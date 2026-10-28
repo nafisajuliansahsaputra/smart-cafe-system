@@ -93,6 +93,7 @@ public class CashWorkflowService {
     @Transactional
     public void kitchenStart(UUID ticketId,UUID staff,String requestId) {
         var ticket=findTicket(ticketId);
+        if(ticket==null) throw missing();
         var order=lockOrder(ticket.orderId());
         var payment=lockPaymentByOrder(order.id());
         // Ticket status may be stale if another kitchen member won the race.

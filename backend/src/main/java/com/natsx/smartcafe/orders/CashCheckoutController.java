@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CashCheckoutController {
     private final CashCheckoutService checkout;
     public CashCheckoutController(CashCheckoutService checkout) { this.checkout=checkout; }
-    public record OrderRequest(@NotEmpty List<@NotNull CashCheckoutService.Line> lines) {}
+    public record OrderRequest(@NotEmpty List<CashCheckoutService.Line> lines) {}
 
     @PostMapping("/orders")
     public ResponseEntity<ApiEnvelope<CashCheckoutService.Checkout>> submit(
