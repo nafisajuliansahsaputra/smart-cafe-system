@@ -18,11 +18,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/ops/orders")
 public class OrderControlController {
     private final CashWorkflowService workflow;
-    public OrderControlController(CashWorkflowService workflow) { this.workflow=workflow; }
+    private final OrderControlQueryService queries;
+    public OrderControlController(CashWorkflowService workflow, OrderControlQueryService queries) {
+        this.workflow=workflow;
+        this.queries=queries;
+    }
 
     @GetMapping
-    public ApiEnvelope<List<CashWorkflowService.OpsOrder>> queue(HttpServletRequest request) {
-        return ApiEnvelope.of(workflow.queue(),RequestIdFilter.get(request));
+    public ApiEnvelope<List<OrderControlQueryService.QueueItem>> queue(
+        @org.springframework.web.bind.annotation.RequestParam(required=false) String status,
+        @org.springframework.web.bind.annotation.RequestParam(required=false) String paymentStatus,
+        @org.springframework.web.bind.annotation.RequestParam(required=false) String tableCode,
+        @org.springframework.web.bind.annotation.RequestParam(required=false) UUID orderId,
+        HttpServletRequest request) {
+        return ApiEnvelope.of(queries.search(status,paymentStatus,tableCode,orderId),
+            RequestIdFilter.get(request));
+    }
+
+    @GetMapping("/{id}")
+    public ApiEnvelope<OrderControlQueryService.OrderDetail> detail(@PathVariable UUID id,
+        HttpServletRequest request) {
+        return ApiEnvelope.of(queries.detail(id),RequestIdFilter.get(request));
     }
 
     @PostMapping("/{id}/approve-cash")

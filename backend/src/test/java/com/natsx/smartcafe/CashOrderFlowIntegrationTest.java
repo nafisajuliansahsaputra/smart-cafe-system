@@ -145,6 +145,20 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(get("/api/v1/ops/orders")
             .header("Authorization","Bearer " + cashier)).andReturn().getResponse().getStatus());
+        var filtered=mvc.perform(get("/api/v1/ops/orders")
+            .param("status","SUBMITTED").param("paymentStatus","AWAITING_CASH")
+            .param("orderId",orderId.toString())
+            .header("Authorization","Bearer " + cashier)).andReturn().getResponse();
+        assertEquals(200,filtered.getStatus());
+        assertTrue(filtered.getContentAsString().contains(orderId.toString()));
+        assertEquals(400,mvc.perform(get("/api/v1/ops/orders").param("status","UNRECOGNIZED")
+            .header("Authorization","Bearer " + cashier)).andReturn().getResponse().getStatus());
+        var detail=mvc.perform(get("/api/v1/ops/orders/" + orderId)
+            .header("Authorization","Bearer " + cashier)).andReturn().getResponse();
+        assertEquals(200,detail.getStatus());
+        assertTrue(detail.getContentAsString().contains("Synthetic Meal"));
+        assertEquals(403,mvc.perform(get("/api/v1/ops/orders/" + orderId)
+            .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(get("/api/v1/kitchen/tickets")
             .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM kitchen_tickets WHERE order_id=?",
