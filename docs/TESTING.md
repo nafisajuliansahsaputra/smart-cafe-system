@@ -130,3 +130,7 @@ Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsapu
 ### M2 additional status privacy
 
 `CashOrderFlowIntegrationTest` checks that a guest can retrieve their own order details with correct cash status while another guest is rejected with a safe 404. New cash checkout creates an `ORDER_SUBMITTED` outbox entry in the same transaction; SSE delivery is not yet implemented.
+
+## 11. Menu catalog and options
+
+`CartAndStockIntegrationTest` includes manager-only category/item create/update, initial HIDDEN visibility, stale revision conflicts, disabled category hiding, required variant group setup, invalid/missing option rejection, authoritative price delta in cart/checkout, immutable old price and label after manager option edits, stock decrement, and idempotent replay. Results are tied to [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks), not assumed until the exact head CI succeeds.

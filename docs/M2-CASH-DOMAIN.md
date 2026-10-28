@@ -35,3 +35,7 @@ V5 introduces a PostgreSQL receipt guard: a receipt can only be inserted for a m
 Persisted, guest-scoped cart supports GET/PUT with version checks. It is an editable draft, not a stock reservation. Cash checkout accepts an explicit cart version, maintains same-key replay after cart consumption, and checks/consumes limited menu stock in the same transaction as order insertion. The public menu hides sold-out items; admin inventory adjustments require manager role, version and an audit reason. Unapproved cash orders can be rejected with reason; recorded stock allocations are restored only once. See [inventory notes](M2-CART-INVENTORY.md) for precise limitations.
 
 The read-only `GET /me/orders/{id}` endpoint exposes guest-owned order status and immutable item snapshots (404 for another guest); a successful cash checkout appends `ORDER_SUBMITTED` to the database outbox. Frontend guest status/print UI is a separate remaining task.
+
+## Catalog and selected option snapshot
+
+Flyway V8 and `VariantCatalogService` implement one configurable group per item, with optional/required single choice and auditable manager edits. Customer catalog choice is not a trusted price; `VariantPricingService` checks the active item/group/option and the cash checkout commits the adjusted unit price plus immutable variant snapshot. Receipt documents include the selected variant, and guest/OCC projections display its original label. Multi-group/custom modifiers and variant-level inventory are deferred. [Engineering details](M2-CATALOG-VARIANTS.md).

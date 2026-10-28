@@ -110,3 +110,10 @@ Not yet implemented: variant tables, inventory reservations, payment attempts/we
 - **V7** adds `order_stock_allocations(order_id,menu_item_id,quantity,reserved_at,released_at)`. Checkout decrements bounded stock in the same transaction as creating the order and allocation record. A pre-kitchen rejection returns counted allocations exactly once and records the release, order transition and staff audit in one DB transaction.
 - The catalog's `menu_items.availability` status is distinct from the quantitative `item_availability` row. The public menu filters both. A stored cart is not a stock reservation.
 - This stock model is per menu-item unit, not ingredients/recipes and not yet a full warehouse ledger. Inventory adjustments during an outstanding checkout require operational reconciliation and a reviewed policy before real stock use.
+
+## 11. V8 single-choice variants
+
+- `menu_variant_groups`: id, unique menu_item_id, name, required, active, revision. One group maximum per item in this M2 version.
+- `menu_variant_options`: id, group_id, unique option_key per group, label, signed price_delta_idr with bounds, active, revision.
+- `cart_lines.variant_option_id` is nullable with FK to option; checkout also verifies it belongs to the item and enabled group. A missing choice is accepted only when no enabled required group exists. Cart still permits one line per menu item. Multiple modifier groups and multiple differently configured lines of one item require a future explicit schema migration.
+- The immutable `order_lines.variant_snapshot` captures the effective selected option metadata and signed delta while `unit_price_idr` stores final server-computed unit price. Receipt document JSON includes the option snapshot, and guest/OCC order detail exposes the selected label.

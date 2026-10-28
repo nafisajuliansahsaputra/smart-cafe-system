@@ -165,3 +165,21 @@ The public `GET /menu` hides items with zero or disabled availability. All claim
 ### Additional guest read and outbox event
 
 `GET /api/v1/me/orders/{id}` is implemented with ownership and visit checks in SQL. The response includes current order/aggregate-payment status, immutable line-item prices/quantities and creation timestamp. An unrelated guest gets a safe 404. On the successful first checkout, `ORDER_SUBMITTED` is committed to the existing durable outbox in the same PostgreSQL transaction. This does not mean SSE transport or worker dispatch is yet enabled.
+
+## 11. Development-only catalog and variant endpoints
+
+All paths are under `/api/v1`. Administrative routes require MANAGER/ADMIN bearer authentication and record staff audit entries.
+
+| Method | Route | Payload |
+| --- | --- | --- |
+| GET/POST | /admin/menu-categories | POST `{name,slug}`; slug is unique lowercase kebab-case |
+| PATCH | /admin/menu-categories/{id}/active | `{active:boolean}` |
+| GET/POST | /admin/menu-items | POST `{categoryId,name,priceIdr}`; new items start HIDDEN |
+| GET/PATCH | /admin/menu-items/{id} | PATCH `{categoryId,name,priceIdr,availability,expectedRevision}` |
+| GET | /menu/{itemId}/variants | Public active group/options for visible stocked menu item only |
+| GET/POST | /admin/menu-items/{itemId}/variant-group | POST `{name,required}`; maximum one group per item |
+| PATCH | /admin/variant-groups/{id} | `{name,required,active,expectedRevision}` |
+| POST | /admin/variant-groups/{id}/options | `{key,label,priceDeltaIdr}` |
+| PATCH | /admin/variant-options/{id} | `{label,priceDeltaIdr,active,expectedRevision}` |
+
+M2 supports **one selected option at most per menu item**, not arbitrary multiple modifiers or separate stocks per variant. Cart line and direct checkout line accept optional `variantOptionId`; if an item's enabled group is required, it must be supplied. It must reference an enabled option belonging to that item. The backend computes the final unit price using current base price + server-stored signed option delta; clients cannot submit a price. Snapshot stores option ID, group name, option key/label and delta as JSON in the immutable order line. Replaying the same idempotency key with a different direct-checkout option conflicts.

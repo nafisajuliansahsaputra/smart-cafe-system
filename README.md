@@ -105,3 +105,7 @@ See [M2 engineering record](docs/M2-CASH-DOMAIN.md) for implemented routes, test
 ### Current M2 cart/stock APIs
 
 The draft M2 backend supports `GET/PUT /api/v1/me/cart`, cash checkout from either explicit lines or a cart version, finite stock constraints, `GET/PATCH /api/v1/admin/menu-items/{id}/availability`, and audited pre-kitchen cash rejection. These operations are covered by synthetic PostgreSQL tests; no staff/guest browser UI or production pilot is enabled. See [M2 cart and stock controls](docs/M2-CART-INVENTORY.md).
+
+### M2 catalogue and variants (backend preview)
+
+Managers/admins can create categories and menu items, publish or hide items, revise prices with optimistic revisions, and manage a single choice group per menu item (e.g., Size: Regular/Large). Variant adjustments and required/optional choices are validated by Spring Boot, never accepted as client-supplied price. Order/receipt projections preserve the selected label and unit-price snapshot even after catalog changes. See [catalog and variants](docs/M2-CATALOG-VARIANTS.md); the browser UI is intentionally not locked in.

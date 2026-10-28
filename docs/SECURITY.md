@@ -106,3 +106,7 @@ See [ADR 0003](decisions/0003-api-bearer-auth.md) and [local bootstrap guide](M2
 ## 11. Cart/inventory authorization gates
 
 Guest cart updates and order checkout take identity exclusively from the current scoped token, never guest IDs in client payload. Limited quantities are enforced by PostgreSQL atomic updates with `limited_quantity>=requested`, not frontend state. Manager/admin stock changes are version-checked, reason-required and audited. Cashier-only pre-kitchen rejection releases stock in the same locked order transaction, with allocation evidence preventing accidental double credit. Inventory search uses parameterized JDBC statements. Further auth review, inventory adjustment reconciliation and full E2E are still required before pilot.
+
+## 12. Catalog variants financial boundary
+
+Only manager/admin roles can write item prices, visibility and variant group/option configuration. New items start HIDDEN. Item edits and option edits require the current revision, with stale writes rejected. Customer `variantOptionId` is treated solely as an untrusted selector: checkout verifies active group ownership, required selection, active option and adjusted unit price on the backend while holding a shared lock against concurrent catalog edits. Stock is still enforced on the parent menu item, not separately per option. Price/variant snapshots are part of the persisted order/receipt history; changing current catalog options never rewrites old financial evidence.
