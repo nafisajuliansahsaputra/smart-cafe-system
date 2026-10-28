@@ -443,6 +443,8 @@ class CartAndStockIntegrationTest {
         assertTrue(groups.contains("Size"));
         assertTrue(groups.contains("Milk"));
         assertTrue(groups.contains("Extras"));
+        assertEquals(409,mvc.perform(get("/api/v1/menu/"+item+"/variants"))
+            .andReturn().getResponse().getStatus());
         assertEquals(3,jdbc.queryForObject(
             "SELECT count(*) FROM menu_variant_groups WHERE menu_item_id=?",Integer.class,item));
 
