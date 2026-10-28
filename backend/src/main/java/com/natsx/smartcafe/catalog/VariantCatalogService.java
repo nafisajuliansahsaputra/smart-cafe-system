@@ -29,6 +29,7 @@ public class VariantCatalogService {
     @Transactional(readOnly=true)
     public Group publicGroup(UUID itemId) {
         var groups=publicGroups(itemId);
+        if(groups.size()>1)throw conflict("This menu has multiple groups; use /variant-groups");
         return groups.isEmpty()?null:groups.getFirst();
     }
 
