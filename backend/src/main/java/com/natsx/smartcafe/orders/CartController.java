@@ -23,7 +23,7 @@ public class CartController {
     private final CartService carts;
     public CartController(CartService carts) { this.carts=carts; }
 
-    public record ReplaceRequest(@Min(0) long expectedVersion,
+    public record ReplaceRequest(@NotNull @Min(0) Long expectedVersion,
                                  @NotNull List<CashCheckoutService.Line> lines) {}
 
     @GetMapping
