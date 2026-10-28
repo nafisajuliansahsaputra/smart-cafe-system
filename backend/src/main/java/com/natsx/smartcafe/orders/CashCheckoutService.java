@@ -4,6 +4,7 @@ import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.GuestPrincipal;
 import com.natsx.smartcafe.identity.SecureToken;
 import com.natsx.smartcafe.common.events.OutboxEvents;
+import com.natsx.smartcafe.catalog.VariantPricingService;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -19,13 +20,18 @@ public class CashCheckoutService {
     private final JdbcTemplate jdbc;
     private final CartService carts;
     private final OutboxEvents outbox;
-    public CashCheckoutService(JdbcTemplate jdbc,CartService carts,OutboxEvents outbox) {
+    private final VariantPricingService variants;
+    public CashCheckoutService(JdbcTemplate jdbc,CartService carts,OutboxEvents outbox,
+                               VariantPricingService variants) {
         this.jdbc=jdbc;
         this.carts=carts;
         this.outbox=outbox;
+        this.variants=variants;
     }
 
-    public record Line(UUID menuItemId, int quantity) {}
+    public record Line(UUID menuItemId,int quantity,UUID variantOptionId) {
+        public Line(UUID menuItemId,int quantity) { this(menuItemId,quantity,null); }
+    }
     public record Checkout(UUID id, String status, String paymentStatus, long totalIdr) {}
     private record MenuRow(UUID id, String name, long price) {}
 
@@ -82,7 +88,8 @@ public class CashCheckoutService {
             }
         }
         var canonical = lines.stream().sorted(Comparator.comparing(x->x.menuItemId().toString()))
-            .map(x->x.menuItemId()+":"+x.quantity()).toList();
+            .map(x->x.menuItemId()+":"+x.quantity()+
+                (x.variantOptionId()==null?"":":"+x.variantOptionId())).toList();
         String hash = overrideHash!=null?overrideHash:SecureToken.sha256("CASH|" + String.join("|",canonical));
         // Serializes concurrent submissions for the same guest/key BEFORE reading idempotency.
         jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class,
@@ -132,14 +139,18 @@ public class CashCheckoutService {
             if(reserved!=1)throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
                 "Insufficient menu item stock");
             var item=found.getFirst();
+            var option=variants.resolve(item.id(),line.variantOptionId());
             long lineTotal;
+            long unitPrice;
             try {
-                lineTotal=IdrMoney.lineTotal(item.price(),line.quantity());
+                unitPrice=Math.addExact(item.price(),option==null?0:option.deltaIdr());
+                if(unitPrice<0)throw new ArithmeticException("Negative adjusted unit price");
+                lineTotal=IdrMoney.lineTotal(unitPrice,line.quantity());
                 subtotal=Math.addExact(subtotal,lineTotal);
             } catch (ArithmeticException e) {
-                throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Order amount exceeds limit");
+                throw failure(HttpStatus.CONFLICT,"CONFLICT","Selected menu price is invalid");
             }
-            items.add(new PricedLine(item,line.quantity(),lineTotal));
+            items.add(new PricedLine(item,line.quantity(),lineTotal,unitPrice,option));
         }
         if(subtotal<=0) throw failure(HttpStatus.CONFLICT,"CONFLICT",
             "Cash checkout requires a positive total");
@@ -151,9 +162,18 @@ public class CashCheckoutService {
             """,orderId,guest.visitId(),guest.guestId(),subtotal,subtotal);
         for(var item:items) {
             jdbc.update("""
-                INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,unit_price_idr,quantity,line_total_idr)
-                VALUES (?,?,?,?,?,?)
-                """,orderId,item.menu().id(),item.menu().name(),item.menu().price(),item.quantity(),item.total());
+                INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
+                                        unit_price_idr,quantity,line_total_idr)
+                VALUES (?,?,?,CASE WHEN ? IS NULL THEN '{}'::jsonb
+                  ELSE jsonb_build_object('id',?,'group',?,'key',?,'label',?,'deltaIdr',?) END,?,?,?)
+                """,orderId,item.menu().id(),item.menu().name(),
+                item.option()==null?null:item.option().id(),
+                item.option()==null?null:item.option().id(),
+                item.option()==null?null:item.option().groupName(),
+                item.option()==null?null:item.option().optionKey(),
+                item.option()==null?null:item.option().label(),
+                item.option()==null?null:item.option().deltaIdr(),
+                item.unitPrice(),item.quantity(),item.total());
             jdbc.update("""
                 INSERT INTO order_stock_allocations(order_id,menu_item_id,quantity) VALUES (?,?,?)
                 """,orderId,item.menu().id(),item.quantity());
@@ -171,7 +191,8 @@ public class CashCheckoutService {
     }
 
     private record Existing(UUID id,String hash,String status,long total,String payment) {}
-    private record PricedLine(MenuRow menu,int quantity,long total) {}
+    private record PricedLine(MenuRow menu,int quantity,long total,long unitPrice,
+                              VariantPricingService.Choice option) {}
 
     @Transactional(readOnly=true)
     public List<Checkout> ownOrders(GuestPrincipal guest) {
