@@ -2,7 +2,7 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Status:** M1 executable skeleton is under development on a feature branch, **not yet verified or deployed**. All business workflows remain planned until implemented and tested.
+> **Status:** M1 executable skeleton has passed GitHub CI on the feature branch, **not merged or deployed**. All business workflows remain planned until implemented and tested.
 
 ## What it solves
 
@@ -86,7 +86,7 @@ docs/                          # engineering specs and ADRs
 
 Copy `.env.example` to `.env`, set a unique local PostgreSQL password, then run `docker compose up --build` with Docker Engine + Compose installed. Visit `http://localhost:3000` to see a diagnostic frontend that calls `GET /api/v1/system/status` on the Spring Boot API, which queries the migrated PostgreSQL schema. Run `cd backend && mvn -B -ntp verify` for JUnit + Testcontainers or `cd apps/web && npm ci && npm run lint && npm run typecheck && npm run build` for the frontend.
 
-These commands are **verification instructions, not claims of a successful run**. See [M1 verification record](docs/M1-VERIFICATION.md). The staff/order/QR/payment surfaces are not yet functional.
+These commands have been **validated in clean GitHub Actions Ubuntu/Docker runners** (see [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242)); local Windows testing and any public deployment are separate. See [M1 verification record](docs/M1-VERIFICATION.md). The staff/order/QR/payment surfaces are not yet functional.
 
 ## Rules before coding
 

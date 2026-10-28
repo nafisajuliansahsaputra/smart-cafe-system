@@ -1,6 +1,6 @@
 # M1 scaffold: verification record
 
-Status: **implementation proposed on feature branch; not yet accepted as complete**.
+Status: **M1 executable scaffold verified by GitHub Actions on feature branch; draft PR awaits review and merge.**
 
 ## Architecture and security boundaries
 
@@ -30,6 +30,6 @@ Status: **implementation proposed on feature branch; not yet accepted as complet
 
 ## Evidence policy
 
-Creating source files is NOT proof of successful startup. Do not tick the M1 completion checkboxes until CI passes and the clean-clone Compose startup/DB migration/full path are reproduced. Verify migration errors and review security posture before any deployment.
+CI evidence: https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242 (all three jobs successful). A clean GitHub-hosted Ubuntu checkout built and launched all Docker Compose services, applied Flyway, returned the DB-backed status, exercised the OpenAPI endpoint and staff deny envelope, and rendered the Next.js page with connected state. Java unit and PostgreSQL Testcontainers tests and Next.js npm ci/lint/typecheck/build also passed. This evidence is limited to the CI environment, not an assertion of deployment or a Windows-local smoke.
 
 Known open tasks: full module API boundaries, login/guest session, staff OCC, and actual order transitions (M2). CI/Compose evidence is tracked through pull request checks; no production deployment is claimed.
