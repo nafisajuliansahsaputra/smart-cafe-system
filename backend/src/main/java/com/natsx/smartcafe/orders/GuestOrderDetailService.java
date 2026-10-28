@@ -15,7 +15,8 @@ public class GuestOrderDetailService {
     private final JdbcTemplate jdbc;
     public GuestOrderDetailService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
-    public record Line(String name,int quantity,long unitPriceIdr,long lineTotalIdr,String notes) {}
+    public record Line(String name,int quantity,long unitPriceIdr,long lineTotalIdr,
+                       String notes,String variantLabel) {}
     public record Detail(UUID id,String status,String paymentStatus,long totalIdr,
                          Instant createdAt,List<Line> lines) {}
     private record Order(UUID id,String status,String paymentStatus,long total,Instant createdAt) {}
@@ -34,11 +35,12 @@ public class GuestOrderDetailService {
             HttpStatus.NOT_FOUND,"NOT_FOUND","Order not found");
         var data=found.getFirst();
         var lines=jdbc.query("""
-            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes
+            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes,
+                   variant_snapshot->>'label' AS variant_label
             FROM order_lines WHERE order_id=? ORDER BY name_snapshot
             """,(rs,n)->new Line(rs.getString("name_snapshot"),rs.getInt("quantity"),
                 rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),
-                rs.getString("notes")),orderId);
+                rs.getString("notes"),rs.getString("variant_label")),orderId);
         return new Detail(data.id(),data.status(),data.paymentStatus(),data.total(),
             data.createdAt(),lines);
     }

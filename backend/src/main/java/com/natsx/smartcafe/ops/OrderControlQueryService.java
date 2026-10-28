@@ -20,7 +20,8 @@ public class OrderControlQueryService {
 
     public record QueueItem(UUID id,String tableCode,String orderStatus,String paymentStatus,
                             long totalIdr,Instant createdAt) {}
-    public record OrderLine(String name,int quantity,long unitPriceIdr,long lineTotalIdr,String notes) {}
+    public record OrderLine(String name,int quantity,long unitPriceIdr,long lineTotalIdr,
+                            String notes,String variantLabel) {}
     public record OrderDetail(UUID id,String tableCode,String orderStatus,String paymentStatus,
                               long subtotalIdr,long taxIdr,long serviceFeeIdr,long totalIdr,
                               String paymentMethod,Instant createdAt,List<OrderLine> lines) {}
@@ -76,10 +77,12 @@ public class OrderControlQueryService {
             "Order not found");
         var order=details.getFirst();
         var lines=jdbc.query("""
-            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes
+            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes,
+                   variant_snapshot->>'label' AS variant_label
             FROM order_lines WHERE order_id=? ORDER BY name_snapshot
             """,(rs,n)->new OrderLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
-                rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),rs.getString("notes")),id);
+                rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),
+                rs.getString("notes"),rs.getString("variant_label")),id);
         return new OrderDetail(order.id(),order.tableCode(),order.orderStatus(),order.paymentStatus(),
             order.subtotal(),order.tax(),order.fee(),order.total(),order.method(),
             order.createdAt(),lines);

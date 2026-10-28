@@ -15,7 +15,7 @@ public class GuestReceiptService {
     private final JdbcTemplate jdbc;
     public GuestReceiptService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
-    public record Line(String name,int quantity,long unitPriceIdr,long lineTotalIdr) {}
+    public record Line(String name,int quantity,long unitPriceIdr,long lineTotalIdr,String variantLabel) {}
     public record Receipt(UUID id,long number,UUID orderId,long totalIdr,String currency,
                           Instant issuedAt,List<Line> lines) {}
     private record ReceiptMeta(UUID id,long number,UUID orderId,long total,String currency,Instant at) {}
@@ -30,7 +30,8 @@ public class GuestReceiptService {
               'method','CASH','lines',(
                 SELECT coalesce(jsonb_agg(jsonb_build_object(
                     'name',l.name_snapshot,'quantity',l.quantity,
-                    'unitPriceIdr',l.unit_price_idr,'lineTotalIdr',l.line_total_idr)
+                    'unitPriceIdr',l.unit_price_idr,'lineTotalIdr',l.line_total_idr,
+                    'variant',l.variant_snapshot)
                     ORDER BY l.name_snapshot),'[]'::jsonb)
                 FROM order_lines l WHERE l.order_id=o.id))
             FROM orders o WHERE o.id=?
@@ -50,10 +51,12 @@ public class GuestReceiptService {
         if(found.isEmpty())throw new ApiFailureException(HttpStatus.NOT_FOUND,"NOT_FOUND","Receipt not found");
         var meta=found.getFirst();
         var lines=jdbc.query("""
-            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr FROM order_lines
+            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,
+                   variant_snapshot->>'label' AS variant_label FROM order_lines
             WHERE order_id=? ORDER BY name_snapshot
             """,(rs,n)->new Line(rs.getString("name_snapshot"),rs.getInt("quantity"),
-                rs.getLong("unit_price_idr"),rs.getLong("line_total_idr")),meta.orderId());
+                rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),
+                rs.getString("variant_label")),meta.orderId());
         return new Receipt(meta.id(),meta.number(),meta.orderId(),meta.total(),meta.currency(),meta.at(),lines);
     }
 }
