@@ -66,7 +66,7 @@ public class CartService {
 
     /** Called only after a successful checkout in the same transaction. */
     public void consume(GuestPrincipal guest,long version) {
-        int deleted=jdbc.update("""
+        jdbc.update("""
             DELETE FROM cart_lines WHERE cart_id IN (
                 SELECT id FROM carts WHERE guest_id=? AND visit_id=? AND version=?)
             """,guest.guestId(),guest.visitId(),version);

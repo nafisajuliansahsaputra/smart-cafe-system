@@ -16,7 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CashCheckoutService {
     private final JdbcTemplate jdbc;
-    public CashCheckoutService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final CartService carts;
+    public CashCheckoutService(JdbcTemplate jdbc,CartService carts) {
+        this.jdbc=jdbc;
+        this.carts=carts;
+    }
 
     public record Line(UUID menuItemId, int quantity) {}
     public record Checkout(UUID id, String status, String paymentStatus, long totalIdr) {}
@@ -24,9 +28,46 @@ public class CashCheckoutService {
 
     @Transactional
     public Checkout checkout(GuestPrincipal guest, List<Line> lines, String key) {
-        if (key == null || key.length() < 8 || key.length() > 128 || !key.matches("[a-zA-Z0-9_-]+")) {
-            throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Invalid idempotency key");
+        return checkoutResolved(guest,lines,key,null);
+    }
+
+    @Transactional
+    public Checkout checkoutFromCart(GuestPrincipal guest,long expectedVersion,String key) {
+        validateKey(key);
+        if(expectedVersion<0)throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+            "Invalid cart version");
+        String hash=SecureToken.sha256("CART|"+expectedVersion);
+        // Lock first: a completed checkout must remain replayable after cart consumption.
+        jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            Object.class,guest.guestId()+":"+key);
+        var prior=jdbc.query("""
+            SELECT i.request_hash,o.id,o.status,p.aggregate_status,o.total_idr
+            FROM order_idempotency i JOIN orders o ON o.id=i.order_id
+            JOIN payment_intents p ON p.order_id=o.id
+            WHERE i.actor_id=? AND i.scope='CASH_CHECKOUT' AND i.idempotency_key=?
+            """,(rs,n)->new Existing(rs.getObject("id",UUID.class),
+                rs.getString("request_hash"),rs.getString("status"),rs.getLong("total_idr"),
+                rs.getString("aggregate_status")),guest.guestId(),key);
+        if(!prior.isEmpty()) {
+            var found=prior.getFirst();
+            if(!hash.equals(found.hash()))throw failure(HttpStatus.CONFLICT,"CONFLICT",
+                "Idempotency key belongs to a different checkout");
+            return new Checkout(found.id(),found.status(),found.payment(),found.total());
         }
+        var lines=carts.lockForCheckout(guest,expectedVersion);
+        var result=checkoutResolved(guest,lines,key,hash);
+        carts.consume(guest,expectedVersion);
+        return result;
+    }
+
+    private void validateKey(String key) {
+        if(key==null || key.length()<8 || key.length()>128 || !key.matches("[a-zA-Z0-9_-]+"))
+            throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Invalid idempotency key");
+    }
+
+    private Checkout checkoutResolved(GuestPrincipal guest,List<Line> lines,String key,
+                                      String overrideHash) {
+        validateKey(key);
         if (lines == null || lines.isEmpty() || lines.size()>30) {
             throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Cart must contain 1 to 30 items");
         }
@@ -39,7 +80,7 @@ public class CashCheckoutService {
         }
         var canonical = lines.stream().sorted(Comparator.comparing(x->x.menuItemId().toString()))
             .map(x->x.menuItemId()+":"+x.quantity()).toList();
-        String hash = SecureToken.sha256("CASH|" + String.join("|",canonical));
+        String hash = overrideHash!=null?overrideHash:SecureToken.sha256("CASH|" + String.join("|",canonical));
         // Serializes concurrent submissions for the same guest/key BEFORE reading idempotency.
         jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class,
             guest.guestId()+":"+key);
@@ -66,7 +107,7 @@ public class CashCheckoutService {
 
         long subtotal=0;
         var items=new java.util.ArrayList<PricedLine>();
-        for(var line:lines) {
+        for(var line:lines.stream().sorted(Comparator.comparing(x->x.menuItemId().toString())).toList()) {
             var found=jdbc.query("""
                 SELECT i.id,i.name,i.base_price_idr FROM menu_items i
                 JOIN menu_categories c ON c.id=i.category_id
@@ -76,6 +117,17 @@ public class CashCheckoutService {
                     rs.getLong("base_price_idr")),line.menuItemId());
             if(found.isEmpty()) throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
                 "Item is unavailable");
+            // An UPDATE is the atomic last-unit guard. Rows also exist for unlimited items.
+            int reserved=jdbc.update("""
+                UPDATE item_availability
+                SET limited_quantity=CASE WHEN limited_quantity IS NULL THEN NULL
+                                          ELSE limited_quantity-? END,
+                    version=version+1
+                WHERE menu_item_id=? AND available=true
+                  AND (limited_quantity IS NULL OR limited_quantity>=?)
+                """,line.quantity(),line.menuItemId(),line.quantity());
+            if(reserved!=1)throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
+                "Insufficient menu item stock");
             var item=found.getFirst();
             long lineTotal;
             try {

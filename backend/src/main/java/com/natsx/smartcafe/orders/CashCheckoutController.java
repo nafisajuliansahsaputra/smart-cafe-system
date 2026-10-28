@@ -5,8 +5,6 @@ import com.natsx.smartcafe.common.api.RequestIdFilter;
 import com.natsx.smartcafe.identity.GuestPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -23,14 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class CashCheckoutController {
     private final CashCheckoutService checkout;
     public CashCheckoutController(CashCheckoutService checkout) { this.checkout=checkout; }
-    public record OrderRequest(@NotEmpty List<CashCheckoutService.Line> lines) {}
+    public record OrderRequest(List<CashCheckoutService.Line> lines,Long cartVersion) {}
 
     @PostMapping("/orders")
     public ResponseEntity<ApiEnvelope<CashCheckoutService.Checkout>> submit(
         @AuthenticationPrincipal GuestPrincipal guest,
         @RequestHeader(value="Idempotency-Key",required=false) String key,
         @Valid @RequestBody OrderRequest body,HttpServletRequest request) {
-        var result=checkout.checkout(guest,body.lines(),key);
+        if((body.lines()==null)==(body.cartVersion()==null))
+            throw new com.natsx.smartcafe.common.api.ApiFailureException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Provide either lines or cartVersion, not both");
+        var result=body.cartVersion()==null
+            ?checkout.checkout(guest,body.lines(),key)
+            :checkout.checkoutFromCart(guest,body.cartVersion(),key);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(result,RequestIdFilter.get(request)));
     }
