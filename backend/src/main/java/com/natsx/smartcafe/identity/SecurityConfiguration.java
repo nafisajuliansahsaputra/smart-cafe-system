@@ -43,6 +43,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, "/api/v1/orders").hasAuthority("GUEST")
                 .requestMatchers("/api/v1/me/**").hasAuthority("GUEST")
                 .requestMatchers("/api/v1/staff/auth/me", "/api/v1/staff/auth/logout").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/v1/ops/payments/*/cash-tenders")
+                    .hasAnyRole("WAITER", "CASHIER", "MANAGER", "ADMIN")
                 .requestMatchers("/api/v1/ops/**").hasAnyRole("CASHIER", "MANAGER", "ADMIN")
                 .requestMatchers("/api/v1/waiter/**").hasAnyRole("WAITER", "CASHIER", "MANAGER", "ADMIN")
                 .requestMatchers("/api/v1/kitchen/**").hasAnyRole("KITCHEN", "MANAGER", "ADMIN")
