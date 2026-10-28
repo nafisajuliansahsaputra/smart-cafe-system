@@ -34,13 +34,7 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         working-directory: apps/web
-        run: npm install --no-audit --no-fund
-      - name: Temporary lockfile export for reviewed reproducibility
-        working-directory: apps/web
-        run: |
-          echo 'SCS_LOCKFILE_BASE64_BEGIN'
-          base64 --wrap=600 package-lock.json
-          echo 'SCS_LOCKFILE_BASE64_END'
+        run: npm ci --no-audit --no-fund
       - name: Lint
         working-directory: apps/web
         run: npm run lint

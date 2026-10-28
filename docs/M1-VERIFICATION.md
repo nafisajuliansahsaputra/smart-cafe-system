@@ -25,11 +25,11 @@ Status: **implementation proposed on feature branch; not yet accepted as complet
 ## Tests
 
 - Java tests: cd backend && mvn -B -ntp verify (Docker required for Testcontainers).
-- Frontend: cd apps/web && npm install && npm run lint && npm run typecheck && npm run build.
+- Frontend: cd apps/web && npm ci && npm run lint && npm run typecheck && npm run build.
 - Pull-request CI executes both jobs with Java 21, Node 22 and Docker-enabled Testcontainers.
 
 ## Evidence policy
 
 Creating source files is NOT proof of successful startup. Do not tick the M1 completion checkboxes until CI passes and the clean-clone Compose startup/DB migration/full path are reproduced. Verify migration errors and review security posture before any deployment.
 
-Known open tasks: package lockfile/reproducible frontend install, live clean-start proof, full module API boundaries, login/guest session, staff OCC, and actual order transitions (M2).
+Known open tasks: full module API boundaries, login/guest session, staff OCC, and actual order transitions (M2). CI/Compose evidence is tracked through pull request checks; no production deployment is claimed.
