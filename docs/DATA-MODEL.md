@@ -1,6 +1,6 @@
 # Data Model — Smart Cafe System
 
-**Status:** Logical schema / design proposal; Flyway SQL migrations will be created in M1. Names and indices are targets subject to reviewed migration. PostgreSQL is authoritative.
+**Status:** Logical contract plus an implemented subset on unmerged M1/M2 feature branches. Flyway V1–V4 are committed and applied successfully in CI. Future entities and indexes below remain design targets. PostgreSQL is authoritative.
 
 ## 1. Identity and tables
 
@@ -92,3 +92,12 @@ TableVisit 1 -> N GameRequest 0..1 -> GameReservation -> GameLoan -> GameCopy ->
 - audit_logs(resource_type, resource_id, occurred_at).
 
 Index choices should be measured after query shape and actual EXPLAIN plans exist.
+
+## 9. Implemented migrations (M2 development branch)
+
+- **V1**: staff, roles, tables/visits, guests, catalog base items, immutable order line snapshots, payment intents, cash tender, kitchen tickets, audit and outbox skeleton. The partial unique index prevents a second ACTIVE/CLOSING visit on the same table; composite FK ties order guest to visit.
+- **V2**: hashed revocable staff bearer sessions, case-insensitive staff login uniqueness, database-backed login throttling.
+- **V3**: short-lived join proof expiry and guest bearer sessions scoped to active visits, all stored as SHA-256 hashes of 256-bit random tokens.
+- **V4**: immutable paid-cash receipts, plus a DB trigger forbidding mutation of order financial snapshot fields.
+
+Not yet implemented: variant tables, inventory reservations, payment attempts/webhooks, serialized physical game units and loans, outbox delivery worker, receipt message dispatch and full reconciliation. A passed migration is not evidence that those future entities exist.

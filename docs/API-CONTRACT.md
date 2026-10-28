@@ -1,6 +1,6 @@
 # API Contract — Smart Cafe System v1 (Proposed)
 
-**Status:** Design only. No API endpoints are implemented or live. Route naming may evolve through reviewed ADR but semantics must remain.
+**Status:** M2 backend subset implemented on draft development PR #2, **not merged, deployed or production-ready**. Routes below remain the target contract; only the subset explicitly listed in the implementation ledger is available.
 
 Base: /api/v1. JSON over HTTPS. Timestamp RFC3339 UTC. Money as integer IDR. IDs opaque UUID/ULID string. Staff and guest authentication differ. AuthZ enforced in API and domain services.
 
@@ -127,3 +127,25 @@ On reconnect, client must fetch canonical snapshot and resubscribe. Staff SSE su
 - Webhook invalid signature/amount/order rejected; genuine duplicate a no-op.
 - SSE reconnect resolves missed event by snapshot.
 - Invalid/expired receipt bearer returns safe 404/410, no phone leak.
+
+## 9. Implemented backend ledger (M2 draft PR #2)
+
+Implemented and verified with PostgreSQL Testcontainers/MockMvc:
+
+| Path | Current implementation | Remaining |
+| --- | --- | --- |
+| POST /staff/auth/login, GET /staff/auth/me, POST /staff/auth/logout | bcrypt staff credentials, revocable 8-hour bearer sessions, DB-backed failed-login throttling, fresh role checks | Secure browser/BFF UX, full staff management/MFA |
+| GET /tables/{alias}/entry | Public table metadata only, no join secret | Customer QR entry UI |
+| POST /waiter/table-visits, POST /waiter/table-visits/{id}/join-proof, POST /waiter/table-visits/{id}/close | Staff-authorized open, rotating 10-min proof, close guard for unresolved cash, session revocation and staff audit | Table CRUD, assignment policy, game-loan closure guard when games are implemented |
+| POST /table-visits/join, GET /me/visit | Active-visit verified proof, isolated guest and revocable guest bearer | Guest join UI and join abuse throttling |
+| GET /menu | Active categories and available base-price items | Variants, limited stock and catalog admin |
+| POST /orders, GET /me/orders | Guest-owned cash order, 1–30 unique lines, integer IDR server prices, immutable order snapshots, PostgreSQL idempotency lock | Persisted cart, variants/taxes, rich customer UI |
+| GET /ops/orders, POST /ops/orders/{id}/approve-cash | Authenticated cashier/manager queue and audited cash approval, kitchen admission | Filters/detail/reject/cancel/exception UI |
+| GET /kitchen/tickets, POST /kitchen/tickets/{id}/start, POST /kitchen/tickets/{id}/ready | Scoped kitchen reads, guarded ticket/order transitions | Actual kitchen display browser UI |
+| POST /waiter/orders/{id}/served | Staff-confirmed serving, does not change payment status | Waiter task UI and delivery assignment |
+| POST /ops/payments/{intentId}/cash-tenders | Waiter/cashier/manager/admin only; amount/role/state validated, idempotent recorded tender, change calculated, immutable paid receipt | Reconciliation, exceptions, cashier shift management |
+| GET /me/receipts/{id} | Paid only, owner-scoped receipt projection, no phone number | Receipt print/download styling and messaging |
+
+All remaining routes in sections 1–8 are **unimplemented**. The initial checkout accepts a bounded lines payload because persisted guest carts have not yet been added. No QRIS/VA gateway is connected and `PENDING` never implies paid.
+
+M2 demo currently requires the order to be **SERVED** before recording cash tender. This is a deliberately conservative sandbox behavior, **not a settled merchant payment policy**; the owner must confirm acceptable cash collection points before a production pilot. Tax/fee calculation is disabled for synthetic demonstration orders with explicit `M2-DEMO-UNTAXED` pricing version and is not a legal-tax policy.

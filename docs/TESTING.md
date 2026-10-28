@@ -108,3 +108,11 @@ Monitor at minimum:
 - No real merchant order, phone, cash tender or PII in CI.
 - Demo data isolated/resettable, clear visible "DEMO" labels.
 - Automated tests never trigger external charge or real customer message.
+
+## 8. Verified M2 API development coverage (2026-10-29)
+
+[GitHub Actions run 40744023293](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293) passed **22 Java tests**, zero failures/errors/skipped, including PostgreSQL 17 Testcontainers with Flyway V1–V4; frontend lint/typecheck/build and clean-start Docker Compose communication also succeeded.
+
+The tested cash API route covers verified guest proof, idempotent cash checkout, price snapshot integrity, staff OCC approval with payment still awaiting cash, kitchen start/ready, waiter serve, recorded tender and receipt, same-key replay, cross-guest receipt denial, blocked visit closure with unpaid cash and session revocation after valid closure. Concurrent same-key order submissions are tested.
+
+These are backend integration tests, **not browser-level E2E, performance, penetration testing, real cash collection validation, provider sandbox transactions or production certification**.

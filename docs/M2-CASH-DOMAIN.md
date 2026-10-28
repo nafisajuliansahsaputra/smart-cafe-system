@@ -1,16 +1,27 @@
-# M2 cash order domain guards (partial work)
+# M2 cash vertical slice: development implementation ledger
 
-**Status:** Domain-level implementation only, not a checkout or POS release.
+**Status:** Backend API vertical slice under development on draft PR #2. It has passed CI using synthetic data, but no real cafe/POS deployment has occurred.
 
-The pure Java policy classes `CashOrderPolicy` and `CashTenderCalculator` start the M2 cash ordering vertical slice without inventing the unresolved cash collection location policy. They enforce:
+## Implemented
 
-- SUBMITTED + AWAITING_CASH can be approved to ACCEPTED.
-- Approval changes order status only; payment remains AWAITING_CASH.
-- Kitchen preparation requires accepted eligibility, then progresses PREPARING -> READY -> SERVED.
-- An order can become SERVED while cash remains unpaid.
-- Cash tender calculations reject insufficient funds, nonpositive dues and non-cash/paid states; all monetary values are integer IDR.
-- A `CashTenderQuote` is **not** a payment receipt or authorization to update payment status.
+- Revocable staff accounts (BCrypt hash), 8-hour hashed bearer sessions, role checks and DB-persistent login throttling. No stock credentials.
+- Table visit open/close, 10-minute rotating join proof, 8-hour visit-scoped guest bearer session, close guard for pending/unpaid orders; visit actions are audited.
+- Public menu endpoint for published available base-priced items, guest-owned cash checkout with integer IDR calculations, immutable line/total snapshots and PostgreSQL-backed concurrent idempotency.
+- Authenticated OCC queue/approve command, KDS ticket admission/start/ready, waiter serve, unchanged AWAITING_CASH after approval/serving.
+- Staff cash capture requiring SERVED, auditable tender and change, payment PAID in the same transaction as issued immutable receipt, safe owner-only receipt fetch. Durable outbox rows are committed for order events; dispatcher remains future work.
+- CI passed 22 JUnit/Testcontainers tests plus Next.js checks and Docker Compose clean-start. [Evidence](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293).
 
-**Not implemented:** staff login/roles, table join, DB-backed order/approval commands, immutable pricing, order idempotency, audit on staff actions, actual tender persistence, kitchen tickets, OCC API/UI, and receipt issuance. Those must be built and verified as one transaction-safe vertical slice. An approved/served cash order can only become PAID after tender evidence is committed with audit, never from these pure helpers alone.
+## Important limitations
 
-No M2 checkbox is complete yet.
+All M2 screens are **not** implemented. Frontend staff routes still return 404; only the API is operational. Admin catalog/staff CRUD, persisted cart, menu variants, stock reservation/locking, OCC filtering/detail/exception UI, rate limiting around guest joins, KDS/waiter visual dashboards and browser end-to-end tests remain open. These are not claimed complete in TODO.
+
+Cash-at-handover and zero tax/fees are explicitly **development-only conservative rules**, not a commercial merchant policy. The owner must decide cash payment point and applicable taxes/fees. No Midtrans, WhatsApp/SMS provider or real funds are handled.
+
+The local first-admin bootstrap is opt-in and documented separately; it is not a production onboarding process. Use disposable synthetic data only.
+
+## Follow-on engineering order
+
+1. Harden auth/session/visit endpoint abuse controls, test true concurrent cash tenders and denied/expired credentials.
+2. Persisted guest cart, variants and inventory-checked ordering.
+3. OCC order detail/search/exception commands and real KDS/waiter task screens.
+4. Guest receipt UI/print, role-managed staff bootstrap/admin, full browser E2E and staging security gates.

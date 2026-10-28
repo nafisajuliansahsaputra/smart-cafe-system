@@ -82,3 +82,17 @@ Boundaries: public browser -> guest API; staff browser -> privileged API; paymen
 ## 8. Security disclosure / incident
 
 A suspicious payment or data incident requires containment, payment reconciliation, credential rotation if needed, evidence preservation, customer/authority notification assessment under applicable law, root-cause analysis and regression coverage. Never repair by deleting audit or historic payments.
+
+## 9. M2 implemented authentication boundary (draft)
+
+This development vertical slice uses a stateless **Authorization: Bearer** header (opaque 256-bit random token, SHA-256 hash only in the DB), not browser cookies. Spring Security disables CSRF specifically because credentials are not automatically attached by browsers; **do not switch to cookie sessions without adding CSRF/origin defenses**. The staff browser login/store design is not implemented and must not store bearer tokens in localStorage. All financial/order routes reject unauthenticated roles at the backend.
+
+- Staff sessions are 8 hours, revocable and immediately rejected if the staff account is disabled. Roles are read from PostgreSQL per authorized request.
+- Invalid staff credentials use a generic response and persistent 5-failure / 15-minute login throttling per normalized login; distributed IP-level rate limiting remains a release blocker.
+- Rotating staff-issued join proof is valid for 10 minutes. Static QR table aliases never grant guest authorization.
+- Guest sessions are 8 hours, scoped to one visit and invalid when closed or explicitly revoked; no phone number is required or stored by implemented join.
+- Local initial admin bootstrap requires an explicit `dev-bootstrap` profile and secret environment values, refused if any staff account exists. It is not a production provisioning mechanism.
+- DB constraints and audited transactional writes back financial and fulfillment invariants. Integration tests exercise role denials, wrong guest receipt access, old join proof, disabled staff and duplicate checkout.
+- Missing production controls: full role/guest object-level security review, staff BFF/cookie+CSRF UI, join/IP throttling, SAST/dependency scans, encrypted PII processing, staff credential reset/management and operational gateway reconciliation.
+
+See [ADR 0003](decisions/0003-api-bearer-auth.md) and [local bootstrap guide](M2-LOCAL-BOOTSTRAP.md).

@@ -2,7 +2,7 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Status:** M1 executable skeleton has passed GitHub CI on the feature branch, **not merged or deployed**. All business workflows remain planned until implemented and tested.
+> **Status:** M1 executable skeleton is CI verified on a separate feature branch; draft M2 PR #2 now includes API-backed staff/table/guest/cash ordering flows with PostgreSQL integration tests. Neither PR is merged or deployed. Complete UI/operational coverage is still in progress.
 
 ## What it solves
 
@@ -95,3 +95,9 @@ Read `PRD.md`, `ARCHITECTURE.md`, `AGENTS.md`, `WORKFLOW.md`, `TODO.md`, then th
 ## Project ownership
 
 Portfolio project by NATSX. License is **not yet selected**. A public repository does not implicitly grant an open-source license.
+
+## M2 API vertical slice (development branch only)
+
+Draft [PR #2](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2) adds versioned auth, table visits, cash checkout, OCC/KDS/waiter commands, and paid cash receipts using the existing one-service modular monolith. **No real payment gateway, messaging, cash handling, or usable staff browser dashboard is connected.** A fresh local development database can opt into the one-time bootstrap described in [docs/M2-LOCAL-BOOTSTRAP.md](docs/M2-LOCAL-BOOTSTRAP.md). The test suite exercises synthetic actors and data; public demo use still requires a staging security review.
+
+See [M2 engineering record](docs/M2-CASH-DOMAIN.md) for implemented routes, test coverage and outstanding requirements.

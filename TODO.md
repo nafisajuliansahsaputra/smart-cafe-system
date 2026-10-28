@@ -27,19 +27,19 @@ M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smar
 
 ## M2 — Cash ordering vertical slice (IN PROGRESS; NOT YET FUNCTIONAL)
 
-- [ ] Staff login with roles and session revocation.
+- [x] Staff login API with roles and session revocation (PostgreSQL/MockMvc verified; staff browser login UI pending).
 - [ ] Table management, alias creation and visit open/close.
 - [ ] QR URL table entry, guest join proof and scoped session.
 - [ ] Catalog, categories, variants and availability.
 - [ ] Guest cart, server pricing and idempotent checkout.
-- [ ] Cash order and staff approval lifecycle with audit.
+- [x] Cash order submission and cashier approval lifecycle with audit (API/DB verified; OCC staff UI still pending).
 - [ ] **Order Control Center** queue/search/detail/approve/exception tools.
 - [ ] Kitchen display admission and preparation states.
 - [ ] Waiter delivery and verified cash tender capture.
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
 
-M2 progress: type-safe cash order transition guards and tender-quote validation with unit tests were introduced, but are **not wired to the database, authorization, operational API or OCC**. No M2 checkbox is complete. See [M2 cash domain progress](docs/M2-CASH-DOMAIN.md).
+M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. API integration tests passed 22/22 on [CI run 40744023293](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293). Staff and operational browser UIs, persisted cart/variants, OCC search/exception commands, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 
