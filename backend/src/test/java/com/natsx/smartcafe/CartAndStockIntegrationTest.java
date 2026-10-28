@@ -530,4 +530,57 @@ class CartAndStockIntegrationTest {
         assertEquals(200,result.getStatus(),result.getContentAsString());
         return UUID.fromString(field(result.getContentAsString(),"id"));
     }
+
+    @Test void archivedModifierMarksCartUnavailableAndCannotConsumeInventory() throws Exception {
+        UUID visit=visit(),item=menu(12000,3);
+        Customer customer=guest(visit);
+        String manager=staffSession("MANAGER");
+        var group=mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Flavor\",\"required\":false}")).andReturn().getResponse();
+        assertEquals(200,group.getStatus(),group.getContentAsString());
+        UUID groupId=UUID.fromString(field(group.getContentAsString(),"id"));
+        UUID vanilla=createVariantOption(groupId,manager,"vanilla","Vanilla",1000);
+        String cart="{\"expectedVersion\":0,\"lines\":[{\"menuItemId\":\""+item+
+            "\",\"quantity\":1,\"variantOptionIds\":[\""+vanilla+"\"]}]}";
+        assertEquals(200,mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+customer.token())
+            .contentType(MediaType.APPLICATION_JSON).content(cart))
+            .andReturn().getResponse().getStatus());
+
+        var archived=mvc.perform(patch("/api/v1/admin/variant-options/"+vanilla)
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"label\":\"Vanilla\",\"priceDeltaIdr\":1000,"
+                +"\"active\":false,\"expectedRevision\":1}")).andReturn().getResponse();
+        assertEquals(200,archived.getStatus(),archived.getContentAsString());
+
+        var view=mvc.perform(get("/api/v1/me/cart")
+            .header("Authorization","Bearer "+customer.token())).andReturn().getResponse();
+        assertEquals(200,view.getStatus(),view.getContentAsString());
+        assertTrue(view.getContentAsString().contains("\"available\":false"));
+        assertTrue(view.getContentAsString().contains(vanilla.toString()));
+        var order=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key","archive-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"cartVersion\":1}")).andReturn().getResponse();
+        assertEquals(409,order.getStatus(),order.getContentAsString());
+        assertEquals(3L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",
+            Long.class,item));
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT count(*) FROM orders WHERE guest_id=?",Integer.class,
+            customer.principal().guestId()));
+        var cleared=mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+customer.token())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"expectedVersion\":1,\"lines\":[]}")).andReturn().getResponse();
+        assertEquals(200,cleared.getStatus(),cleared.getContentAsString());
+        assertTrue(cleared.getContentAsString().contains("\"version\":2"));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM cart_line_variant_options WHERE menu_item_id=?
+            """,Integer.class,item));
+    }
 }
