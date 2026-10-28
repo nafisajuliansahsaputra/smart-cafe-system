@@ -1,6 +1,6 @@
 # API Contract — Smart Cafe System v1 (Proposed)
 
-**Status:** Design only. No API endpoints are implemented or live. Route naming may evolve through reviewed ADR but semantics must remain.
+**Status:** M2 backend subset implemented on draft development PR #2, **not merged, deployed or production-ready**. Routes below remain the target contract; only the subset explicitly listed in the implementation ledger is available.
 
 Base: /api/v1. JSON over HTTPS. Timestamp RFC3339 UTC. Money as integer IDR. IDs opaque UUID/ULID string. Staff and guest authentication differ. AuthZ enforced in API and domain services.
 
@@ -127,3 +127,67 @@ On reconnect, client must fetch canonical snapshot and resubscribe. Staff SSE su
 - Webhook invalid signature/amount/order rejected; genuine duplicate a no-op.
 - SSE reconnect resolves missed event by snapshot.
 - Invalid/expired receipt bearer returns safe 404/410, no phone leak.
+
+## 9. Implemented backend ledger (M2 draft PR #2)
+
+Implemented and verified with PostgreSQL Testcontainers/MockMvc:
+
+| Path | Current implementation | Remaining |
+| --- | --- | --- |
+| POST /staff/auth/login, GET /staff/auth/me, POST /staff/auth/logout | bcrypt staff credentials, revocable 8-hour bearer sessions, DB-backed failed-login throttling, fresh role checks | Secure browser/BFF UX, full staff management/MFA |
+| GET /tables/{alias}/entry | Public table metadata only, no join secret | Customer QR entry UI |
+| POST /waiter/table-visits, POST /waiter/table-visits/{id}/join-proof, POST /waiter/table-visits/{id}/close | Staff-authorized open, rotating 10-min proof, close guard for unresolved cash, session revocation and staff audit | Table CRUD, assignment policy, game-loan closure guard when games are implemented |
+| POST /table-visits/join, GET /me/visit | Active-visit verified proof, isolated guest and revocable guest bearer | Guest join UI and join abuse throttling |
+| GET /menu | Active categories and available base-price items | Variants, limited stock and catalog admin |
+| POST /orders, GET /me/orders | Guest-owned cash order, 1–30 unique lines, integer IDR server prices, immutable order snapshots, PostgreSQL idempotency lock | Persisted cart, variants/taxes, rich customer UI |
+| GET /ops/orders, POST /ops/orders/{id}/approve-cash | Authenticated cashier/manager filtered queue and itemized order detail, audited cash approval, kitchen admission | Filters/detail/reject/cancel/exception UI |
+| GET /kitchen/tickets, POST /kitchen/tickets/{id}/start, POST /kitchen/tickets/{id}/ready | Scoped kitchen reads, guarded ticket/order transitions | Actual kitchen display browser UI |
+| POST /waiter/orders/{id}/served | Staff-confirmed serving, does not change payment status | Waiter task UI and delivery assignment |
+| POST /ops/payments/{intentId}/cash-tenders | Waiter/cashier/manager/admin only; amount/role/state validated, idempotent recorded tender, change calculated, immutable paid receipt | Reconciliation, exceptions, cashier shift management |
+| GET /me/receipts/{id} | Paid only, owner-scoped receipt projection, no phone number | Receipt print/download styling and messaging |
+
+All remaining routes in sections 1–8 are **unimplemented**. The initial checkout accepts a bounded lines payload because persisted guest carts have not yet been added. No QRIS/VA gateway is connected and `PENDING` never implies paid.
+
+M2 demo currently requires the order to be **SERVED** before recording cash tender. This is a deliberately conservative sandbox behavior, **not a settled merchant payment policy**; the owner must confirm acceptable cash collection points before a production pilot. Tax/fee calculation is disabled for synthetic demonstration orders with explicit `M2-DEMO-UNTAXED` pricing version and is not a legal-tax policy.
+
+**Staff access refinement (M2):** A waiter can close/rotate, serve and capture cash only for a visit the waiter opened. This temporary conservative rule will be replaced by actual task assignment. Query filters are parameterized and enum-validated; staff access to itemized OCC detail requires cashier/manager/admin privileges.
+
+## 10. Cart, limited item stock and rejection (M2 draft extension)
+
+- `GET /api/v1/me/cart` requires a scoped active guest bearer; returns `{version,estimatedSubtotalIdr,lines[]}`. Each line exposes current server item price, total, whether orderable now, and a nullable remaining quantity. `Cache-Control: no-store`.
+- `PUT /api/v1/me/cart` accepts `{"expectedVersion":0,"lines":[{"menuItemId":"uuid","quantity":2}]}`. Lines are unique; max 30, each quantity 1–20. A stale cart version is **409 CONFLICT**. Empty array clears cart. The server never accepts user-submitted price.
+- `POST /api/v1/orders` accepts either `{"lines":[...]}` (existing direct cash checkout) **or** `{"cartVersion":1}` (checkout from stored cart), but not both; an `Idempotency-Key` is required. Cart-based checkout consumes the cart and increments its version after success. A replay of the same key and version returns the same stored order even after the cart is cleared; a different version with the same key conflicts.
+- `PATCH /api/v1/admin/menu-items/{id}/availability` requires MANAGER or ADMIN and accepts `{"available":true,"limitedQuantity":3,"expectedVersion":0,"reason":"Stock count corrected"}`. A `null` quantity explicitly means unlimited; zero means sold out. The write is version checked and audited. `GET` on the same path returns the current stock/version.
+- `POST /api/v1/ops/orders/{id}/reject` requires CASHIER/MANAGER/ADMIN and `{"reason":"..."}`. It accepts only an unapproved SUBMITTED cash order still AWAITING_CASH and with no kitchen ticket; it atomically rejects the order and releases its tracked stock allocation once. A second rejection is 409.
+
+The public `GET /menu` hides items with zero or disabled availability. All claims are bounded to single-cafe development with synthetic data, not production inventory/checkout policy.
+
+### Additional guest read and outbox event
+
+`GET /api/v1/me/orders/{id}` is implemented with ownership and visit checks in SQL. The response includes current order/aggregate-payment status, immutable line-item prices/quantities and creation timestamp. An unrelated guest gets a safe 404. On the successful first checkout, `ORDER_SUBMITTED` is committed to the existing durable outbox in the same PostgreSQL transaction. This does not mean SSE transport or worker dispatch is yet enabled.
+
+## 11. Development-only catalog and variant endpoints
+
+All paths are under `/api/v1`. Administrative routes require MANAGER/ADMIN bearer authentication and record staff audit entries.
+
+| Method | Route | Payload |
+| --- | --- | --- |
+| GET/POST | /admin/menu-categories | POST `{name,slug}`; slug is unique lowercase kebab-case |
+| PATCH | /admin/menu-categories/{id}/active | `{active:boolean}` |
+| GET/POST | /admin/menu-items | POST `{categoryId,name,priceIdr}`; new items start HIDDEN |
+| GET/PATCH | /admin/menu-items/{id} | PATCH `{categoryId,name,priceIdr,availability,expectedRevision}` |
+| GET | /menu/{itemId}/variants | Public active group/options for visible stocked menu item only |
+| GET/POST | /admin/menu-items/{itemId}/variant-group | POST `{name,required}`; maximum one group per item |
+| PATCH | /admin/variant-groups/{id} | `{name,required,active,expectedRevision}` |
+| POST | /admin/variant-groups/{id}/options | `{key,label,priceDeltaIdr}` |
+| PATCH | /admin/variant-options/{id} | `{label,priceDeltaIdr,active,expectedRevision}` |
+
+M2 supports **one selected option at most per menu item**, not arbitrary multiple modifiers or separate stocks per variant. Cart line and direct checkout line accept optional `variantOptionId`; if an item's enabled group is required, it must be supplied. It must reference an enabled option belonging to that item. The backend computes the final unit price using current base price + server-stored signed option delta; clients cannot submit a price. Snapshot stores option ID, group name, option key/label and delta as JSON in the immutable order line. Replaying the same idempotency key with a different direct-checkout option conflicts.
+
+## 12. Multi-group modifier upgrade (Flyway V9)
+
+New public `GET /api/v1/menu/{itemId}/variant-groups` returns an array of every **active** group, with active options only, on available menu items. New manager/admin `GET /api/v1/admin/menu-items/{itemId}/variant-groups` returns active/inactive configuration for review. Existing `POST /admin/menu-items/{itemId}/variant-group` can add groups, bounded to eight per item, and existing update/option CRUD routes remain valid. An item can have multiple different required/optional single-select groups.
+
+Cart `PUT /me/cart` and direct `POST /orders` lines now accept `variantOptionIds: [uuid, ...]` (zero to eight unique UUIDs) in addition to the backwards-compatible singular `variantOptionId`. **Do not send both fields in one line.** Empty/missing array means no choices; any active required group then causes 409. Duplicate choices, multiple choices in one group, inactive/foreign options or a negative/overflow adjusted price are rejected server-side. The complete option UUID list is sorted for direct checkout idempotency so reversing an array does not create a distinct order.
+
+The singular public legacy route `/menu/{id}/variants` remains for one-group items, but returns 409 for a multi-group item rather than hiding other required choices. M2 still stores one cart line per menu-item ID and uses parent menu item stock quantities, not modifier-level inventory. Order line `variant_snapshot` includes immutable `label` and `options[]` metadata. Receipt/KDS/guest/OCC read the snapshot label, never a live option name.

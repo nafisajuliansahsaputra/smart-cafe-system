@@ -2,7 +2,7 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Status:** M1 executable skeleton has passed GitHub CI on the feature branch, **not merged or deployed**. All business workflows remain planned until implemented and tested.
+> **Status:** M1 executable skeleton is CI verified on a separate feature branch; draft M2 PR #2 now includes API-backed staff/table/guest/cash ordering flows with PostgreSQL integration tests. Neither PR is merged or deployed. Complete UI/operational coverage is still in progress.
 
 ## What it solves
 
@@ -95,3 +95,21 @@ Read `PRD.md`, `ARCHITECTURE.md`, `AGENTS.md`, `WORKFLOW.md`, `TODO.md`, then th
 ## Project ownership
 
 Portfolio project by NATSX. License is **not yet selected**. A public repository does not implicitly grant an open-source license.
+
+## M2 API vertical slice (development branch only)
+
+Draft [PR #2](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2) adds versioned auth, table visits, cash checkout, OCC/KDS/waiter commands, and paid cash receipts using the existing one-service modular monolith. **No real payment gateway, messaging, cash handling, or usable staff browser dashboard is connected.** A fresh local development database can opt into the one-time bootstrap described in [docs/M2-LOCAL-BOOTSTRAP.md](docs/M2-LOCAL-BOOTSTRAP.md). The test suite exercises synthetic actors and data; public demo use still requires a staging security review.
+
+See [M2 engineering record](docs/M2-CASH-DOMAIN.md) for implemented routes, test coverage and outstanding requirements.
+
+### Current M2 cart/stock APIs
+
+The draft M2 backend supports `GET/PUT /api/v1/me/cart`, cash checkout from either explicit lines or a cart version, finite stock constraints, `GET/PATCH /api/v1/admin/menu-items/{id}/availability`, and audited pre-kitchen cash rejection. These operations are covered by synthetic PostgreSQL tests; no staff/guest browser UI or production pilot is enabled. See [M2 cart and stock controls](docs/M2-CART-INVENTORY.md).
+
+### M2 catalogue and variants (backend preview)
+
+Managers/admins can create categories and menu items, publish or hide items, revise prices with optimistic revisions, and manage a single choice group per menu item (e.g., Size: Regular/Large). Variant adjustments and required/optional choices are validated by Spring Boot, never accepted as client-supplied price. Order/receipt projections preserve the selected label and unit-price snapshot even after catalog changes. See [catalog and variants](docs/M2-CATALOG-VARIANTS.md); the browser UI is intentionally not locked in.
+
+### Multiple modifier groups (V9 development API)
+
+For a menu with Size (required), Milk (required), and Extra (optional), clients fetch `GET /api/v1/menu/{itemId}/variant-groups`, then submit `variantOptionIds: [sizeId, milkId]` in a cart or direct-order line. The server verifies one option per active group, enforces all required selections, and stores an immutable combined snapshot. Old `variantOptionId` still works for single-choice items. No client-supplied delta/price is trusted. [Implementation and limitations](docs/M2-CATALOG-VARIANTS.md).

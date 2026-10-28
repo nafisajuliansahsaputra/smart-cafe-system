@@ -82,3 +82,35 @@ Boundaries: public browser -> guest API; staff browser -> privileged API; paymen
 ## 8. Security disclosure / incident
 
 A suspicious payment or data incident requires containment, payment reconciliation, credential rotation if needed, evidence preservation, customer/authority notification assessment under applicable law, root-cause analysis and regression coverage. Never repair by deleting audit or historic payments.
+
+## 9. M2 implemented authentication boundary (draft)
+
+This development vertical slice uses a stateless **Authorization: Bearer** header (opaque 256-bit random token, SHA-256 hash only in the DB), not browser cookies. Spring Security disables CSRF specifically because credentials are not automatically attached by browsers; **do not switch to cookie sessions without adding CSRF/origin defenses**. The staff browser login/store design is not implemented and must not store bearer tokens in localStorage. All financial/order routes reject unauthenticated roles at the backend.
+
+- Staff sessions are 8 hours, revocable and immediately rejected if the staff account is disabled. Roles are read from PostgreSQL per authorized request.
+- Invalid staff credentials use a generic response and persistent 5-failure / 15-minute login throttling per normalized login; distributed IP-level rate limiting remains a release blocker.
+- Rotating staff-issued join proof is valid for 10 minutes. Static QR table aliases never grant guest authorization.
+- Guest sessions are 8 hours, scoped to one visit and invalid when closed or explicitly revoked; no phone number is required or stored by implemented join.
+- Local initial admin bootstrap requires an explicit `dev-bootstrap` profile and secret environment values, refused if any staff account exists. It is not a production provisioning mechanism.
+- DB constraints and audited transactional writes back financial and fulfillment invariants. Integration tests exercise role denials, wrong guest receipt access, old join proof, disabled staff and duplicate checkout.
+- Missing production controls: full role/guest object-level security review, staff BFF/cookie+CSRF UI, join/IP throttling, SAST/dependency scans, encrypted PII processing, staff credential reset/management and operational gateway reconciliation.
+
+See [ADR 0003](decisions/0003-api-bearer-auth.md) and [local bootstrap guide](M2-LOCAL-BOOTSTRAP.md).
+
+## 10. M2 incremental enforcement
+
+- PostgreSQL V5 prevents a receipt from being inserted unless the correlated payment intent is fully PAID with the matching total.
+- Until actual task assignment exists, only the waiter who opened a visit may close/rotate it, mark that visit's order served or record its cash; supervisory roles have separate privileges. This is stricter than role-only access.
+- OCC filters are parameterized and status values validated; query errors use the public safe error envelope.
+
+## 11. Cart/inventory authorization gates
+
+Guest cart updates and order checkout take identity exclusively from the current scoped token, never guest IDs in client payload. Limited quantities are enforced by PostgreSQL atomic updates with `limited_quantity>=requested`, not frontend state. Manager/admin stock changes are version-checked, reason-required and audited. Cashier-only pre-kitchen rejection releases stock in the same locked order transaction, with allocation evidence preventing accidental double credit. Inventory search uses parameterized JDBC statements. Further auth review, inventory adjustment reconciliation and full E2E are still required before pilot.
+
+## 12. Catalog variants financial boundary
+
+Only manager/admin roles can write item prices, visibility and variant group/option configuration. New items start HIDDEN. Item edits and option edits require the current revision, with stale writes rejected. Customer `variantOptionId` is treated solely as an untrusted selector: checkout verifies active group ownership, required selection, active option and adjusted unit price on the backend while holding a shared lock against concurrent catalog edits. Stock is still enforced on the parent menu item, not separately per option. Price/variant snapshots are part of the persisted order/receipt history; changing current catalog options never rewrites old financial evidence.
+
+## 13. Multi-group modifier constraints
+
+Each untrusted `variantOptionIds` array is bounded (at most eight), duplicate-checked and matched to active groups belonging to the requested menu item. All required groups must be represented exactly once. The backend reads catalog option prices under shared database row locks while checkout holds the parent menu item lock. Catalog writers take a parent-item write lock before creating/editing groups or options, serializing catalog changes with order-time snapshots. The canonical direct checkout idempotency fingerprint sorts UUID selections, preventing alternate selection ordering from causing duplicate orders. Manager/admin permissions remain mandatory for modifier writes. Legacy one-group lookup fails visibly when more than one group exists.

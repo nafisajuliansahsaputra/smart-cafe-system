@@ -108,3 +108,33 @@ Monitor at minimum:
 - No real merchant order, phone, cash tender or PII in CI.
 - Demo data isolated/resettable, clear visible "DEMO" labels.
 - Automated tests never trigger external charge or real customer message.
+
+## 8. Verified M2 API development coverage (2026-10-29)
+
+[GitHub Actions run 40744023293](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293) passed **22 Java tests**, zero failures/errors/skipped, including PostgreSQL 17 Testcontainers with Flyway V1–V4; frontend lint/typecheck/build and clean-start Docker Compose communication also succeeded.
+
+The tested cash API route covers verified guest proof, idempotent cash checkout, price snapshot integrity, staff OCC approval with payment still awaiting cash, kitchen start/ready, waiter serve, recorded tender and receipt, same-key replay, cross-guest receipt denial, blocked visit closure with unpaid cash and session revocation after valid closure. Concurrent same-key order submissions are tested.
+
+These are backend integration tests, **not browser-level E2E, performance, penetration testing, real cash collection validation, provider sandbox transactions or production certification**.
+
+## 9. Follow-up M2 hardening evidence
+
+[CI run 40744820730](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744820730) passed 23 Java tests including parallel cash tender attempts with distinct idempotency keys and exactly one settlement. [CI run 40744971944](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744971944) passed the V5 database rejection test for prepayment receipts. The final head CI must additionally pass waiter ownership denials.
+
+## 10. M2 cart and finite-stock integration scenarios
+
+`CartAndStockIntegrationTest` covers separate guest carts, unauthorized access, optimistic version conflicts, persisted cart checkout/replay after consumption, immutable order pricing, two concurrent guests competing for the last available unit, and rollback of any prior stock mutations when one line is sold out. Manager stock editing tests include denied CASHIER access, audit, optimistic version mismatch, and hiding out-of-stock entries. `CashOrderFlowIntegrationTest` additionally covers cashier rejection, single-release inventory restoration and visit closure after rejection.
+
+Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). Do not mark this test set passed on a new commit until its exact CI run succeeds.
+
+### M2 additional status privacy
+
+`CashOrderFlowIntegrationTest` checks that a guest can retrieve their own order details with correct cash status while another guest is rejected with a safe 404. New cash checkout creates an `ORDER_SUBMITTED` outbox entry in the same transaction; SSE delivery is not yet implemented.
+
+## 11. Menu catalog and options
+
+`CartAndStockIntegrationTest` includes manager-only category/item create/update, initial HIDDEN visibility, stale revision conflicts, disabled category hiding, required variant group setup, invalid/missing option rejection, authoritative price delta in cart/checkout, immutable old price and label after manager option edits, stock decrement, and idempotent replay. Results are tied to [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks), not assumed until the exact head CI succeeds.
+
+## 12. V9 modifier regression scenarios
+
+Synthetic PostgreSQL Testcontainers coverage includes: creating independent Size/Milk/Extras groups; missing a required group; selecting two options from one group; multi-group cart pricing, stock allocation and immutable order snapshot array; idempotent replay with reversed modifier input order; publication of all groups; rejection by the legacy singular lookup when more than one active group exists; and archived options returning a safe unorderable cart preview and a rejected checkout without spending stock. **Inspect the latest PR-head CI** before treating these added cases as passing.

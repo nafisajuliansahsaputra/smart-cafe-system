@@ -25,19 +25,21 @@
 
 M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242) passed Java/JUnit, Testcontainers/PostgreSQL/Flyway V1, Next.js lint/typecheck/build with npm ci, and clean-clone Docker Compose + OpenAPI + security deny + web -> API -> DB smoke. [Verification record](docs/M1-VERIFICATION.md). All checkmarks apply to the feature branch only; no merge, deployment, or business feature is implied.
 
-## M2 — Cash ordering vertical slice (NOT STARTED)
+## M2 — Cash ordering vertical slice (BACKEND FUNCTIONAL; FULL UI IN PROGRESS)
 
-- [ ] Staff login with roles and session revocation.
+- [x] Staff login API with roles and session revocation (PostgreSQL/MockMvc verified; staff browser login UI pending).
 - [ ] Table management, alias creation and visit open/close.
 - [ ] QR URL table entry, guest join proof and scoped session.
 - [ ] Catalog, categories, variants and availability.
-- [ ] Guest cart, server pricing and idempotent checkout.
-- [ ] Cash order and staff approval lifecycle with audit.
+- [x] Guest cart, server pricing and idempotent checkout (PostgreSQL cart v6, atomic limited stock, idempotency replay and race tests in CI).
+- [x] Cash order submission and cashier approval lifecycle with audit (API/DB verified; OCC staff UI still pending).
 - [ ] **Order Control Center** queue/search/detail/approve/exception tools.
 - [ ] Kitchen display admission and preparation states.
 - [ ] Waiter delivery and verified cash tender capture.
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
+
+M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. Backend integration tests passed 30/30 on [CI run 40749892835](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40749892835); further modifier tests require PR-head CI verification. Staff/guest operational browser UIs, ingredient inventory, cashier exception/reconciliation workflows, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 
@@ -85,3 +87,15 @@ M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smar
 ## Maintenance rule
 
 Only mark checked when code/docs exist on the target branch **and** the item's acceptance tests/evidence exist. List blockers in relevant PR/issue, do not add optimistic completion claims. Update this file together with changes.
+
+### M2 inventory follow-up
+
+V6 provides guest cart and limited menu-item quantities; V7 tracks per-order stock allocations so rejection can release stock once. Role-guarded manager stock adjustments and cashier pre-kitchen rejection are implemented and tested on this feature branch. This is **not** ingredient-level or expiry-aware inventory. See [cart and stock controls](docs/M2-CART-INVENTORY.md).
+
+### Catalog/backend follow-up
+
+Manager/admin category and item API writes with audit and revision checks have been introduced. Flyway V8 adds single-choice variant groups/options and a selected option on cart lines. Server-priced variant selection and immutable order snapshots are covered by tests in the [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). The original M2 catalog checkbox remains open because multi-group modifiers, catalog browser management and other product rules are not complete. See [M2 catalog variants](docs/M2-CATALOG-VARIANTS.md).
+
+### M2 modifier groups V9
+
+V9 removes the old one-group-per-item limit and introduces normalized `cart_line_variant_options` while preserving the old `variantOptionId` client input for a single choice. The new `variantOptionIds` input accepts one choice per active group, with all required groups present (maximum eight groups). The backend canonicalizes options for idempotency, computes all deltas in checked integer IDR, and stores the combined label and immutable options array in the order snapshot. Public `/menu/{item}/variant-groups` lists all active groups. The singular legacy lookup refuses a multi-group item instead of omitting required choices. Multi-group options do **not** imply arbitrary topping quantities, per-option stock, or multiple differently customized cart lines for the same menu item. M2 catalog remains open until browser management and remaining rules pass full acceptance.
