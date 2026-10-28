@@ -141,6 +141,10 @@ class CashOrderFlowIntegrationTest {
         assertEquals(56000,jdbc.queryForObject("SELECT total_idr FROM orders WHERE id=?",
             Long.class,orderId));
         assertThrows(DataAccessException.class,()->jdbc.update(
+            "INSERT INTO receipts(payment_intent_id,order_id,total_idr,document_json) " +
+            "VALUES ((SELECT id FROM payment_intents WHERE order_id=?),?,?,'{}'::jsonb)",
+            orderId,orderId,56000));
+        assertThrows(DataAccessException.class,()->jdbc.update(
             "UPDATE orders SET total_idr=57000 WHERE id=?",orderId));
         assertEquals(403,mvc.perform(get("/api/v1/ops/orders")
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse().getStatus());
