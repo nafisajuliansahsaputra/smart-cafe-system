@@ -308,4 +308,99 @@ class CartAndStockIntegrationTest {
                 ('MENU_ITEM_CREATED','MENU_ITEM_CHANGED','CATEGORY_DISABLED')
             """,Integer.class,itemId,categoryId));
     }
+
+    @Test void requiredVariantIsPricedServerSideAndSnapshotted() throws Exception {
+        UUID visit=visit(),item=menu(20000,4);
+        Customer guest=guest(visit);
+        String manager=staffSession("MANAGER");
+        String cashier=staffSession("CASHIER");
+        String groupBody="{\"name\":\"Size\",\"required\":true}";
+        assertEquals(403,mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+cashier).contentType(MediaType.APPLICATION_JSON)
+            .content(groupBody)).andReturn().getResponse().getStatus());
+        var groupResponse=mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(groupBody)).andReturn().getResponse();
+        assertEquals(200,groupResponse.getStatus(),groupResponse.getContentAsString());
+        UUID groupId=UUID.fromString(field(groupResponse.getContentAsString(),"id"));
+        String optionBody="{\"key\":\"large\",\"label\":\"Large\",\"priceDeltaIdr\":5000}";
+        var optionResponse=mvc.perform(post("/api/v1/admin/variant-groups/"+groupId+"/options")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(optionBody)).andReturn().getResponse();
+        assertEquals(200,optionResponse.getStatus(),optionResponse.getContentAsString());
+        UUID optionId=UUID.fromString(field(optionResponse.getContentAsString(),"id"));
+        var published=mvc.perform(get("/api/v1/menu/"+item+"/variants"))
+            .andReturn().getResponse();
+        assertEquals(200,published.getStatus());
+        assertTrue(published.getContentAsString().contains("\"required\":true"));
+        assertTrue(published.getContentAsString().contains("Large"));
+        assertEquals(409,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key","no-variant-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lines\":[{\"menuItemId\":\""+item+"\",\"quantity\":1}]}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key","fake-variant-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lines\":[{\"menuItemId\":\""+item+
+                "\",\"quantity\":1,\"variantOptionId\":\""+UUID.randomUUID()+"\"}]}"))
+            .andReturn().getResponse().getStatus());
+
+        String cartJson="{\"expectedVersion\":0,\"lines\":[{\"menuItemId\":\""+item+
+            "\",\"quantity\":2,\"variantOptionId\":\""+optionId+"\"}]}";
+        var cart=mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+guest.token())
+            .contentType(MediaType.APPLICATION_JSON).content(cartJson))
+            .andReturn().getResponse();
+        assertEquals(200,cart.getStatus(),cart.getContentAsString());
+        assertTrue(cart.getContentAsString().contains("\"estimatedSubtotalIdr\":50000"));
+        assertTrue(cart.getContentAsString().contains("\"variantLabel\":\"Large\""));
+
+        String idempotency="variant-cart-"+UUID.randomUUID();
+        var order=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key",idempotency).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"cartVersion\":1}")).andReturn().getResponse();
+        assertEquals(200,order.getStatus(),order.getContentAsString());
+        UUID orderId=UUID.fromString(field(order.getContentAsString(),"id"));
+        assertTrue(order.getContentAsString().contains("\"totalIdr\":50000"));
+        assertEquals(25000L,jdbc.queryForObject("""
+            SELECT unit_price_idr FROM order_lines WHERE order_id=?
+            """,Long.class,orderId));
+        String snapshot=jdbc.queryForObject("""
+            SELECT variant_snapshot::text FROM order_lines WHERE order_id=?
+            """,String.class,orderId);
+        assertTrue(snapshot.contains("Large"));
+        assertTrue(snapshot.contains("5000"));
+        assertTrue(snapshot.contains(optionId.toString()));
+
+        String changed="{\"label\":\"Extra Large\",\"priceDeltaIdr\":9000,"
+            +"\"active\":true,\"expectedRevision\":1}";
+        var changedResponse=mvc.perform(patch("/api/v1/admin/variant-options/"+optionId)
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON).content(changed))
+            .andReturn().getResponse();
+        assertEquals(200,changedResponse.getStatus(),changedResponse.getContentAsString());
+        assertEquals(409,mvc.perform(patch("/api/v1/admin/variant-options/"+optionId)
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON).content(changed))
+            .andReturn().getResponse().getStatus());
+        String detail=mvc.perform(get("/api/v1/me/orders/"+orderId)
+            .header("Authorization","Bearer "+guest.token()))
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(detail.contains("\"variantLabel\":\"Large\""));
+        assertEquals(25000L,jdbc.queryForObject("""
+            SELECT unit_price_idr FROM order_lines WHERE order_id=?
+            """,Long.class,orderId));
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT limited_quantity FROM item_availability WHERE menu_item_id=?
+            """,Long.class,item));
+        assertEquals(200,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key",idempotency)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"cartVersion\":1}")).andReturn().getResponse().getStatus());
+    }
 }
