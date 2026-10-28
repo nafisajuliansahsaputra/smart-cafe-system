@@ -18,7 +18,8 @@ public final class GuestBearerFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        if (request.getRequestURI().startsWith("/api/v1/me/")) {
+        if (request.getRequestURI().startsWith("/api/v1/me/")
+            || request.getRequestURI().equals("/api/v1/orders")) {
             String header = request.getHeader("Authorization");
             if (header != null && header.startsWith("Bearer ")) {
                 GuestPrincipal principal = sessions.authenticate(header.substring(7));
