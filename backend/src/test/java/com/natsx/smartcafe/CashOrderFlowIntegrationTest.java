@@ -126,6 +126,14 @@ class CashOrderFlowIntegrationTest {
         UUID orderId=UUID.fromString(value(json,"id"));
         assertTrue(json.contains("AWAITING_CASH"));
         assertTrue(json.contains("56000"));
+        var ownedDetail=mvc.perform(get("/api/v1/me/orders/"+orderId)
+            .header("Authorization","Bearer "+a.token())).andReturn().getResponse();
+        assertEquals(200,ownedDetail.getStatus());
+        assertTrue(ownedDetail.getContentAsString().contains("Synthetic Meal"));
+        assertTrue(ownedDetail.getContentAsString().contains("AWAITING_CASH"));
+        assertEquals(404,mvc.perform(get("/api/v1/me/orders/"+orderId)
+            .header("Authorization","Bearer "+b.token()))
+            .andReturn().getResponse().getStatus());
         assertEquals(orderId,UUID.fromString(value(submit(a,menuItem,2,key).getContentAsString(),"id")));
         assertEquals(409,submit(a,menuItem,3,key).getStatus());
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",

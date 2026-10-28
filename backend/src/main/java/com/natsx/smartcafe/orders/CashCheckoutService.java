@@ -3,6 +3,7 @@ package com.natsx.smartcafe.orders;
 import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.GuestPrincipal;
 import com.natsx.smartcafe.identity.SecureToken;
+import com.natsx.smartcafe.common.events.OutboxEvents;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -17,9 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class CashCheckoutService {
     private final JdbcTemplate jdbc;
     private final CartService carts;
-    public CashCheckoutService(JdbcTemplate jdbc,CartService carts) {
+    private final OutboxEvents outbox;
+    public CashCheckoutService(JdbcTemplate jdbc,CartService carts,OutboxEvents outbox) {
         this.jdbc=jdbc;
         this.carts=carts;
+        this.outbox=outbox;
     }
 
     public record Line(UUID menuItemId, int quantity) {}
@@ -163,6 +166,7 @@ public class CashCheckoutService {
             INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
             VALUES (?,'CASH_CHECKOUT',?,?,?,now()+interval '7 days')
             """,guest.guestId(),key,hash,orderId);
+        outbox.order(orderId,"ORDER_SUBMITTED");
         return new Checkout(orderId,"SUBMITTED","AWAITING_CASH",subtotal);
     }
 
