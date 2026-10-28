@@ -23,3 +23,7 @@ M1's Spring Security denied all business routes. M2 needs staff role controls an
 Tokens are revocable and don't require a new microservice, Redis, or JWT signing key. The DB read cost per request is acceptable at the current single-cafe target; benchmark before any scaling changes. Cookie/BFF UI and phishing/XSS-resilient credential handling are still unresolved and require review. Rate limits by IP/network and durable event/incident monitoring remain production requirements.
 
 The auth scheme is **not a claim of production readiness**. All financial actions remain server-authorized/audited; actual payment providers remain disabled.
+
+## Temporary waiter ownership rule
+
+The opener of the table visit is the only employee with a WAITER-only role permitted to close/rotate that visit, serve its order or capture its cash. Cashier/manager/admin retain their documented supervisory rights. Replace this conservative rule with explicit assignment/reassignment through a reviewed later change.

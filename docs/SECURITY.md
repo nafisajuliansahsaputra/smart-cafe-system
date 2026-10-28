@@ -96,3 +96,9 @@ This development vertical slice uses a stateless **Authorization: Bearer** heade
 - Missing production controls: full role/guest object-level security review, staff BFF/cookie+CSRF UI, join/IP throttling, SAST/dependency scans, encrypted PII processing, staff credential reset/management and operational gateway reconciliation.
 
 See [ADR 0003](decisions/0003-api-bearer-auth.md) and [local bootstrap guide](M2-LOCAL-BOOTSTRAP.md).
+
+## 10. M2 incremental enforcement
+
+- PostgreSQL V5 prevents a receipt from being inserted unless the correlated payment intent is fully PAID with the matching total.
+- Until actual task assignment exists, only the waiter who opened a visit may close/rotate it, mark that visit's order served or record its cash; supervisory roles have separate privileges. This is stricter than role-only access.
+- OCC filters are parameterized and status values validated; query errors use the public safe error envelope.

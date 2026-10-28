@@ -1,6 +1,6 @@
 # Data Model — Smart Cafe System
 
-**Status:** Logical contract plus an implemented subset on unmerged M1/M2 feature branches. Flyway V1–V4 are committed and applied successfully in CI. Future entities and indexes below remain design targets. PostgreSQL is authoritative.
+**Status:** Logical contract plus an implemented subset on unmerged M1/M2 feature branches. Flyway V1–V5 are committed and applied successfully in CI. Future entities and indexes below remain design targets. PostgreSQL is authoritative.
 
 ## 1. Identity and tables
 
@@ -101,3 +101,5 @@ Index choices should be measured after query shape and actual EXPLAIN plans exis
 - **V4**: immutable paid-cash receipts, plus a DB trigger forbidding mutation of order financial snapshot fields.
 
 Not yet implemented: variant tables, inventory reservations, payment attempts/webhooks, serialized physical game units and loans, outbox delivery worker, receipt message dispatch and full reconciliation. A passed migration is not evidence that those future entities exist.
+
+- **V5**: Database receipt insertion guard requires matching payment intent, order, total and fully PAID status; the trigger rejects prepayment receipt creation even if application code attempts it.

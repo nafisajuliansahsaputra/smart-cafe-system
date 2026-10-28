@@ -39,7 +39,7 @@ M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smar
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
 
-M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. API integration tests passed 22/22 on [CI run 40744023293](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293). Staff and operational browser UIs, persisted cart/variants, OCC search/exception commands, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
+M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. API integration tests passed 23/23 with concurrent cash tender coverage on [CI run 40744820730](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293). Staff and operational browser UIs, persisted cart/variants, OCC exception commands, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 

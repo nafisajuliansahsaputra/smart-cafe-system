@@ -140,7 +140,7 @@ Implemented and verified with PostgreSQL Testcontainers/MockMvc:
 | POST /table-visits/join, GET /me/visit | Active-visit verified proof, isolated guest and revocable guest bearer | Guest join UI and join abuse throttling |
 | GET /menu | Active categories and available base-price items | Variants, limited stock and catalog admin |
 | POST /orders, GET /me/orders | Guest-owned cash order, 1–30 unique lines, integer IDR server prices, immutable order snapshots, PostgreSQL idempotency lock | Persisted cart, variants/taxes, rich customer UI |
-| GET /ops/orders, POST /ops/orders/{id}/approve-cash | Authenticated cashier/manager queue and audited cash approval, kitchen admission | Filters/detail/reject/cancel/exception UI |
+| GET /ops/orders, POST /ops/orders/{id}/approve-cash | Authenticated cashier/manager filtered queue and itemized order detail, audited cash approval, kitchen admission | Filters/detail/reject/cancel/exception UI |
 | GET /kitchen/tickets, POST /kitchen/tickets/{id}/start, POST /kitchen/tickets/{id}/ready | Scoped kitchen reads, guarded ticket/order transitions | Actual kitchen display browser UI |
 | POST /waiter/orders/{id}/served | Staff-confirmed serving, does not change payment status | Waiter task UI and delivery assignment |
 | POST /ops/payments/{intentId}/cash-tenders | Waiter/cashier/manager/admin only; amount/role/state validated, idempotent recorded tender, change calculated, immutable paid receipt | Reconciliation, exceptions, cashier shift management |
@@ -149,3 +149,5 @@ Implemented and verified with PostgreSQL Testcontainers/MockMvc:
 All remaining routes in sections 1–8 are **unimplemented**. The initial checkout accepts a bounded lines payload because persisted guest carts have not yet been added. No QRIS/VA gateway is connected and `PENDING` never implies paid.
 
 M2 demo currently requires the order to be **SERVED** before recording cash tender. This is a deliberately conservative sandbox behavior, **not a settled merchant payment policy**; the owner must confirm acceptable cash collection points before a production pilot. Tax/fee calculation is disabled for synthetic demonstration orders with explicit `M2-DEMO-UNTAXED` pricing version and is not a legal-tax policy.
+
+**Staff access refinement (M2):** A waiter can close/rotate, serve and capture cash only for a visit the waiter opened. This temporary conservative rule will be replaced by actual task assignment. Query filters are parameterized and enum-validated; staff access to itemized OCC detail requires cashier/manager/admin privileges.

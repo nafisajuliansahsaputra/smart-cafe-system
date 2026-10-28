@@ -118,3 +118,7 @@ Delivery attempt states: QUEUED -> SENDING -> SENT or RETRYABLE_FAILURE -> QUEUE
 8. Customer with an expired visit token cannot reuse old QR to order.
 9. Resending a receipt does not produce duplicate charge or new order.
 10. Late digital payment success on cancelled order goes to reconciliation/exception queue; never silently fulfill or discard.
+
+## 7. M2 implementation guardrails
+
+Cash may be approved for cooking and even served while still AWAITING_CASH. In the current development-only implementation, recording the cash tender requires the order to have reached SERVED. After confirmed staff tender, cash payment and immutable receipt are committed together. V5 independently prevents receipts for unpaid intents. A waiter must have opened the visit to manage its visit/serving/cash until a proper assignment system is available. These temporary merchant policies are not approved for production use.

@@ -116,3 +116,7 @@ Monitor at minimum:
 The tested cash API route covers verified guest proof, idempotent cash checkout, price snapshot integrity, staff OCC approval with payment still awaiting cash, kitchen start/ready, waiter serve, recorded tender and receipt, same-key replay, cross-guest receipt denial, blocked visit closure with unpaid cash and session revocation after valid closure. Concurrent same-key order submissions are tested.
 
 These are backend integration tests, **not browser-level E2E, performance, penetration testing, real cash collection validation, provider sandbox transactions or production certification**.
+
+## 9. Follow-up M2 hardening evidence
+
+[CI run 40744820730](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744820730) passed 23 Java tests including parallel cash tender attempts with distinct idempotency keys and exactly one settlement. [CI run 40744971944](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744971944) passed the V5 database rejection test for prepayment receipts. The final head CI must additionally pass waiter ownership denials.
