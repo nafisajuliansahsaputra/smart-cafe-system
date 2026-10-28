@@ -249,4 +249,63 @@ class CartAndStockIntegrationTest {
         assertEquals(0L,jdbc.queryForObject("SELECT limited_quantity FROM item_availability "
             +"WHERE menu_item_id=?",Long.class,item));
     }
+
+    @Test void managerCatalogLifecycleEnforcesRoleRevisionAndVisibility() throws Exception {
+        String manager=staffSession("MANAGER");
+        String cashier=staffSession("CASHIER");
+        String slug="hot-drinks-"+UUID.randomUUID();
+        String categoryPayload="{\"name\":\"Hot Drinks\",\"slug\":\""+slug+"\"}";
+        assertEquals(403,mvc.perform(post("/api/v1/admin/menu-categories")
+            .header("Authorization","Bearer "+cashier).contentType(MediaType.APPLICATION_JSON)
+            .content(categoryPayload)).andReturn().getResponse().getStatus());
+        var category=mvc.perform(post("/api/v1/admin/menu-categories")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(categoryPayload)).andReturn().getResponse();
+        assertEquals(200,category.getStatus(),category.getContentAsString());
+        UUID categoryId=UUID.fromString(field(category.getContentAsString(),"id"));
+        assertEquals(409,mvc.perform(post("/api/v1/admin/menu-categories")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(categoryPayload)).andReturn().getResponse().getStatus());
+
+        String itemPayload="{\"categoryId\":\""+categoryId+
+            "\",\"name\":\"Cafe Latte\",\"priceIdr\":28000}";
+        var created=mvc.perform(post("/api/v1/admin/menu-items")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(itemPayload)).andReturn().getResponse();
+        assertEquals(200,created.getStatus(),created.getContentAsString());
+        UUID itemId=UUID.fromString(field(created.getContentAsString(),"id"));
+        assertTrue(created.getContentAsString().contains("\"availability\":\"HIDDEN\""));
+        assertFalse(mvc.perform(get("/api/v1/menu")).andReturn().getResponse()
+            .getContentAsString().contains(itemId.toString()));
+        String edit="{\"categoryId\":\""+categoryId+
+            "\",\"name\":\"Cafe Latte Large\",\"priceIdr\":35000,"+
+            "\"availability\":\"AVAILABLE\",\"expectedRevision\":1}";
+        assertEquals(403,mvc.perform(patch("/api/v1/admin/menu-items/"+itemId)
+            .header("Authorization","Bearer "+cashier).contentType(MediaType.APPLICATION_JSON)
+            .content(edit)).andReturn().getResponse().getStatus());
+        var visible=mvc.perform(patch("/api/v1/admin/menu-items/"+itemId)
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(edit)).andReturn().getResponse();
+        assertEquals(200,visible.getStatus(),visible.getContentAsString());
+        assertTrue(visible.getContentAsString().contains("\"revision\":2"));
+        assertEquals(409,mvc.perform(patch("/api/v1/admin/menu-items/"+itemId)
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(edit)).andReturn().getResponse().getStatus());
+        String publicMenu=mvc.perform(get("/api/v1/menu")).andReturn().getResponse()
+            .getContentAsString();
+        assertTrue(publicMenu.contains(itemId.toString()));
+        assertTrue(publicMenu.contains("35000"));
+
+        String toggle="{\"active\":false}";
+        assertEquals(200,mvc.perform(patch("/api/v1/admin/menu-categories/"+categoryId+"/active")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(toggle)).andReturn().getResponse().getStatus());
+        assertFalse(mvc.perform(get("/api/v1/menu")).andReturn().getResponse()
+            .getContentAsString().contains(itemId.toString()));
+        assertEquals(3,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE actor_type='STAFF'
+              AND resource_id IN (?,?) AND operation IN
+                ('MENU_ITEM_CREATED','MENU_ITEM_CHANGED','CATEGORY_DISABLED')
+            """,Integer.class,itemId,categoryId));
+    }
 }
