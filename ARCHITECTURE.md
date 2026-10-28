@@ -57,7 +57,7 @@ Domain modules do not reach into each other's repository internals. Prefer publi
 
 ## 4. High-value invariants
 
-1. **One active table visit:** unique database partial index on table_id WHERE status='ACTIVE' (adjust actual status model if necessary).
+1. **One unclosed table visit:** unique database partial index on table_id WHERE status IN ('ACTIVE','CLOSING'), preventing a second visit during closure.
 2. **Scoped guest:** a visitor can only view/mutate own guest-owned carts/orders within current visit; do not trust a client-provided table_id/role.
 3. **Checkout snapshot:** server calculates IDR prices/taxes/fees; store immutable line and total snapshots; use numeric decimal/integer representation.
 4. **Idempotency:** key scoped to actor/action with request hash and uniqueness; repeat gives same result, mismatched payload fails.
