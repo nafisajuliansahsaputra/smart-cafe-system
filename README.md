@@ -66,6 +66,7 @@ All choices are architectural targets, not assertions of existing implementation
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, PII, payment safeguards |
 | [docs/USER-FLOWS.md](docs/USER-FLOWS.md) | Customer/staff journeys, exceptions |
 | [docs/RECEIPTS.md](docs/RECEIPTS.md) | Receipts, phone opt-in, delivery jobs |
+| [docs/UI-GUIDELINES.md](docs/UI-GUIDELINES.md) | Customer/staff UX behavior and accessibility |
 | [docs/TESTING.md](docs/TESTING.md) | Unit/integration/E2E and failure tests |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Planned environments and operations |
 | [docs/decisions/0001-foundation.md](docs/decisions/0001-foundation.md) | Architecture decision record |
