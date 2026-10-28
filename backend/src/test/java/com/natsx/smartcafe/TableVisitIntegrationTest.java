@@ -121,6 +121,11 @@ class TableVisitIntegrationTest {
         var waiter=staff("WAITER");
         var opened=open(waiter,table);
         var id=extract(opened,"id");
+        var otherWaiter=staff("WAITER");
+        assertEquals(403,mvc.perform(post("/api/v1/waiter/table-visits/" + id + "/join-proof")
+            .header("Authorization","Bearer " + otherWaiter)).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(post("/api/v1/waiter/table-visits/" + id + "/close")
+            .header("Authorization","Bearer " + otherWaiter)).andReturn().getResponse().getStatus());
         var oldProof=extract(opened,"joinProof");
         assertEquals(409,mvc.perform(post("/api/v1/waiter/table-visits")
             .header("Authorization","Bearer " + waiter).contentType(MediaType.APPLICATION_JSON)

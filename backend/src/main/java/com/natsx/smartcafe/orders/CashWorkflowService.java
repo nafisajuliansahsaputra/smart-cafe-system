@@ -127,6 +127,7 @@ public class CashWorkflowService {
     @Transactional
     public void served(UUID orderId,UUID staff,String requestId) {
         var order=lockOrder(orderId);
+        requireWaiterOwnershipOrSupervisor(orderId, staff);
         try {
             CashOrderPolicy.markServed(OrderStatus.valueOf(order.status()));
         } catch(IllegalStateException ex) { throw conflict("Order is not ready to serve"); }
@@ -144,6 +145,7 @@ public class CashWorkflowService {
             rs->rs.next()?rs.getObject(1,UUID.class):null,intentId);
         if(orderId==null) throw missing();
         var order=lockOrder(orderId);
+        requireWaiterOwnershipOrSupervisor(orderId, staff);
         var payment=lockPaymentByOrder(orderId);
         if(!payment.id().equals(intentId)) throw missing();
         var replay=jdbc.query("""
@@ -180,6 +182,22 @@ public class CashWorkflowService {
         audit.staff(staff,"CASH_COLLECTED","PAYMENT_INTENT",intentId,requestId);
         outbox.order(orderId,"CASH_PAYMENT_PAID");
         return new CashTenderResult(intentId,orderId,receivedIdr,quote.changeGivenIdr(),"PAID",receiptId);
+    }
+
+    private void requireWaiterOwnershipOrSupervisor(UUID orderId, UUID staffId) {
+        Boolean supervisor = jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM staff_role_assignments
+                          WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
+            """, Boolean.class, staffId);
+        if (Boolean.TRUE.equals(supervisor)) return;
+        Boolean assigned = jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM orders o JOIN table_visits v ON v.id=o.visit_id
+                          WHERE o.id=? AND v.opened_by=?)
+            """, Boolean.class, orderId, staffId);
+        if (!Boolean.TRUE.equals(assigned)) {
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Waiter is not responsible for this visit");
+        }
     }
 
     private TicketRow findTicket(UUID id) {

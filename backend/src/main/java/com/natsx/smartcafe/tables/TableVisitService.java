@@ -73,6 +73,7 @@ public class TableVisitService {
             FROM table_visits WHERE id=? FOR UPDATE
             """, rs -> rs.next() ? readVisit(rs) : null, visitId);
         if (visit == null) throw missing();
+        requireWaiterOwnershipOrSupervisor(visitId,staffId);
         if (!visit.status().equals("ACTIVE")) throw conflict("Visit is not active");
         String proof = SecureToken.generate();
         Instant expires = Instant.now().plus(PROOF_TTL);
@@ -129,6 +130,7 @@ public class TableVisitService {
             WHERE id=? FOR UPDATE
             """, rs -> rs.next() ? readVisit(rs) : null, visitId);
         if (visit == null) throw missing();
+        requireWaiterOwnershipOrSupervisor(visitId,staffId);
         if (!visit.status().equals("ACTIVE")) throw conflict("Visit cannot close from current state");
         Integer unresolved = jdbc.queryForObject("""
             SELECT count(*) FROM orders o LEFT JOIN payment_intents p ON p.order_id=o.id
@@ -141,6 +143,21 @@ public class TableVisitService {
         jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", visitId);
         jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", visitId);
         audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
+    }
+
+    private void requireWaiterOwnershipOrSupervisor(UUID visitId,UUID staffId) {
+        Boolean supervisor=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM staff_role_assignments
+                          WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
+            """,Boolean.class,staffId);
+        if(Boolean.TRUE.equals(supervisor))return;
+        Boolean opener=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM table_visits WHERE id=? AND opened_by=?)
+            """,Boolean.class,visitId,staffId);
+        if(!Boolean.TRUE.equals(opener)) {
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Waiter is not responsible for this visit");
+        }
     }
 
     private VisitRow readVisit(java.sql.ResultSet rs) throws java.sql.SQLException {

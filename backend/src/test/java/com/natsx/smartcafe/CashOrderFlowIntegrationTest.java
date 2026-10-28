@@ -189,12 +189,20 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/" + ticket + "/ready")
             .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
+        var unassignedWaiter=staff("WAITER");
+        assertEquals(403,mvc.perform(post("/api/v1/waiter/orders/" + orderId + "/served")
+            .header("Authorization","Bearer " + unassignedWaiter)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(post("/api/v1/waiter/orders/" + orderId + "/served")
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse().getStatus());
         assertEquals("AWAITING_CASH",jdbc.queryForObject(
             "SELECT aggregate_status FROM payment_intents WHERE id=?",String.class,intent));
 
         String tenderKey="tender-" + UUID.randomUUID();
+        assertEquals(403,mvc.perform(post("/api/v1/ops/payments/" + intent + "/cash-tenders")
+            .header("Authorization","Bearer " + unassignedWaiter)
+            .header("Idempotency-Key","unassigned-tender")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"amountReceivedIdr\":60000}"))
+            .andReturn().getResponse().getStatus());
         var tender=mvc.perform(post("/api/v1/ops/payments/" + intent + "/cash-tenders")
             .header("Authorization","Bearer " + waiter).header("Idempotency-Key",tenderKey)
             .contentType(MediaType.APPLICATION_JSON).content("{\"amountReceivedIdr\":60000}"))
