@@ -161,3 +161,7 @@ M2 demo currently requires the order to be **SERVED** before recording cash tend
 - `POST /api/v1/ops/orders/{id}/reject` requires CASHIER/MANAGER/ADMIN and `{"reason":"..."}`. It accepts only an unapproved SUBMITTED cash order still AWAITING_CASH and with no kitchen ticket; it atomically rejects the order and releases its tracked stock allocation once. A second rejection is 409.
 
 The public `GET /menu` hides items with zero or disabled availability. All claims are bounded to single-cafe development with synthetic data, not production inventory/checkout policy.
+
+### Additional guest read and outbox event
+
+`GET /api/v1/me/orders/{id}` is implemented with ownership and visit checks in SQL. The response includes current order/aggregate-payment status, immutable line-item prices/quantities and creation timestamp. An unrelated guest gets a safe 404. On the successful first checkout, `ORDER_SUBMITTED` is committed to the existing durable outbox in the same PostgreSQL transaction. This does not mean SSE transport or worker dispatch is yet enabled.

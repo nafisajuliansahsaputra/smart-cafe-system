@@ -126,3 +126,7 @@ These are backend integration tests, **not browser-level E2E, performance, penet
 `CartAndStockIntegrationTest` covers separate guest carts, unauthorized access, optimistic version conflicts, persisted cart checkout/replay after consumption, immutable order pricing, two concurrent guests competing for the last available unit, and rollback of any prior stock mutations when one line is sold out. Manager stock editing tests include denied CASHIER access, audit, optimistic version mismatch, and hiding out-of-stock entries. `CashOrderFlowIntegrationTest` additionally covers cashier rejection, single-release inventory restoration and visit closure after rejection.
 
 Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). Do not mark this test set passed on a new commit until its exact CI run succeeds.
+
+### M2 additional status privacy
+
+`CashOrderFlowIntegrationTest` checks that a guest can retrieve their own order details with correct cash status while another guest is rejected with a safe 404. New cash checkout creates an `ORDER_SUBMITTED` outbox entry in the same transaction; SSE delivery is not yet implemented.
