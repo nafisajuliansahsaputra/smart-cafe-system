@@ -35,6 +35,12 @@ jobs:
       - name: Install dependencies
         working-directory: apps/web
         run: npm install --no-audit --no-fund
+      - name: Temporary lockfile export for reviewed reproducibility
+        working-directory: apps/web
+        run: |
+          echo 'SCS_LOCKFILE_BASE64_BEGIN'
+          base64 --wrap=600 package-lock.json
+          echo 'SCS_LOCKFILE_BASE64_END'
       - name: Lint
         working-directory: apps/web
         run: npm run lint
@@ -68,6 +74,10 @@ jobs:
             sleep 3
           done
           grep -q '"database":"connected"' /tmp/scs-status.json
+          curl --fail --silent http://127.0.0.1:8080/v3/api-docs | grep -q '"openapi"'
+          denied_code=$(curl --silent --output /tmp/scs-denied.json --write-out '%{http_code}' http://127.0.0.1:8080/api/v1/ops/orders)
+          test "$denied_code" = "401" -o "$denied_code" = "403"
+          grep -q '"error"' /tmp/scs-denied.json
           curl --fail --silent http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'
           for attempt in $(seq 1 40); do
             if curl --fail --silent http://127.0.0.1:3000 > /tmp/scs-web.html; then

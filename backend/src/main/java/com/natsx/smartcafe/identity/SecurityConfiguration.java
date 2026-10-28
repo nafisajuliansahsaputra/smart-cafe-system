@@ -18,6 +18,13 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
+            .exceptionHandling(errors -> errors
+                .authenticationEntryPoint((request, response, ex) ->
+                    com.natsx.smartcafe.common.api.SecurityErrorWriter.write(
+                        request, response, 401, "UNAUTHENTICATED", "Authentication required"))
+                .accessDeniedHandler((request, response, ex) ->
+                    com.natsx.smartcafe.common.api.SecurityErrorWriter.write(
+                        request, response, 403, "FORBIDDEN", "Access denied")))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/system/status").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",

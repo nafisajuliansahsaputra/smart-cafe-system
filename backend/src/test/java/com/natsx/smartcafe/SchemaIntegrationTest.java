@@ -8,6 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -17,6 +21,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers
+@AutoConfigureMockMvc
 @SpringBootTest
 class SchemaIntegrationTest {
     @Container
@@ -31,6 +36,7 @@ class SchemaIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+    @Autowired MockMvc mvc;
 
     @Test void flywayCreatesSchemaAndOnlyOneActiveVisitPerTable() {
         assertEquals(5, jdbc.queryForObject("SELECT count(*) FROM staff_roles", Integer.class));
@@ -45,6 +51,17 @@ class SchemaIntegrationTest {
         assertThrows(DataIntegrityViolationException.class,
             () -> jdbc.update("INSERT INTO table_visits(table_id,opened_by,join_secret_hash) VALUES (?,?,?)",
                 table, staff, "b".repeat(64)));
+    }
+
+    @Test void publicDatabaseProbeWorksAndStaffApiIsDenied() throws Exception {
+        var healthy = mvc.perform(get("/api/v1/system/status")).andReturn().getResponse();
+        assertEquals(200, healthy.getStatus());
+        assertTrue(healthy.getContentAsString().contains("\"connected\""));
+
+        var denied = mvc.perform(get("/api/v1/ops/orders")).andReturn().getResponse();
+        assertTrue(denied.getStatus() == 401 || denied.getStatus() == 403);
+        assertTrue(denied.getContentAsString().contains("\"UNAUTHENTICATED\"")
+            || denied.getContentAsString().contains("\"FORBIDDEN\""));
     }
 
     @Test void rejectsNegativeMenuPrices() {
