@@ -11,11 +11,19 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SecurityConfiguration {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // M1 has no login or guest token issuer. Deny every business route until M2.
-        // Keep CSRF protection enabled for future session-based authenticated writes.
+    org.springframework.security.crypto.password.PasswordEncoder passwordEncoder() {
+        return new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(12);
+    }
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http, StaffAuthService staffAuth) throws Exception {
+        // Only explicit Authorization: Bearer headers authenticate staff.
+        // No browser cookies are accepted; adding cookie auth requires CSRF protection.
         return http
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(AbstractHttpConfigurer::disable)
+            .addFilterBefore(new StaffBearerFilter(staffAuth),
+                org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .exceptionHandling(errors -> errors
@@ -29,6 +37,11 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/system/status").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                     "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/staff/auth/login").permitAll()
+                .requestMatchers("/api/v1/staff/auth/me", "/api/v1/staff/auth/logout").authenticated()
+                .requestMatchers("/api/v1/ops/**").hasAnyRole("CASHIER", "MANAGER", "ADMIN")
+                .requestMatchers("/api/v1/waiter/**").hasAnyRole("WAITER", "CASHIER", "MANAGER", "ADMIN")
+                .requestMatchers("/api/v1/kitchen/**").hasAnyRole("KITCHEN", "MANAGER", "ADMIN")
                 .anyRequest().denyAll())
             .build();
     }
