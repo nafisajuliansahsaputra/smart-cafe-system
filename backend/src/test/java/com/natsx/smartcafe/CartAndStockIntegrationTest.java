@@ -86,7 +86,7 @@ class CartAndStockIntegrationTest {
     }
 
     private String field(String json,String name) {
-        var matcher=Pattern.compile("\\\""+name+"\\\":\\\"([^\\\"]+)\\\"").matcher(json);
+        var matcher=Pattern.compile("\""+name+"\":\"([^\"]+)\"").matcher(json);
         assertTrue(matcher.find(),"Missing field "+name);
         return matcher.group(1);
     }
@@ -97,47 +97,47 @@ class CartAndStockIntegrationTest {
         var empty=mvc.perform(get("/api/v1/me/cart").header("Authorization","Bearer "+a.token()))
             .andReturn().getResponse();
         assertEquals(200,empty.getStatus());
-        assertTrue(empty.getContentAsString().contains("\\"version\\":0"));
+        assertTrue(empty.getContentAsString().contains("\"version\":0"));
         assertEquals(401,mvc.perform(get("/api/v1/me/cart")).andReturn().getResponse().getStatus());
-        String request="{\\"expectedVersion\\":0,\\"lines\\":[{\\"menuItemId\\":\\""
-            +item+"\\",\\"quantity\\":2}]}";
+        String request="{\"expectedVersion\":0,\"lines\":[{\"menuItemId\":\""
+            +item+"\",\"quantity\":2}]}";
         var replaced=mvc.perform(put("/api/v1/me/cart")
             .header("Authorization","Bearer "+a.token()).contentType(MediaType.APPLICATION_JSON)
             .content(request)).andReturn().getResponse();
         assertEquals(200,replaced.getStatus(),replaced.getContentAsString());
-        assertTrue(replaced.getContentAsString().contains("\\"estimatedSubtotalIdr\\":50000"));
-        assertTrue(replaced.getContentAsString().contains("\\"version\\":1"));
+        assertTrue(replaced.getContentAsString().contains("\"estimatedSubtotalIdr\":50000"));
+        assertTrue(replaced.getContentAsString().contains("\"version\":1"));
         assertEquals(409,mvc.perform(put("/api/v1/me/cart")
             .header("Authorization","Bearer "+a.token()).contentType(MediaType.APPLICATION_JSON)
             .content(request)).andReturn().getResponse().getStatus());
         var other=mvc.perform(get("/api/v1/me/cart")
             .header("Authorization","Bearer "+b.token())).andReturn().getResponse();
         assertEquals(200,other.getStatus());
-        assertTrue(other.getContentAsString().contains("\\"lines\\":[]"));
+        assertTrue(other.getContentAsString().contains("\"lines\":[]"));
 
         String key="cart-checkout-"+UUID.randomUUID();
         var ordered=mvc.perform(post("/api/v1/orders")
             .header("Authorization","Bearer "+a.token())
             .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"cartVersion\\":1}")).andReturn().getResponse();
+            .content("{\"cartVersion\":1}")).andReturn().getResponse();
         assertEquals(200,ordered.getStatus(),ordered.getContentAsString());
         String id=field(ordered.getContentAsString(),"id");
-        assertTrue(ordered.getContentAsString().contains("\\"totalIdr\\":50000"));
+        assertTrue(ordered.getContentAsString().contains("\"totalIdr\":50000"));
         var consumed=mvc.perform(get("/api/v1/me/cart")
             .header("Authorization","Bearer "+a.token())).andReturn().getResponse();
-        assertTrue(consumed.getContentAsString().contains("\\"version\\":2"));
-        assertTrue(consumed.getContentAsString().contains("\\"lines\\":[]"));
+        assertTrue(consumed.getContentAsString().contains("\"version\":2"));
+        assertTrue(consumed.getContentAsString().contains("\"lines\":[]"));
 
         var replay=mvc.perform(post("/api/v1/orders")
             .header("Authorization","Bearer "+a.token())
             .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"cartVersion\\":1}")).andReturn().getResponse();
+            .content("{\"cartVersion\":1}")).andReturn().getResponse();
         assertEquals(200,replay.getStatus());
         assertEquals(id,field(replay.getContentAsString(),"id"));
         assertEquals(409,mvc.perform(post("/api/v1/orders")
             .header("Authorization","Bearer "+a.token())
             .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"cartVersion\\":2}")).andReturn().getResponse().getStatus());
+            .content("{\"cartVersion\":2}")).andReturn().getResponse().getStatus());
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
             Integer.class,a.principal().guestId()));
         assertEquals(8,jdbc.queryForObject("""
