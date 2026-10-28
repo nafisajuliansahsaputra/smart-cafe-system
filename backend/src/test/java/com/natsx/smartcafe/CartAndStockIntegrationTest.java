@@ -198,4 +198,55 @@ class CartAndStockIntegrationTest {
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
             Integer.class,guest.principal().guestId()));
     }
+
+    private String staffSession(String role) {
+        UUID staff=UUID.randomUUID();
+        String token=SecureToken.generate();
+        jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+            staff,"stock-"+staff,"synthetic-test-only");
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            staff,role);
+        jdbc.update("""
+            INSERT INTO staff_sessions(token_hash,staff_user_id,expires_at)
+            VALUES (?,?,now()+interval '1 hour')
+            """,SecureToken.sha256(token),staff);
+        return token;
+    }
+
+    @Test void managerStockUpdatesRequireRoleVersionAndAudit() throws Exception {
+        UUID item=menu(9000,2);
+        String cashier=staffSession("CASHIER");
+        String manager=staffSession("MANAGER");
+        var initial=mvc.perform(get("/api/v1/admin/menu-items/"+item+"/availability")
+            .header("Authorization","Bearer "+manager)).andReturn().getResponse();
+        assertEquals(200,initial.getStatus());
+        assertTrue(initial.getContentAsString().contains("\"limitedQuantity\":2"));
+        String edit="{\"available\":true,\"limitedQuantity\":1,\"expectedVersion\":0,"
+            +"\"reason\":\"Stock count corrected\"}";
+        assertEquals(403,mvc.perform(patch("/api/v1/admin/menu-items/"+item+"/availability")
+            .header("Authorization","Bearer "+cashier)
+            .contentType(MediaType.APPLICATION_JSON).content(edit))
+            .andReturn().getResponse().getStatus());
+        var updated=mvc.perform(patch("/api/v1/admin/menu-items/"+item+"/availability")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(edit)).andReturn().getResponse();
+        assertEquals(200,updated.getStatus(),updated.getContentAsString());
+        assertTrue(updated.getContentAsString().contains("\"version\":1"));
+        assertEquals(409,mvc.perform(patch("/api/v1/admin/menu-items/"+item+"/availability")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(edit)).andReturn().getResponse().getStatus());
+        assertEquals(1,jdbc.queryForObject(
+            "SELECT count(*) FROM audit_logs WHERE resource_id=? AND operation='MENU_STOCK_UPDATED'",
+            Integer.class,item));
+        String soldOut="{\"available\":true,\"limitedQuantity\":0,\"expectedVersion\":1,"
+            +"\"reason\":\"Counted last stock\"}";
+        assertEquals(200,mvc.perform(patch("/api/v1/admin/menu-items/"+item+"/availability")
+            .header("Authorization","Bearer "+manager).contentType(MediaType.APPLICATION_JSON)
+            .content(soldOut)).andReturn().getResponse().getStatus());
+        var menuResponse=mvc.perform(get("/api/v1/menu")).andReturn().getResponse();
+        assertEquals(200,menuResponse.getStatus());
+        assertFalse(menuResponse.getContentAsString().contains(item.toString()));
+        assertEquals(0L,jdbc.queryForObject("SELECT limited_quantity FROM item_availability "
+            +"WHERE menu_item_id=?",Long.class,item));
+    }
 }
