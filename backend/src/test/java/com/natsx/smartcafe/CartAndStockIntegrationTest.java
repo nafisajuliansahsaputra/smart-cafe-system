@@ -412,4 +412,120 @@ class CartAndStockIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"cartVersion\":1}")).andReturn().getResponse().getStatus());
     }
+
+    @Test void multipleRequiredModifierGroupsPriceAtomicallyAndSnapshotSelections() throws Exception {
+        UUID visit=visit(),item=menu(20000,6);
+        Customer customer=guest(visit);
+        String manager=staffSession("MANAGER");
+        var size=mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Size\",\"required\":true}")).andReturn().getResponse();
+        assertEquals(200,size.getStatus(),size.getContentAsString());
+        UUID sizeGroup=UUID.fromString(field(size.getContentAsString(),"id"));
+        var milk=mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Milk\",\"required\":true}")).andReturn().getResponse();
+        assertEquals(200,milk.getStatus(),milk.getContentAsString());
+        UUID milkGroup=UUID.fromString(field(milk.getContentAsString(),"id"));
+        var extras=mvc.perform(post("/api/v1/admin/menu-items/"+item+"/variant-group")
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"Extras\",\"required\":false}")).andReturn().getResponse();
+        assertEquals(200,extras.getStatus(),extras.getContentAsString());
+
+        UUID large=createVariantOption(sizeGroup,manager,"large","Large",5000);
+        UUID medium=createVariantOption(sizeGroup,manager,"medium","Medium",1000);
+        UUID oat=createVariantOption(milkGroup,manager,"oat","Oat milk",2000);
+        String groups=mvc.perform(get("/api/v1/menu/"+item+"/variant-groups"))
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(groups.contains("Size"));
+        assertTrue(groups.contains("Milk"));
+        assertTrue(groups.contains("Extras"));
+        assertEquals(3,jdbc.queryForObject(
+            "SELECT count(*) FROM menu_variant_groups WHERE menu_item_id=?",Integer.class,item));
+
+        String prefix="{\"lines\":[{\"menuItemId\":\""+item+"\",\"quantity\":2,";
+        String missing=prefix+"\"variantOptionIds\":[\""+large+"\"]}]}";
+        assertEquals(409,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key","missing-milk-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON).content(missing))
+            .andReturn().getResponse().getStatus());
+
+        String twice=prefix+"\"variantOptionIds\":[\""+large+"\",\""+medium+
+            "\",\""+oat+"\"]}]}";
+        assertEquals(409,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key","two-sizes-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON).content(twice))
+            .andReturn().getResponse().getStatus());
+
+        String cart="{\"expectedVersion\":0,\"lines\":[{\"menuItemId\":\""+item+
+            "\",\"quantity\":2,\"variantOptionIds\":[\""+oat+"\",\""+large+"\"]}]}";
+        var saved=mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+customer.token())
+            .contentType(MediaType.APPLICATION_JSON).content(cart)).andReturn().getResponse();
+        assertEquals(200,saved.getStatus(),saved.getContentAsString());
+        assertTrue(saved.getContentAsString().contains("\"estimatedSubtotalIdr\":54000"));
+        assertTrue(saved.getContentAsString().contains("Oat milk"));
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM cart_line_variant_options
+            WHERE menu_item_id=?
+            """,Integer.class,item));
+
+        String key="multi-modifier-"+UUID.randomUUID();
+        var ordered=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"cartVersion\":1}")).andReturn().getResponse();
+        assertEquals(200,ordered.getStatus(),ordered.getContentAsString());
+        UUID id=UUID.fromString(field(ordered.getContentAsString(),"id"));
+        assertTrue(ordered.getContentAsString().contains("\"totalIdr\":54000"));
+        assertEquals(27000L,jdbc.queryForObject(
+            "SELECT unit_price_idr FROM order_lines WHERE order_id=?",Long.class,id));
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT jsonb_array_length(variant_snapshot->'options')
+            FROM order_lines WHERE order_id=?
+            """,Integer.class,id));
+        assertEquals(4L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",Long.class,item));
+        String detail=mvc.perform(get("/api/v1/me/orders/"+id)
+            .header("Authorization","Bearer "+customer.token()))
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(detail.contains("Large"));
+        assertTrue(detail.contains("Oat milk"));
+        assertEquals(200,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"cartVersion\":1}")).andReturn().getResponse().getStatus());
+
+        // Direct checkout uses the same canonical fingerprint regardless of option ordering.
+        String direct=prefix+"\"variantOptionIds\":[\""+large+"\",\""+oat+"\"]}]}";
+        String reversed=prefix+"\"variantOptionIds\":[\""+oat+"\",\""+large+"\"]}]}";
+        String otherKey="order-multi-"+UUID.randomUUID();
+        var first=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key",otherKey).contentType(MediaType.APPLICATION_JSON)
+            .content(direct)).andReturn().getResponse();
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        var retry=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+customer.token())
+            .header("Idempotency-Key",otherKey).contentType(MediaType.APPLICATION_JSON)
+            .content(reversed)).andReturn().getResponse();
+        assertEquals(200,retry.getStatus(),retry.getContentAsString());
+        assertEquals(field(first.getContentAsString(),"id"),field(retry.getContentAsString(),"id"));
+    }
+
+    private UUID createVariantOption(UUID group,String manager,String key,String label,long delta)
+        throws Exception {
+        var result=mvc.perform(post("/api/v1/admin/variant-groups/"+group+"/options")
+            .header("Authorization","Bearer "+manager)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"key\":\""+key+"\",\"label\":\""+label+
+                "\",\"priceDeltaIdr\":"+delta+"}")).andReturn().getResponse();
+        assertEquals(200,result.getStatus(),result.getContentAsString());
+        return UUID.fromString(field(result.getContentAsString(),"id"));
+    }
 }
