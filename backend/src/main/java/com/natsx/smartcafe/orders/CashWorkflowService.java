@@ -69,6 +69,55 @@ public class CashWorkflowService {
         outbox.order(orderId,"ORDER_ACCEPTED");
     }
 
+
+    /**
+     * Only submitted, unpaid, never-admitted cash orders may be rejected.
+     * Returning reservations and changing order state are one locked transaction.
+     */
+    @Transactional
+    public void reject(UUID orderId,UUID staff,String reason,String requestId) {
+        var order=lockOrder(orderId);
+        var payment=lockPaymentByOrder(orderId);
+        if(!order.status().equals("SUBMITTED") || !payment.status().equals("AWAITING_CASH"))
+            throw conflict("Only submitted unpaid cash orders can be rejected");
+        Integer ticketCount=jdbc.queryForObject("""
+            SELECT count(*) FROM kitchen_tickets WHERE order_id=?
+            """,Integer.class,orderId);
+        if(ticketCount==null || ticketCount!=0)throw conflict("Already admitted to kitchen");
+        var allocations=jdbc.query("""
+            SELECT menu_item_id,quantity,released_at FROM order_stock_allocations
+            WHERE order_id=? ORDER BY menu_item_id FOR UPDATE
+            """,(rs,n)->new StockAllocation(rs.getObject("menu_item_id",UUID.class),
+                rs.getInt("quantity"),rs.getTimestamp("released_at")),orderId);
+        Integer lines=jdbc.queryForObject("SELECT count(*) FROM order_lines WHERE order_id=?",
+            Integer.class,orderId);
+        if(lines==null || allocations.size()!=lines || allocations.isEmpty())
+            throw conflict("Cannot safely release an order missing stock allocation evidence");
+        for(var allocation:allocations) {
+            if(allocation.releasedAt()!=null)throw conflict("Order allocations already released");
+            jdbc.update("""
+                UPDATE item_availability SET limited_quantity=limited_quantity+?,version=version+1
+                WHERE menu_item_id=? AND limited_quantity IS NOT NULL
+                """,allocation.quantity(),allocation.itemId());
+            int updated=jdbc.update("""
+                UPDATE order_stock_allocations SET released_at=now()
+                WHERE order_id=? AND menu_item_id=? AND released_at IS NULL
+                """,orderId,allocation.itemId());
+            if(updated!=1)throw conflict("Concurrent stock release detected");
+        }
+        jdbc.update("UPDATE orders SET status='REJECTED',version=version+1 WHERE id=?",orderId);
+        jdbc.update("""
+            UPDATE payment_intents SET aggregate_status='UNPAID',version=version+1 WHERE id=?
+            """,payment.id());
+        jdbc.update("""
+            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,reason,correlation_id)
+            VALUES ('STAFF',?,'CASH_ORDER_REJECTED','ORDER',?,?,?)
+            """,staff,orderId,reason,requestId);
+        outbox.order(orderId,"CASH_ORDER_REJECTED");
+    }
+
+    private record StockAllocation(UUID itemId,int quantity,java.sql.Timestamp releasedAt) {}
+
     @Transactional(readOnly=true)
     public List<KitchenTicket> kitchen() {
         var tickets=jdbc.query("""

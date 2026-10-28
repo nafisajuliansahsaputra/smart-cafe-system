@@ -151,6 +151,9 @@ public class CashCheckoutService {
                 INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,unit_price_idr,quantity,line_total_idr)
                 VALUES (?,?,?,?,?,?)
                 """,orderId,item.menu().id(),item.menu().name(),item.menu().price(),item.quantity(),item.total());
+            jdbc.update("""
+                INSERT INTO order_stock_allocations(order_id,menu_item_id,quantity) VALUES (?,?,?)
+                """,orderId,item.menu().id(),item.quantity());
         }
         jdbc.update("""
             INSERT INTO payment_intents(order_id,method_selected,amount_due_idr,aggregate_status)

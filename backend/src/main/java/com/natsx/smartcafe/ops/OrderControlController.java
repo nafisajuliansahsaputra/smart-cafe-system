@@ -41,6 +41,18 @@ public class OrderControlController {
         return ApiEnvelope.of(queries.detail(id),RequestIdFilter.get(request));
     }
 
+    public record RejectRequest(@jakarta.validation.constraints.NotBlank
+        @jakarta.validation.constraints.Size(min=4,max=300) String reason) {}
+
+    @PostMapping("/{id}/reject")
+    public ApiEnvelope<String> reject(@PathVariable UUID id,
+        @AuthenticationPrincipal StaffPrincipal staff,
+        @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody RejectRequest body,
+        HttpServletRequest request) {
+        workflow.reject(id,staff.staffId(),body.reason(),RequestIdFilter.get(request));
+        return ApiEnvelope.of("REJECTED",RequestIdFilter.get(request));
+    }
+
     @PostMapping("/{id}/approve-cash")
     public ApiEnvelope<String> approve(@PathVariable UUID id,
         @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {

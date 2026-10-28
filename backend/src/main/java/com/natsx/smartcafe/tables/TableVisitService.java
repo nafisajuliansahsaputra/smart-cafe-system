@@ -135,8 +135,12 @@ public class TableVisitService {
         Integer unresolved = jdbc.queryForObject("""
             SELECT count(*) FROM orders o LEFT JOIN payment_intents p ON p.order_id=o.id
             WHERE o.visit_id=? AND (
-                p.id IS NULL OR p.aggregate_status NOT IN ('PAID','REFUNDED')
-                OR o.status NOT IN ('SERVED','CANCELLED','REJECTED'))
+                p.id IS NULL
+                OR (o.status NOT IN ('REJECTED','CANCELLED') AND
+                    (p.aggregate_status NOT IN ('PAID','REFUNDED') OR o.status <> 'SERVED'))
+                OR (o.status IN ('REJECTED','CANCELLED') AND
+                    p.aggregate_status NOT IN ('UNPAID','AWAITING_CASH','REFUNDED'))
+            )
             """, Integer.class, visitId);
         if (unresolved != null && unresolved > 0) throw conflict("Visit has unresolved orders or payments");
         // M4 game-loan constraint must be added before enabling loans.
