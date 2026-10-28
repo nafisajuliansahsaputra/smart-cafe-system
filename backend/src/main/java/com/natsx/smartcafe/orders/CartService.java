@@ -23,7 +23,8 @@ public class CartService {
 
     public record Line(UUID menuItemId,String name,long unitPriceIdr,int quantity,
                        long lineTotalIdr,boolean available,Long remainingQuantity,
-                       UUID variantOptionId,String variantLabel) {}
+                       UUID variantOptionId,String variantLabel,
+                       List<UUID> variantOptionIds,List<String> variantLabels) {}
     public record CartView(long version,long estimatedSubtotalIdr,List<Line> lines) {}
     private record CartRow(UUID id,long version) {}
 
@@ -49,13 +50,20 @@ public class CartService {
                   AND a.available AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
                 """,Integer.class,line.menuItemId());
             if(count==null || count==0)throw outOfStock();
-            variants.resolve(line.menuItemId(),line.variantOptionId());
+            variants.resolveSelections(line.menuItemId(),line.selectedOptionIds());
         }
         jdbc.update("DELETE FROM cart_lines WHERE cart_id=?",cart.id());
-        for(var line:lines)jdbc.update("""
-            INSERT INTO cart_lines(cart_id,menu_item_id,variant_option_id,quantity)
-            VALUES (?,?,?,?)
-            """,cart.id(),line.menuItemId(),line.variantOptionId(),line.quantity());
+        for(var line:lines) {
+            var ids=line.selectedOptionIds();
+            jdbc.update("""
+                INSERT INTO cart_lines(cart_id,menu_item_id,variant_option_id,quantity)
+                VALUES (?,?,?,?)
+                """,cart.id(),line.menuItemId(),ids.size()==1?ids.getFirst():null,line.quantity());
+            for(var optionId:ids)jdbc.update("""
+                INSERT INTO cart_line_variant_options(cart_id,menu_item_id,option_id)
+                VALUES (?,?,?)
+                """,cart.id(),line.menuItemId(),optionId);
+        }
         jdbc.update("UPDATE carts SET version=version+1,updated_at=now() WHERE id=?",cart.id());
         return view(new CartRow(cart.id(),expectedVersion+1));
     }
@@ -64,12 +72,14 @@ public class CartService {
     public List<CashCheckoutService.Line> lockForCheckout(GuestPrincipal guest,long version) {
         var cart=findCart(guest,true);
         if(cart.version()!=version)throw conflict("Cart version is stale");
-        var lines=jdbc.query("""
-            SELECT menu_item_id,quantity,variant_option_id FROM cart_lines
-            WHERE cart_id=? ORDER BY menu_item_id
-            """,(rs,n)->new CashCheckoutService.Line(rs.getObject("menu_item_id",UUID.class),
-                rs.getInt("quantity"),rs.getObject("variant_option_id",UUID.class)),cart.id());
-        if(lines.isEmpty())throw invalid("Cart is empty");
+        var entries=jdbc.query("""
+            SELECT menu_item_id,quantity FROM cart_lines WHERE cart_id=? ORDER BY menu_item_id
+            """,(rs,n)->new Entry(rs.getObject("menu_item_id",UUID.class),
+                rs.getInt("quantity")),cart.id());
+        if(entries.isEmpty())throw invalid("Cart is empty");
+        var lines=new java.util.ArrayList<CashCheckoutService.Line>();
+        for(var entry:entries)lines.add(new CashCheckoutService.Line(entry.itemId(),
+            entry.quantity(),null,selectedIds(cart.id(),entry.itemId())));
         return lines;
     }
 
@@ -97,42 +107,52 @@ public class CartService {
         return rows.getFirst();
     }
 
+    private record Entry(UUID itemId,int quantity) {}
+    private record PreviewRow(UUID itemId,String name,long price,int quantity,
+                              Long remaining,boolean itemAvailable) {}
+
+    private List<UUID> selectedIds(UUID cartId,UUID itemId) {
+        return jdbc.query("""
+            SELECT option_id FROM cart_line_variant_options
+            WHERE cart_id=? AND menu_item_id=? ORDER BY option_id
+            """,(rs,n)->rs.getObject("option_id",UUID.class),cartId,itemId);
+    }
+
     private CartView view(CartRow cart) {
-        var lines=jdbc.query("""
+        var entries=jdbc.query("""
             SELECT l.menu_item_id,i.name,i.base_price_idr,l.quantity,a.limited_quantity,
-              l.variant_option_id,o.label AS variant_label,o.price_delta_idr,
-              (i.availability='AVAILABLE' AND c.active AND a.available
-                AND (a.limited_quantity IS NULL OR a.limited_quantity>=l.quantity)
-                AND (g.id IS NULL AND l.variant_option_id IS NULL OR
-                  g.id IS NOT NULL AND (
-                    (l.variant_option_id IS NULL AND NOT g.required) OR
-                    (l.variant_option_id IS NOT NULL AND o.active AND o.group_id=g.id)
-                  ))) AS can_order
+                   (i.availability='AVAILABLE' AND c.active AND a.available
+                   AND (a.limited_quantity IS NULL OR a.limited_quantity>=l.quantity)) AS can_order
             FROM cart_lines l JOIN menu_items i ON i.id=l.menu_item_id
             JOIN menu_categories c ON c.id=i.category_id
             JOIN item_availability a ON a.menu_item_id=i.id
-            LEFT JOIN menu_variant_groups g ON g.menu_item_id=i.id AND g.active=true
-            LEFT JOIN menu_variant_options o ON o.id=l.variant_option_id
             WHERE l.cart_id=? ORDER BY i.name,l.menu_item_id
-            """,(rs,n)->{
-                long price;
-                try {
-                    price=Math.addExact(rs.getLong("base_price_idr"),
-                        rs.getObject("price_delta_idr")==null?0:rs.getLong("price_delta_idr"));
-                    if(price<0)price=0;
-                } catch(ArithmeticException ex) {
-                    price=0;
-                }
-                int quantity=rs.getInt("quantity");
-                Long remaining=rs.getObject("limited_quantity")==null
-                    ?null:rs.getLong("limited_quantity");
-                return new Line(rs.getObject("menu_item_id",UUID.class),rs.getString("name"),
-                    price,quantity,IdrMoney.lineTotal(price,quantity),
-                    rs.getBoolean("can_order"),remaining,
-                    rs.getObject("variant_option_id",UUID.class),rs.getString("variant_label"));
-            },cart.id());
+            """,(rs,n)->new PreviewRow(rs.getObject("menu_item_id",UUID.class),
+                rs.getString("name"),rs.getLong("base_price_idr"),rs.getInt("quantity"),
+                rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
+                rs.getBoolean("can_order")),cart.id());
+        var lines=new java.util.ArrayList<Line>();
         long subtotal=0;
-        for(var line:lines)subtotal=Math.addExact(subtotal,line.lineTotalIdr());
+        for(var entry:entries) {
+            var ids=selectedIds(cart.id(),entry.itemId());
+            boolean available=entry.itemAvailable();
+            long price=entry.price();
+            List<String> labels=List.of();
+            try {
+                var selection=variants.resolveSelections(entry.itemId(),ids);
+                price=Math.addExact(price,selection.totalDeltaIdr());
+                if(price<0)throw new ArithmeticException("negative price");
+                labels=selection.choices().stream().map(VariantPricingService.Choice::label).toList();
+            }catch(ApiFailureException|ArithmeticException ex) {
+                available=false;
+                price=entry.price();
+            }
+            long extended=IdrMoney.lineTotal(price,entry.quantity());
+            subtotal=Math.addExact(subtotal,extended);
+            lines.add(new Line(entry.itemId(),entry.name(),price,entry.quantity(),extended,
+                available,entry.remaining(),ids.size()==1?ids.getFirst():null,
+                labels.size()==1?labels.getFirst():null,ids,labels));
+        }
         return new CartView(cart.version(),subtotal,lines);
     }
 
@@ -150,7 +170,10 @@ public class CartService {
         var seen=new HashSet<UUID>();
         for(var line:lines) {
             if(line==null || line.menuItemId()==null || line.quantity()<1
-                || line.quantity()>20 || !seen.add(line.menuItemId()))
+                || line.quantity()>20 || !seen.add(line.menuItemId())
+                || line.selectedOptionIds().size()>8
+                || line.selectedOptionIds().stream().anyMatch(id->id==null)
+                || new HashSet<>(line.selectedOptionIds()).size()!=line.selectedOptionIds().size())
                 throw invalid("Invalid or duplicate cart line");
         }
     }
