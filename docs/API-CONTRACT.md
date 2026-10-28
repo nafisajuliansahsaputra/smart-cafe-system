@@ -151,3 +151,13 @@ All remaining routes in sections 1–8 are **unimplemented**. The initial checko
 M2 demo currently requires the order to be **SERVED** before recording cash tender. This is a deliberately conservative sandbox behavior, **not a settled merchant payment policy**; the owner must confirm acceptable cash collection points before a production pilot. Tax/fee calculation is disabled for synthetic demonstration orders with explicit `M2-DEMO-UNTAXED` pricing version and is not a legal-tax policy.
 
 **Staff access refinement (M2):** A waiter can close/rotate, serve and capture cash only for a visit the waiter opened. This temporary conservative rule will be replaced by actual task assignment. Query filters are parameterized and enum-validated; staff access to itemized OCC detail requires cashier/manager/admin privileges.
+
+## 10. Cart, limited item stock and rejection (M2 draft extension)
+
+- `GET /api/v1/me/cart` requires a scoped active guest bearer; returns `{version,estimatedSubtotalIdr,lines[]}`. Each line exposes current server item price, total, whether orderable now, and a nullable remaining quantity. `Cache-Control: no-store`.
+- `PUT /api/v1/me/cart` accepts `{"expectedVersion":0,"lines":[{"menuItemId":"uuid","quantity":2}]}`. Lines are unique; max 30, each quantity 1–20. A stale cart version is **409 CONFLICT**. Empty array clears cart. The server never accepts user-submitted price.
+- `POST /api/v1/orders` accepts either `{"lines":[...]}` (existing direct cash checkout) **or** `{"cartVersion":1}` (checkout from stored cart), but not both; an `Idempotency-Key` is required. Cart-based checkout consumes the cart and increments its version after success. A replay of the same key and version returns the same stored order even after the cart is cleared; a different version with the same key conflicts.
+- `PATCH /api/v1/admin/menu-items/{id}/availability` requires MANAGER or ADMIN and accepts `{"available":true,"limitedQuantity":3,"expectedVersion":0,"reason":"Stock count corrected"}`. A `null` quantity explicitly means unlimited; zero means sold out. The write is version checked and audited. `GET` on the same path returns the current stock/version.
+- `POST /api/v1/ops/orders/{id}/reject` requires CASHIER/MANAGER/ADMIN and `{"reason":"..."}`. It accepts only an unapproved SUBMITTED cash order still AWAITING_CASH and with no kitchen ticket; it atomically rejects the order and releases its tracked stock allocation once. A second rejection is 409.
+
+The public `GET /menu` hides items with zero or disabled availability. All claims are bounded to single-cafe development with synthetic data, not production inventory/checkout policy.

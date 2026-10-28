@@ -103,3 +103,10 @@ Index choices should be measured after query shape and actual EXPLAIN plans exis
 Not yet implemented: variant tables, inventory reservations, payment attempts/webhooks, serialized physical game units and loans, outbox delivery worker, receipt message dispatch and full reconciliation. A passed migration is not evidence that those future entities exist.
 
 - **V5**: Database receipt insertion guard requires matching payment intent, order, total and fully PAID status; the trigger rejects prepayment receipt creation even if application code attempts it.
+
+## 10. Cart and stock migrations
+
+- **V6** adds `carts` keyed by unique guest + visit, `cart_lines` with unique item and bounded quantity, and `item_availability` with `limited_quantity BIGINT NULL` (null is unlimited, never inferred as zero). Every menu item receives an availability row via backfill and insert trigger. DB enforces nonnegative remaining quantity.
+- **V7** adds `order_stock_allocations(order_id,menu_item_id,quantity,reserved_at,released_at)`. Checkout decrements bounded stock in the same transaction as creating the order and allocation record. A pre-kitchen rejection returns counted allocations exactly once and records the release, order transition and staff audit in one DB transaction.
+- The catalog's `menu_items.availability` status is distinct from the quantitative `item_availability` row. The public menu filters both. A stored cart is not a stock reservation.
+- This stock model is per menu-item unit, not ingredients/recipes and not yet a full warehouse ledger. Inventory adjustments during an outstanding checkout require operational reconciliation and a reviewed policy before real stock use.

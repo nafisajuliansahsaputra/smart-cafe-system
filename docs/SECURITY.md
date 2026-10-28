@@ -102,3 +102,7 @@ See [ADR 0003](decisions/0003-api-bearer-auth.md) and [local bootstrap guide](M2
 - PostgreSQL V5 prevents a receipt from being inserted unless the correlated payment intent is fully PAID with the matching total.
 - Until actual task assignment exists, only the waiter who opened a visit may close/rotate it, mark that visit's order served or record its cash; supervisory roles have separate privileges. This is stricter than role-only access.
 - OCC filters are parameterized and status values validated; query errors use the public safe error envelope.
+
+## 11. Cart/inventory authorization gates
+
+Guest cart updates and order checkout take identity exclusively from the current scoped token, never guest IDs in client payload. Limited quantities are enforced by PostgreSQL atomic updates with `limited_quantity>=requested`, not frontend state. Manager/admin stock changes are version-checked, reason-required and audited. Cashier-only pre-kitchen rejection releases stock in the same locked order transaction, with allocation evidence preventing accidental double credit. Inventory search uses parameterized JDBC statements. Further auth review, inventory adjustment reconciliation and full E2E are still required before pilot.

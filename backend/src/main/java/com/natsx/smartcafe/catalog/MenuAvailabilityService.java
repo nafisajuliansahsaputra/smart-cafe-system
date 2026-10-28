@@ -1,6 +1,5 @@
 package com.natsx.smartcafe.catalog;
 
-import com.natsx.smartcafe.audit.AuditTrail;
 import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.StaffPrincipal;
 import java.util.List;
@@ -13,11 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MenuAvailabilityService {
     private final JdbcTemplate jdbc;
-    private final AuditTrail audit;
-    public MenuAvailabilityService(JdbcTemplate jdbc,AuditTrail audit) {
-        this.jdbc=jdbc;
-        this.audit=audit;
-    }
+    public MenuAvailabilityService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
 
     public record Availability(UUID itemId,boolean available,Long limitedQuantity,long version) {}
 

@@ -29,3 +29,7 @@ The local first-admin bootstrap is opt-in and documented separately; it is not a
 ## Additional hardening
 
 V5 introduces a PostgreSQL receipt guard: a receipt can only be inserted for a matching fully PAID intent and amount. A waiter may close/rotate a visit, serve its order or collect its cash only if that waiter opened the visit; cashier/manager/admin retain controlled supervisory privileges. A two-way concurrent cash tender integration test confirms one payment and one receipt only. Task reassignment and staff UI remain pending.
+
+## V6/V7 guest cart and inventory controls
+
+Persisted, guest-scoped cart supports GET/PUT with version checks. It is an editable draft, not a stock reservation. Cash checkout accepts an explicit cart version, maintains same-key replay after cart consumption, and checks/consumes limited menu stock in the same transaction as order insertion. The public menu hides sold-out items; admin inventory adjustments require manager role, version and an audit reason. Unapproved cash orders can be rejected with reason; recorded stock allocations are restored only once. See [inventory notes](M2-CART-INVENTORY.md) for precise limitations.

@@ -101,3 +101,7 @@ Portfolio project by NATSX. License is **not yet selected**. A public repository
 Draft [PR #2](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2) adds versioned auth, table visits, cash checkout, OCC/KDS/waiter commands, and paid cash receipts using the existing one-service modular monolith. **No real payment gateway, messaging, cash handling, or usable staff browser dashboard is connected.** A fresh local development database can opt into the one-time bootstrap described in [docs/M2-LOCAL-BOOTSTRAP.md](docs/M2-LOCAL-BOOTSTRAP.md). The test suite exercises synthetic actors and data; public demo use still requires a staging security review.
 
 See [M2 engineering record](docs/M2-CASH-DOMAIN.md) for implemented routes, test coverage and outstanding requirements.
+
+### Current M2 cart/stock APIs
+
+The draft M2 backend supports `GET/PUT /api/v1/me/cart`, cash checkout from either explicit lines or a cart version, finite stock constraints, `GET/PATCH /api/v1/admin/menu-items/{id}/availability`, and audited pre-kitchen cash rejection. These operations are covered by synthetic PostgreSQL tests; no staff/guest browser UI or production pilot is enabled. See [M2 cart and stock controls](docs/M2-CART-INVENTORY.md).

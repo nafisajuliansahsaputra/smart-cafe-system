@@ -120,3 +120,9 @@ These are backend integration tests, **not browser-level E2E, performance, penet
 ## 9. Follow-up M2 hardening evidence
 
 [CI run 40744820730](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744820730) passed 23 Java tests including parallel cash tender attempts with distinct idempotency keys and exactly one settlement. [CI run 40744971944](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744971944) passed the V5 database rejection test for prepayment receipts. The final head CI must additionally pass waiter ownership denials.
+
+## 10. M2 cart and finite-stock integration scenarios
+
+`CartAndStockIntegrationTest` covers separate guest carts, unauthorized access, optimistic version conflicts, persisted cart checkout/replay after consumption, immutable order pricing, two concurrent guests competing for the last available unit, and rollback of any prior stock mutations when one line is sold out. Manager stock editing tests include denied CASHIER access, audit, optimistic version mismatch, and hiding out-of-stock entries. `CashOrderFlowIntegrationTest` additionally covers cashier rejection, single-release inventory restoration and visit closure after rejection.
+
+Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). Do not mark this test set passed on a new commit until its exact CI run succeeds.
