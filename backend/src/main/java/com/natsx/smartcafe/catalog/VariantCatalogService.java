@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Single-select variant group CRUD, no destructive historical option deletes. */
+/** Multi-group single-select variant CRUD; no historical option deletes. */
 @Service
 public class VariantCatalogService {
     private final JdbcTemplate jdbc;
@@ -28,6 +28,12 @@ public class VariantCatalogService {
 
     @Transactional(readOnly=true)
     public Group publicGroup(UUID itemId) {
+        var groups=publicGroups(itemId);
+        return groups.isEmpty()?null:groups.getFirst();
+    }
+
+    @Transactional(readOnly=true)
+    public List<Group> publicGroups(UUID itemId) {
         Integer live=jdbc.queryForObject("""
             SELECT count(*) FROM menu_items i
             JOIN menu_categories c ON c.id=i.category_id
@@ -36,45 +42,68 @@ public class VariantCatalogService {
               AND a.available AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
             """,Integer.class,itemId);
         if(live==null || live==0)throw missing();
-        return lookup(itemId,true);
+        return lookupAll(itemId,true);
     }
 
     @Transactional(readOnly=true)
     public Group adminGroup(UUID itemId) {
+        var groups=adminGroups(itemId);
+        return groups.isEmpty()?null:groups.getFirst();
+    }
+
+    @Transactional(readOnly=true)
+    public List<Group> adminGroups(UUID itemId) {
         Integer exists=jdbc.queryForObject("SELECT count(*) FROM menu_items WHERE id=?",
             Integer.class,itemId);
         if(exists==null || exists==0)throw missing();
-        return lookup(itemId,false);
+        return lookupAll(itemId,false);
     }
 
-    private Group lookup(UUID itemId,boolean publicOnly) {
-        String filter=publicOnly?" AND active=true":"";
-        var found=jdbc.query("""
+    private List<Group> lookupAll(UUID itemId,boolean publicOnly) {
+        var groups=jdbc.query("""
             SELECT id,name,required,active,revision FROM menu_variant_groups
             WHERE menu_item_id=?
-            """+filter,(rs,n)->new Group(rs.getObject("id",UUID.class),itemId,
+            """+(publicOnly?" AND active=true":"")+" ORDER BY name,id",
+            (rs,n)->new Group(rs.getObject("id",UUID.class),itemId,
                 rs.getString("name"),rs.getBoolean("required"),
                 rs.getBoolean("active"),rs.getLong("revision"),List.of()),itemId);
-        if(found.isEmpty())return null;
-        var group=found.getFirst();
-        var options=jdbc.query("""
-            SELECT id,option_key,label,price_delta_idr,active,revision
-            FROM menu_variant_options WHERE group_id=?
-            """+(publicOnly?" AND active=true":"")+" ORDER BY label,id",
-            (rs,n)->new Option(rs.getObject("id",UUID.class),rs.getString("option_key"),
-                rs.getString("label"),rs.getLong("price_delta_idr"),rs.getBoolean("active"),
-                rs.getLong("revision")),group.id());
-        return new Group(group.id(),itemId,group.name(),group.required(),group.active(),
-            group.revision(),options);
+        var results=new java.util.ArrayList<Group>();
+        for(var group:groups) {
+            var options=jdbc.query("""
+                SELECT id,option_key,label,price_delta_idr,active,revision
+                FROM menu_variant_options WHERE group_id=?
+                """+(publicOnly?" AND active=true":"")+" ORDER BY label,id",
+                (rs,n)->new Option(rs.getObject("id",UUID.class),rs.getString("option_key"),
+                    rs.getString("label"),rs.getLong("price_delta_idr"),rs.getBoolean("active"),
+                    rs.getLong("revision")),group.id());
+            results.add(new Group(group.id(),itemId,group.name(),group.required(),
+                group.active(),group.revision(),options));
+        }
+        return List.copyOf(results);
+    }
+
+    private Group byId(UUID groupId) {
+        UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
+            rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
+        if(itemId==null)throw missing();
+        return adminGroups(itemId).stream().filter(g->g.id().equals(groupId))
+            .findFirst().orElseThrow(()->missing());
+    }
+
+    private void lockItem(UUID itemId) {
+        UUID id=jdbc.query("SELECT id FROM menu_items WHERE id=? FOR UPDATE",
+            rs->rs.next()?rs.getObject(1,UUID.class):null,itemId);
+        if(id==null)throw missing();
     }
 
     @Transactional
     public Group createGroup(UUID itemId,String name,boolean required,
                              StaffPrincipal staff,String requestId) {
         validateLabel(name);
-        Integer exists=jdbc.queryForObject("SELECT count(*) FROM menu_items WHERE id=?",
+        lockItem(itemId);
+        Integer count=jdbc.queryForObject("SELECT count(*) FROM menu_variant_groups WHERE menu_item_id=?",
             Integer.class,itemId);
-        if(exists==null || exists==0)throw missing();
+        if(count!=null && count>=8)throw invalid("Maximum eight modifier groups per menu item");
         UUID groupId=UUID.randomUUID();
         try {
             jdbc.update("""
@@ -83,22 +112,29 @@ public class VariantCatalogService {
                 """,groupId,itemId,name.strip(),required);
         }catch(DuplicateKeyException ex){throw conflict("Item already has a variant group");}
         audit.staff(staff.staffId(),"VARIANT_GROUP_CREATED","MENU_ITEM",itemId,requestId);
-        return adminGroup(itemId);
+        return byId(groupId);
     }
 
     @Transactional
     public Group editGroup(UUID groupId,String name,boolean required,boolean active,long revision,
                            StaffPrincipal staff,String requestId) {
         validateLabel(name);
-        int updated=jdbc.update("""
+        UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
+            rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
+        if(itemId==null)throw missing();
+        lockItem(itemId);
+        int updated;
+        try {
+            updated=jdbc.update("""
             UPDATE menu_variant_groups SET name=?,required=?,active=?,revision=revision+1
             WHERE id=? AND revision=?
             """,name.strip(),required,active,groupId,revision);
+        } catch(DuplicateKeyException ex) {
+            throw conflict("A modifier group with this name already exists");
+        }
         if(updated!=1)throw conflict("Variant group changed or does not exist");
-        UUID itemId=jdbc.queryForObject("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
-            UUID.class,groupId);
         audit.staff(staff.staffId(),"VARIANT_GROUP_CHANGED","MENU_ITEM",itemId,requestId);
-        return adminGroup(itemId);
+        return byId(groupId);
     }
 
     @Transactional
@@ -108,6 +144,7 @@ public class VariantCatalogService {
         UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
             rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
         if(itemId==null)throw missing();
+        lockItem(itemId);
         UUID optionId=UUID.randomUUID();
         try {
             jdbc.update("""
@@ -124,16 +161,18 @@ public class VariantCatalogService {
                              StaffPrincipal staff,String requestId) {
         validateLabel(label);
         validateDelta(delta);
+        UUID itemId=jdbc.query("""
+            SELECT g.menu_item_id FROM menu_variant_options o
+            JOIN menu_variant_groups g ON g.id=o.group_id WHERE o.id=?
+            """,rs->rs.next()?rs.getObject(1,UUID.class):null,optionId);
+        if(itemId==null)throw missing();
+        lockItem(itemId);
         int updated=jdbc.update("""
             UPDATE menu_variant_options
             SET label=?,price_delta_idr=?,active=?,revision=revision+1
             WHERE id=? AND revision=?
             """,label.strip(),delta,active,optionId,revision);
         if(updated!=1)throw conflict("Variant option changed or does not exist");
-        UUID itemId=jdbc.queryForObject("""
-            SELECT g.menu_item_id FROM menu_variant_options o
-            JOIN menu_variant_groups g ON g.id=o.group_id WHERE o.id=?
-            """,UUID.class,optionId);
         audit.staff(staff.staffId(),"VARIANT_OPTION_CHANGED","MENU_ITEM",itemId,requestId);
         return option(optionId);
     }
