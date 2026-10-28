@@ -1,6 +1,6 @@
 # TODO.md — Smart Cafe System Execution Roadmap
 
-**Status ledger as of 2026-10-29.** Checkboxes reflect verified repository work, not aspirations. Document-only initialization does **not** mean the application exists.
+**Status ledger as of 2026-10-29; M1 scaffolding is in progress on a feature branch, not yet verified.** Checkboxes reflect verified repository work, not aspirations. Document-only initialization does **not** mean the application exists.
 
 ## M0 — Product and contract foundation
 
@@ -13,7 +13,7 @@
 - [ ] Decide project license.
 - [ ] Confirm cash tender policy, receipt messaging provider and game fee rules with owner before implementation dependent on them.
 
-## M1 — Executable skeleton (NOT STARTED)
+## M1 — Executable skeleton (IN PROGRESS; UNVERIFIED)
 
 - [ ] Create apps/web Next.js TypeScript application with route groups and design foundation.
 - [ ] Create backend Spring Boot Java application with modular package boundaries.
@@ -22,6 +22,8 @@
 - [ ] Add API OpenAPI generation, error envelope and health endpoints.
 - [ ] Add local formatting, static checks, unit/integration test commands and PR CI.
 - [ ] Prove clean clone -> local startup -> migration -> tests.
+
+M1 progress: source scaffolds, initial migration, basic health/API envelope, CI workflow and unit/DB integration test files added to the feature branch. All checkboxes remain unchecked pending successful builds, CI, and clean-clone Compose smoke verification. See [docs/M1-VERIFICATION.md](docs/M1-VERIFICATION.md).
 
 ## M2 — Cash ordering vertical slice (NOT STARTED)
 
