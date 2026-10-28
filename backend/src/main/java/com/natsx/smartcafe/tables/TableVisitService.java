@@ -1,6 +1,7 @@
 package com.natsx.smartcafe.tables;
 
 import com.natsx.smartcafe.common.api.ApiFailureException;
+import com.natsx.smartcafe.audit.AuditTrail;
 import com.natsx.smartcafe.identity.SecureToken;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,8 +20,12 @@ public class TableVisitService {
     private static final Duration PROOF_TTL = Duration.ofMinutes(10);
     private static final Duration GUEST_TTL = Duration.ofHours(8);
     private final JdbcTemplate jdbc;
+    private final AuditTrail audit;
 
-    public TableVisitService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    public TableVisitService(JdbcTemplate jdbc, AuditTrail audit) {
+        this.jdbc = jdbc;
+        this.audit = audit;
+    }
 
     public record TableEntry(String tableCode, boolean activeVisit) {}
     public record VisitOpened(UUID id, UUID tableId, String joinProof, Instant proofExpiresAt) {}
@@ -41,7 +46,7 @@ public class TableVisitService {
     }
 
     @Transactional
-    public VisitOpened open(UUID tableId, UUID staffId) {
+    public VisitOpened open(UUID tableId, UUID staffId, String requestId) {
         String status = jdbc.query("SELECT status FROM cafe_tables WHERE id=? FOR UPDATE", rs ->
             rs.next() ? rs.getString("status") : null, tableId);
         if (status == null) throw missing();
@@ -57,11 +62,12 @@ public class TableVisitService {
             INSERT INTO table_visits(id,table_id,status,opened_by,join_secret_hash,join_proof_expires_at)
             VALUES (?,?,'ACTIVE',?,?,?)
             """, id, tableId, staffId, SecureToken.sha256(proof), Timestamp.from(expires));
+        audit.staff(staffId, "TABLE_VISIT_OPENED", "TABLE_VISIT", id, requestId);
         return new VisitOpened(id, tableId, proof, expires);
     }
 
     @Transactional
-    public VisitOpened rotate(UUID visitId) {
+    public VisitOpened rotate(UUID visitId, UUID staffId, String requestId) {
         VisitRow visit = jdbc.query("""
             SELECT id,status,join_secret_hash,join_proof_expires_at
             FROM table_visits WHERE id=? FOR UPDATE
@@ -75,6 +81,7 @@ public class TableVisitService {
                 rotation_version=rotation_version+1,version=version+1 WHERE id=?
             """, SecureToken.sha256(proof), Timestamp.from(expires), visitId);
         UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?", UUID.class, visitId);
+        audit.staff(staffId, "TABLE_JOIN_PROOF_ROTATED", "TABLE_VISIT", visitId, requestId);
         return new VisitOpened(visitId, tableId, proof, expires);
     }
 
@@ -116,7 +123,7 @@ public class TableVisitService {
     }
 
     @Transactional
-    public void close(UUID visitId) {
+    public void close(UUID visitId, UUID staffId, String requestId) {
         VisitRow visit = jdbc.query("""
             SELECT id,status,join_secret_hash,join_proof_expires_at FROM table_visits
             WHERE id=? FOR UPDATE
@@ -133,6 +140,7 @@ public class TableVisitService {
         // M4 game-loan constraint must be added before enabling loans.
         jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", visitId);
         jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", visitId);
+        audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
     }
 
     private VisitRow readVisit(java.sql.ResultSet rs) throws java.sql.SQLException {

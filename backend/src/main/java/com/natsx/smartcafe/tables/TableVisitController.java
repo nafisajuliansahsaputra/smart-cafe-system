@@ -39,21 +39,22 @@ public class TableVisitController {
     public ResponseEntity<ApiEnvelope<TableVisitService.VisitOpened>> open(
         @Valid @RequestBody OpenRequest payload, @AuthenticationPrincipal StaffPrincipal staff,
         HttpServletRequest request) {
-        var data = visits.open(payload.tableId(), staff.staffId());
+        var data = visits.open(payload.tableId(), staff.staffId(), RequestIdFilter.get(request));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(data, RequestIdFilter.get(request)));
     }
 
     @PostMapping("/waiter/table-visits/{id}/join-proof")
     public ResponseEntity<ApiEnvelope<TableVisitService.VisitOpened>> rotate(@PathVariable UUID id,
-                                                        HttpServletRequest request) {
+        @AuthenticationPrincipal StaffPrincipal staff, HttpServletRequest request) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-            .body(ApiEnvelope.of(visits.rotate(id), RequestIdFilter.get(request)));
+            .body(ApiEnvelope.of(visits.rotate(id, staff.staffId(), RequestIdFilter.get(request)), RequestIdFilter.get(request)));
     }
 
     @PostMapping("/waiter/table-visits/{id}/close")
-    public ApiEnvelope<String> close(@PathVariable UUID id, HttpServletRequest request) {
-        visits.close(id);
+    public ApiEnvelope<String> close(@PathVariable UUID id,
+        @AuthenticationPrincipal StaffPrincipal staff, HttpServletRequest request) {
+        visits.close(id, staff.staffId(), RequestIdFilter.get(request));
         return ApiEnvelope.of("CLOSED", RequestIdFilter.get(request));
     }
 
