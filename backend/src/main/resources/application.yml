@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: smart-cafe-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/smart_cafe}
+    username: ${DB_USERNAME:smart_cafe}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
