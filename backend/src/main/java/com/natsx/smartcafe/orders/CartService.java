@@ -2,6 +2,7 @@ package com.natsx.smartcafe.orders;
 
 import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.GuestPrincipal;
+import com.natsx.smartcafe.catalog.VariantPricingService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -14,10 +15,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CartService {
     private final JdbcTemplate jdbc;
-    public CartService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    private final VariantPricingService variants;
+    public CartService(JdbcTemplate jdbc,VariantPricingService variants) {
+        this.jdbc=jdbc;
+        this.variants=variants;
+    }
 
     public record Line(UUID menuItemId,String name,long unitPriceIdr,int quantity,
-                       long lineTotalIdr,boolean available,Long remainingQuantity) {}
+                       long lineTotalIdr,boolean available,Long remainingQuantity,
+                       UUID variantOptionId,String variantLabel) {}
     public record CartView(long version,long estimatedSubtotalIdr,List<Line> lines) {}
     private record CartRow(UUID id,long version) {}
 
@@ -43,11 +49,13 @@ public class CartService {
                   AND a.available AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
                 """,Integer.class,line.menuItemId());
             if(count==null || count==0)throw outOfStock();
+            variants.resolve(line.menuItemId(),line.variantOptionId());
         }
         jdbc.update("DELETE FROM cart_lines WHERE cart_id=?",cart.id());
         for(var line:lines)jdbc.update("""
-            INSERT INTO cart_lines(cart_id,menu_item_id,quantity) VALUES (?,?,?)
-            """,cart.id(),line.menuItemId(),line.quantity());
+            INSERT INTO cart_lines(cart_id,menu_item_id,variant_option_id,quantity)
+            VALUES (?,?,?,?)
+            """,cart.id(),line.menuItemId(),line.variantOptionId(),line.quantity());
         jdbc.update("UPDATE carts SET version=version+1,updated_at=now() WHERE id=?",cart.id());
         return view(new CartRow(cart.id(),expectedVersion+1));
     }
@@ -57,9 +65,10 @@ public class CartService {
         var cart=findCart(guest,true);
         if(cart.version()!=version)throw conflict("Cart version is stale");
         var lines=jdbc.query("""
-            SELECT menu_item_id,quantity FROM cart_lines WHERE cart_id=? ORDER BY menu_item_id
+            SELECT menu_item_id,quantity,variant_option_id FROM cart_lines
+            WHERE cart_id=? ORDER BY menu_item_id
             """,(rs,n)->new CashCheckoutService.Line(rs.getObject("menu_item_id",UUID.class),
-                rs.getInt("quantity")),cart.id());
+                rs.getInt("quantity"),rs.getObject("variant_option_id",UUID.class)),cart.id());
         if(lines.isEmpty())throw invalid("Cart is empty");
         return lines;
     }
@@ -91,20 +100,36 @@ public class CartService {
     private CartView view(CartRow cart) {
         var lines=jdbc.query("""
             SELECT l.menu_item_id,i.name,i.base_price_idr,l.quantity,a.limited_quantity,
+              l.variant_option_id,o.label AS variant_label,o.price_delta_idr,
               (i.availability='AVAILABLE' AND c.active AND a.available
-                AND (a.limited_quantity IS NULL OR a.limited_quantity>=l.quantity)) AS can_order
+                AND (a.limited_quantity IS NULL OR a.limited_quantity>=l.quantity)
+                AND (g.id IS NULL AND l.variant_option_id IS NULL OR
+                  g.id IS NOT NULL AND (
+                    (l.variant_option_id IS NULL AND NOT g.required) OR
+                    (l.variant_option_id IS NOT NULL AND o.active AND o.group_id=g.id)
+                  ))) AS can_order
             FROM cart_lines l JOIN menu_items i ON i.id=l.menu_item_id
             JOIN menu_categories c ON c.id=i.category_id
-            JOIN item_availability a ON a.menu_item_id=i.id WHERE l.cart_id=?
-            ORDER BY i.name,l.menu_item_id
+            JOIN item_availability a ON a.menu_item_id=i.id
+            LEFT JOIN menu_variant_groups g ON g.menu_item_id=i.id AND g.active=true
+            LEFT JOIN menu_variant_options o ON o.id=l.variant_option_id
+            WHERE l.cart_id=? ORDER BY i.name,l.menu_item_id
             """,(rs,n)->{
-                long price=rs.getLong("base_price_idr");
+                long price;
+                try {
+                    price=Math.addExact(rs.getLong("base_price_idr"),
+                        rs.getObject("price_delta_idr")==null?0:rs.getLong("price_delta_idr"));
+                    if(price<0)price=0;
+                } catch(ArithmeticException ex) {
+                    price=0;
+                }
                 int quantity=rs.getInt("quantity");
                 Long remaining=rs.getObject("limited_quantity")==null
                     ?null:rs.getLong("limited_quantity");
                 return new Line(rs.getObject("menu_item_id",UUID.class),rs.getString("name"),
                     price,quantity,IdrMoney.lineTotal(price,quantity),
-                    rs.getBoolean("can_order"),remaining);
+                    rs.getBoolean("can_order"),remaining,
+                    rs.getObject("variant_option_id",UUID.class),rs.getString("variant_label"));
             },cart.id());
         long subtotal=0;
         for(var line:lines)subtotal=Math.addExact(subtotal,line.lineTotalIdr());
