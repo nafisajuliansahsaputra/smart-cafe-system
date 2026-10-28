@@ -39,7 +39,7 @@ M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smar
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
 
-M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. API integration tests passed 23/23 with concurrent cash tender coverage on [CI run 40744820730](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40744023293). Staff/guest operational browser UIs, variants and ingredients, cashier exception/reconciliation workflows, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
+M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. Backend integration tests passed 30/30 on [CI run 40749892835](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40749892835); further modifier tests require PR-head CI verification. Staff/guest operational browser UIs, ingredient inventory, cashier exception/reconciliation workflows, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 
@@ -95,3 +95,7 @@ V6 provides guest cart and limited menu-item quantities; V7 tracks per-order sto
 ### Catalog/backend follow-up
 
 Manager/admin category and item API writes with audit and revision checks have been introduced. Flyway V8 adds single-choice variant groups/options and a selected option on cart lines. Server-priced variant selection and immutable order snapshots are covered by tests in the [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). The original M2 catalog checkbox remains open because multi-group modifiers, catalog browser management and other product rules are not complete. See [M2 catalog variants](docs/M2-CATALOG-VARIANTS.md).
+
+### M2 modifier groups V9
+
+V9 removes the old one-group-per-item limit and introduces normalized `cart_line_variant_options` while preserving the old `variantOptionId` client input for a single choice. The new `variantOptionIds` input accepts one choice per active group, with all required groups present (maximum eight groups). The backend canonicalizes options for idempotency, computes all deltas in checked integer IDR, and stores the combined label and immutable options array in the order snapshot. Public `/menu/{item}/variant-groups` lists all active groups. The singular legacy lookup refuses a multi-group item instead of omitting required choices. Multi-group options do **not** imply arbitrary topping quantities, per-option stock, or multiple differently customized cart lines for the same menu item. M2 catalog remains open until browser management and remaining rules pass full acceptance.

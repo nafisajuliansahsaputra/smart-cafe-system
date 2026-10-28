@@ -134,3 +134,7 @@ Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsapu
 ## 11. Menu catalog and options
 
 `CartAndStockIntegrationTest` includes manager-only category/item create/update, initial HIDDEN visibility, stale revision conflicts, disabled category hiding, required variant group setup, invalid/missing option rejection, authoritative price delta in cart/checkout, immutable old price and label after manager option edits, stock decrement, and idempotent replay. Results are tied to [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks), not assumed until the exact head CI succeeds.
+
+## 12. V9 modifier regression scenarios
+
+Synthetic PostgreSQL Testcontainers coverage includes: creating independent Size/Milk/Extras groups; missing a required group; selecting two options from one group; multi-group cart pricing, stock allocation and immutable order snapshot array; idempotent replay with reversed modifier input order; publication of all groups; rejection by the legacy singular lookup when more than one active group exists; and archived options returning a safe unorderable cart preview and a rejected checkout without spending stock. **Inspect the latest PR-head CI** before treating these added cases as passing.

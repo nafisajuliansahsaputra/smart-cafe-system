@@ -18,3 +18,7 @@ The canonical data model calls for menu variants with a key/label, signed price 
 ## Consequences
 
 One size choice works without rewriting the existing cart or order identity model. Supporting combinations, customization notes, variant-specific stock or duplicate item lines will require a deliberate V9+ migration, revised checkout canonicalization, and concurrency tests. This ADR is not a permanent product restriction or merchant policy, and it does not authorize production deployment.
+
+## Superseded selection cardinality
+
+The original single-group limit has been superseded for the **development implementation** by [ADR 0006](0006-multi-modifier-groups.md) and Flyway V9. A group remains single-select, but a menu item may now have several required/optional groups. All security invariants around server-controlled pricing and immutable snapshots continue to apply.

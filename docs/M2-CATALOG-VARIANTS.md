@@ -1,20 +1,24 @@
-# M2 catalog and single-choice variants
+# M2 catalog and multi-group single-select modifiers
 
-**Status:** Development backend/API only on draft PR #2. Do not use for a live merchant before security/policy review.
+**Status:** API/backend development on draft PR #2; not approved for real cafe operations.
 
-## Implemented
+## Current contract
 
-- Staff catalog API: MANAGER/ADMIN only, audited category create/enable/disable, menu create (HIDDEN by default), item pricing/visibility edit with revision precondition, safe public catalog filtering.
-- Single-option variant groups: one group per menu item, optional or required, enabled/disabled independently. Options include a stable key, display label, signed integer-IDR price adjustment, enabled flag and revision.
-- Public `GET /menu/{itemId}/variants` is available only if the menu item is visible and available; hidden/inactive options are excluded.
-- Cart and direct order line accept one `variantOptionId`. Backend rejects a missing required option, another item's option or a disabled option and calculates current adjusted unit price (base + delta) and quantity total using checked integer arithmetic.
-- Order line snapshot includes original selected group/key/label/delta. Cash receipt document embeds the snapshot. Owner-scoped guest and staff OCC order projections expose the original label.
-- Existing cart idempotency, menu-item stock reservation, cashier rejection stock return, receipt immutability and authorization boundaries remain intact.
+Manager/admin may create categories and items (new items start HIDDEN), edit item price and status with revision checks, and configure a maximum of **eight** modifier groups per item. Every group is independently required or optional and may be disabled. Each active group permits **zero or one** active option from that group; required groups permit exactly one. Examples: Size = Large, Milk = Oat, Extras = none.
 
-## Explicit limitations
+- Public catalog: `GET /api/v1/menu/{itemId}/variant-groups` returns all active groups/options on an available item.
+- Manager catalog: `GET /api/v1/admin/menu-items/{itemId}/variant-groups` exposes inactive groups/options for management.
+- Write contracts: existing group/option POST/PATCH API remains audited, role restricted and revision checked.
+- `PUT /api/v1/me/cart` and `POST /api/v1/orders` lines accept `variantOptionIds` as an array. Legacy singular `variantOptionId` remains accepted for backwards compatibility, but both must not be provided together.
+- Server checks all group constraints, option ownership, activation, and adjusted IDR unit price. Money is never taken from client-submitted prices. Selected IDs are canonically ordered for order idempotency.
+- Normalized cart selection table has FK to cart line and to option. Order line stores a point-in-time `variant_snapshot` with summary `label` and individual `options[]` (group/key/label/delta). KDS, guest order detail, OCC and paid receipt use this snapshot, even after option edits.
 
-This is a **single-choice MVP**, suitable for one axis such as size, not an unconstrained modifiers framework. It does not support multiple option groups on one item (size plus toppings), two separately configured lines of the same menu item in one cart, per-option stock, recipe/ingredient inventory, image/media uploads, bulk CSV edits, promotion discounts or merchant tax decisions. Changing stock counts and option pricing requires operational review for active carts/orders. There is no final visual design; staff browser catalog management is deferred.
+## Compatibility
 
-## Acceptance and tests
+The original `GET /menu/{itemId}/variants` returns a single group only when there is at most one active group; it returns 409 for multi-group menus rather than misleading an old client about required modifiers. Old cart selections are backfilled into the normalized V9 table. The singular option JSON from older orders remains valid and readable in the projection.
 
-Run `cd backend && mvn -B -ntp verify` with Docker for PostgreSQL Testcontainers; GitHub CI additionally checks Next.js production build and clean-start Docker Compose. The verification ledger must reference the CI run for the **current PR head**, not a previously passing commit. See [ADR 0005](decisions/0005-variant-selection.md).
+## Intentionally deferred
+
+This upgrade **does not** include multiple choices *within* one group, per-option quantities, bundles/combo deals, variant-specific stock, ingredient/recipe tracking, duplicate differently configured cart lines of one menu item, promotions or merchant tax/fees. UI is deliberately not designed here because the owner controls visual work. Full staff/browser session security and browser E2E still remain M2 release blockers.
+
+See [ADR 0006](decisions/0006-multi-modifier-groups.md) for the migration rationale. Use exact [PR CI](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks) for verified migration and concurrency evidence.

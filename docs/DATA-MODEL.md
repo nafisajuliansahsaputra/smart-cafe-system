@@ -117,3 +117,10 @@ Not yet implemented: variant tables, inventory reservations, payment attempts/we
 - `menu_variant_options`: id, group_id, unique option_key per group, label, signed price_delta_idr with bounds, active, revision.
 - `cart_lines.variant_option_id` is nullable with FK to option; checkout also verifies it belongs to the item and enabled group. A missing choice is accepted only when no enabled required group exists. Cart still permits one line per menu item. Multiple modifier groups and multiple differently configured lines of one item require a future explicit schema migration.
 - The immutable `order_lines.variant_snapshot` captures the effective selected option metadata and signed delta while `unit_price_idr` stores final server-computed unit price. Receipt document JSON includes the option snapshot, and guest/OCC order detail exposes the selected label.
+
+## 12. V9 normalized modifier selections
+
+- V9 removes the database unique constraint on `menu_variant_groups.menu_item_id`, replacing it with a unique index on `(menu_item_id, lower(name))`. Application service currently restricts a menu to eight groups.
+- `cart_line_variant_options(cart_id,menu_item_id,option_id)` is normalized with a composite FK to cart lines, single option FK, and cascade delete when a cart line is consumed or removed. Migration backfills existing singular `cart_lines.variant_option_id` selections. Old singular column remains as a compatibility field, but the normalized junction is authoritative for new checkout.
+- Cart and direct checkout lines retain a single menu item and quantity, plus zero or more selected UUIDs, capped at eight. Required group cardinality and option-group ownership are enforced in transactional domain service, not inferred from a UI. One per active group, not unrestricted multiple toppings.
+- Order `variant_snapshot` is immutable order-time JSON. New selection objects contain `label` and `options[]` with group name, option key/label and signed IDR delta. Old historical single-option JSON can coexist; the projection label remains present in both.

@@ -109,3 +109,7 @@ The draft M2 backend supports `GET/PUT /api/v1/me/cart`, cash checkout from eith
 ### M2 catalogue and variants (backend preview)
 
 Managers/admins can create categories and menu items, publish or hide items, revise prices with optimistic revisions, and manage a single choice group per menu item (e.g., Size: Regular/Large). Variant adjustments and required/optional choices are validated by Spring Boot, never accepted as client-supplied price. Order/receipt projections preserve the selected label and unit-price snapshot even after catalog changes. See [catalog and variants](docs/M2-CATALOG-VARIANTS.md); the browser UI is intentionally not locked in.
+
+### Multiple modifier groups (V9 development API)
+
+For a menu with Size (required), Milk (required), and Extra (optional), clients fetch `GET /api/v1/menu/{itemId}/variant-groups`, then submit `variantOptionIds: [sizeId, milkId]` in a cart or direct-order line. The server verifies one option per active group, enforces all required selections, and stores an immutable combined snapshot. Old `variantOptionId` still works for single-choice items. No client-supplied delta/price is trusted. [Implementation and limitations](docs/M2-CATALOG-VARIANTS.md).
