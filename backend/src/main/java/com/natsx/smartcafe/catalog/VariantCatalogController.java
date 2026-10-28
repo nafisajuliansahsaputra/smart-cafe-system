@@ -33,6 +33,19 @@ public class VariantCatalogController {
     public record OptionEdit(@NotBlank String label,@NotNull Long priceDeltaIdr,
                              @NotNull Boolean active,@NotNull Long expectedRevision) {}
 
+    @GetMapping("/menu/{itemId}/variant-groups")
+    public ResponseEntity<ApiEnvelope<java.util.List<VariantCatalogService.Group>>> publishedGroups(
+        @PathVariable UUID itemId,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(variants.publicGroups(itemId),RequestIdFilter.get(request)));
+    }
+
+    @GetMapping("/admin/menu-items/{itemId}/variant-groups")
+    public ApiEnvelope<java.util.List<VariantCatalogService.Group>> adminGroups(
+        @PathVariable UUID itemId,HttpServletRequest request) {
+        return ApiEnvelope.of(variants.adminGroups(itemId),RequestIdFilter.get(request));
+    }
+
     @GetMapping("/menu/{itemId}/variants")
     public ResponseEntity<ApiEnvelope<VariantCatalogService.Group>> published(@PathVariable UUID itemId,
                                                                                HttpServletRequest request) {
