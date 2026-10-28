@@ -47,6 +47,7 @@ class CashOrderFlowIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired PasswordEncoder passwords;
     @Autowired CashCheckoutService checkout;
+    @Autowired com.natsx.smartcafe.orders.CashWorkflowService workflow;
 
     private String value(String json,String field) {
         var m=Pattern.compile("\"" + field + "\":\"([^\"]+)\"").matcher(json);
@@ -242,5 +243,70 @@ class CashOrderFlowIntegrationTest {
         assertEquals(first.join().id(),second.join().id());
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
             Integer.class,guest.id()));
+    }
+
+    @Test void simultaneousCashTendersNeverDoubleSettle() throws Exception {
+        String waiter=staff("WAITER"),cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        var visit=open(waiter);
+        var guest=join(visit,"Tender Race Guest");
+        UUID menuItem=item(12000);
+        var response=submit(guest,menuItem,1,"race-"+UUID.randomUUID());
+        assertEquals(200,response.getStatus());
+        UUID orderId=UUID.fromString(value(response.getContentAsString(),"id"));
+        assertEquals(200,mvc.perform(post("/api/v1/ops/orders/"+orderId+"/approve-cash")
+            .header("Authorization","Bearer "+cashier)).andReturn().getResponse().getStatus());
+        UUID ticket=jdbc.queryForObject("SELECT id FROM kitchen_tickets WHERE order_id=?",
+            UUID.class,orderId);
+        UUID intent=jdbc.queryForObject("SELECT id FROM payment_intents WHERE order_id=?",
+            UUID.class,orderId);
+        assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/"+ticket+"/start")
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/"+ticket+"/ready")
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post("/api/v1/waiter/orders/"+orderId+"/served")
+            .header("Authorization","Bearer "+waiter)).andReturn().getResponse().getStatus());
+        UUID staffId=jdbc.queryForObject(
+            "SELECT staff_user_id FROM staff_sessions WHERE token_hash=?",UUID.class,
+            com.natsx.smartcafe.identity.SecureToken.sha256(waiter));
+        var ready=new java.util.concurrent.CountDownLatch(2);
+        var go=new java.util.concurrent.CountDownLatch(1);
+        java.util.function.Supplier<Boolean> first=()->{
+            ready.countDown();
+            try {
+                go.await();
+                workflow.capture(intent,15000,"cash-race-1",staffId,"race-request-1");
+                return true;
+            } catch(com.natsx.smartcafe.common.api.ApiFailureException ex) {
+                return false;
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(ex);
+            }
+        };
+        java.util.function.Supplier<Boolean> second=()->{
+            ready.countDown();
+            try {
+                go.await();
+                workflow.capture(intent,15000,"cash-race-2",staffId,"race-request-2");
+                return true;
+            } catch(com.natsx.smartcafe.common.api.ApiFailureException ex) {
+                return false;
+            } catch(InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(ex);
+            }
+        };
+        var a=CompletableFuture.supplyAsync(first);
+        var b=CompletableFuture.supplyAsync(second);
+        assertTrue(ready.await(10,java.util.concurrent.TimeUnit.SECONDS));
+        go.countDown();
+        int successful=(a.join()?1:0)+(b.join()?1:0);
+        assertEquals(1,successful);
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM cash_tenders WHERE payment_intent_id=?",
+            Integer.class,intent));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM receipts WHERE order_id=?",
+            Integer.class,orderId));
+        assertEquals("PAID",jdbc.queryForObject("SELECT aggregate_status FROM payment_intents WHERE id=?",
+            String.class,intent));
     }
 }
