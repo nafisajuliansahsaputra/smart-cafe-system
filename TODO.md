@@ -25,7 +25,7 @@
 
 M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242) passed Java/JUnit, Testcontainers/PostgreSQL/Flyway V1, Next.js lint/typecheck/build with npm ci, and clean-clone Docker Compose + OpenAPI + security deny + web -> API -> DB smoke. [Verification record](docs/M1-VERIFICATION.md). All checkmarks apply to the feature branch only; no merge, deployment, or business feature is implied.
 
-## M2 — Cash ordering vertical slice (NOT STARTED)
+## M2 — Cash ordering vertical slice (IN PROGRESS; NOT YET FUNCTIONAL)
 
 - [ ] Staff login with roles and session revocation.
 - [ ] Table management, alias creation and visit open/close.
@@ -38,6 +38,8 @@ M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smar
 - [ ] Waiter delivery and verified cash tender capture.
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
+
+M2 progress: type-safe cash order transition guards and tender-quote validation with unit tests were introduced, but are **not wired to the database, authorization, operational API or OCC**. No M2 checkbox is complete. See [M2 cash domain progress](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 
