@@ -369,6 +369,15 @@ class CartAndStockIntegrationTest {
         assertEquals(25000L,jdbc.queryForObject("""
             SELECT unit_price_idr FROM order_lines WHERE order_id=?
             """,Long.class,orderId));
+        String cashierToken=staffSession("CASHIER");
+        String kitchenToken=staffSession("KITCHEN");
+        assertEquals(200,mvc.perform(post("/api/v1/ops/orders/"+orderId+"/approve-cash")
+            .header("Authorization","Bearer "+cashierToken))
+            .andReturn().getResponse().getStatus());
+        var kitchenTickets=mvc.perform(get("/api/v1/kitchen/tickets")
+            .header("Authorization","Bearer "+kitchenToken)).andReturn().getResponse();
+        assertEquals(200,kitchenTickets.getStatus(),kitchenTickets.getContentAsString());
+        assertTrue(kitchenTickets.getContentAsString().contains("\"variantLabel\":\"Large\""));
         String snapshot=jdbc.queryForObject("""
             SELECT variant_snapshot::text FROM order_lines WHERE order_id=?
             """,String.class,orderId);
