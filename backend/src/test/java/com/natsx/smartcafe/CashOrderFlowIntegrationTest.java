@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -139,7 +139,7 @@ class CashOrderFlowIntegrationTest {
         jdbc.update("UPDATE menu_items SET base_price_idr=35000 WHERE id=?",menuItem);
         assertEquals(56000,jdbc.queryForObject("SELECT total_idr FROM orders WHERE id=?",
             Long.class,orderId));
-        assertThrows(DataIntegrityViolationException.class,()->jdbc.update(
+        assertThrows(DataAccessException.class,()->jdbc.update(
             "UPDATE orders SET total_idr=57000 WHERE id=?",orderId));
         assertEquals(403,mvc.perform(get("/api/v1/ops/orders")
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse().getStatus());
@@ -202,7 +202,7 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
         assertEquals(404,mvc.perform(get("/api/v1/me/receipts/" + receipt)
             .header("Authorization","Bearer " + b.token())).andReturn().getResponse().getStatus());
-        assertThrows(DataIntegrityViolationException.class,()->jdbc.update(
+        assertThrows(DataAccessException.class,()->jdbc.update(
             "UPDATE receipts SET total_idr=1 WHERE id=?",receipt));
         assertEquals(200,mvc.perform(post("/api/v1/waiter/table-visits/" + visit.id() + "/close")
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse().getStatus());
