@@ -29,7 +29,7 @@ public class CashWorkflowService {
                            String paymentStatus,long totalIdr) {}
     public record KitchenTicket(UUID id,UUID orderId,String tableCode,String status,
                                 List<KitchenLine> lines) {}
-    public record KitchenLine(String name,int quantity,String notes) {}
+    public record KitchenLine(String name,int quantity,String notes,String variantLabel) {}
     public record CashTenderResult(UUID paymentIntentId,UUID orderId,
                                    long receivedIdr,long changeGivenIdr,String paymentStatus,
                                    UUID receiptId) {}
@@ -130,9 +130,10 @@ public class CashWorkflowService {
                 rs.getObject("order_id",UUID.class),rs.getString("table_code"),rs.getString("status")));
         return tickets.stream().map(ticket->{
             var lines=jdbc.query("""
-                SELECT name_snapshot,quantity,notes FROM order_lines WHERE order_id=? ORDER BY name_snapshot
+                SELECT name_snapshot,quantity,notes,variant_snapshot->>'label' AS variant_label
+                FROM order_lines WHERE order_id=? ORDER BY name_snapshot
                 """,(rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
-                    rs.getString("notes")),ticket.orderId());
+                    rs.getString("notes"),rs.getString("variant_label")),ticket.orderId());
             return new KitchenTicket(ticket.id(),ticket.orderId(),ticket.tableCode(),ticket.status(),lines);
         }).toList();
     }
