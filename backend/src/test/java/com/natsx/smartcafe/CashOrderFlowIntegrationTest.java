@@ -321,4 +321,51 @@ class CashOrderFlowIntegrationTest {
         assertEquals("PAID",jdbc.queryForObject("SELECT aggregate_status FROM payment_intents WHERE id=?",
             String.class,intent));
     }
+
+    @Test void rejectingUnpaidOrderReleasesAllocatedStockExactlyOnce() throws Exception {
+        String waiter=staff("WAITER"),cashier=staff("CASHIER");
+        var visit=open(waiter);
+        var customer=join(visit,"Rejected Cash Guest");
+        UUID item=item(12000);
+        jdbc.update("UPDATE item_availability SET limited_quantity=1 WHERE menu_item_id=?",item);
+        var first=submit(customer,item,1,"rejected-"+UUID.randomUUID());
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        UUID orderId=UUID.fromString(value(first.getContentAsString(),"id"));
+        assertEquals(0L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",Long.class,item));
+        assertEquals(409,submit(customer,item,1,"soldout-"+UUID.randomUUID()).getStatus());
+
+        String reason="{\"reason\":\"Wrong table request, rejected before cooking\"}";
+        assertEquals(403,mvc.perform(post("/api/v1/ops/orders/"+orderId+"/reject")
+            .header("Authorization","Bearer "+waiter)
+            .contentType(MediaType.APPLICATION_JSON).content(reason))
+            .andReturn().getResponse().getStatus());
+        var rejected=mvc.perform(post("/api/v1/ops/orders/"+orderId+"/reject")
+            .header("Authorization","Bearer "+cashier)
+            .contentType(MediaType.APPLICATION_JSON).content(reason)).andReturn().getResponse();
+        assertEquals(200,rejected.getStatus(),rejected.getContentAsString());
+        assertEquals("REJECTED",jdbc.queryForObject("SELECT status FROM orders WHERE id=?",
+            String.class,orderId));
+        assertEquals("UNPAID",jdbc.queryForObject(
+            "SELECT aggregate_status FROM payment_intents WHERE order_id=?",String.class,orderId));
+        assertEquals(1L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",Long.class,item));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM order_stock_allocations WHERE order_id=? AND released_at IS NOT NULL
+            """,Integer.class,orderId));
+        assertEquals(409,mvc.perform(post("/api/v1/ops/orders/"+orderId+"/reject")
+            .header("Authorization","Bearer "+cashier)
+            .contentType(MediaType.APPLICATION_JSON).content(reason))
+            .andReturn().getResponse().getStatus());
+        assertEquals(1L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",Long.class,item));
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT count(*) FROM receipts WHERE order_id=?",Integer.class,orderId));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE resource_id=? AND operation='CASH_ORDER_REJECTED'
+            """,Integer.class,orderId));
+        assertEquals(200,mvc.perform(post("/api/v1/waiter/table-visits/"+visit.id()+"/close")
+            .header("Authorization","Bearer "+waiter))
+            .andReturn().getResponse().getStatus());
+    }
 }
