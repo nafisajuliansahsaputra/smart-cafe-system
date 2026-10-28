@@ -16,7 +16,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, StaffAuthService staffAuth) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, StaffAuthService staffAuth, GuestSessionService guestAuth) throws Exception {
         // Only explicit Authorization: Bearer headers authenticate staff.
         // No browser cookies are accepted; adding cookie auth requires CSRF protection.
         return http
@@ -24,6 +24,7 @@ public class SecurityConfiguration {
             .csrf(AbstractHttpConfigurer::disable)
             .addFilterBefore(new StaffBearerFilter(staffAuth),
                 org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(new GuestBearerFilter(guestAuth), StaffBearerFilter.class)
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .exceptionHandling(errors -> errors
@@ -37,7 +38,9 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/system/status").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                     "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/v1/staff/auth/login").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/staff/auth/login", "/api/v1/table-visits/join").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/tables/*/entry").permitAll()
+                .requestMatchers("/api/v1/me/**").hasAuthority("GUEST")
                 .requestMatchers("/api/v1/staff/auth/me", "/api/v1/staff/auth/logout").authenticated()
                 .requestMatchers("/api/v1/ops/**").hasAnyRole("CASHIER", "MANAGER", "ADMIN")
                 .requestMatchers("/api/v1/waiter/**").hasAnyRole("WAITER", "CASHIER", "MANAGER", "ADMIN")
