@@ -165,7 +165,9 @@ public class CashCheckoutService {
                 INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
                                         unit_price_idr,quantity,line_total_idr)
                 VALUES (?,?,?,CASE WHEN CAST(? AS uuid) IS NULL THEN '{}'::jsonb
-                  ELSE jsonb_build_object('id',?,'group',?,'key',?,'label',?,'deltaIdr',?) END,?,?,?)
+                  ELSE jsonb_build_object('id',CAST(? AS uuid),'group',CAST(? AS text),
+                    'key',CAST(? AS text),'label',CAST(? AS text),
+                    'deltaIdr',CAST(? AS bigint)) END,?,?,?)
                 """,orderId,item.menu().id(),item.menu().name(),
                 item.option()==null?null:item.option().id(),
                 item.option()==null?null:item.option().id(),
