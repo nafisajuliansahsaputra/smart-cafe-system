@@ -1,0 +1,201 @@
+package com.natsx.smartcafe;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+
+import com.natsx.smartcafe.common.api.ApiFailureException;
+import com.natsx.smartcafe.identity.GuestPrincipal;
+import com.natsx.smartcafe.identity.SecureToken;
+import com.natsx.smartcafe.orders.CashCheckoutService;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Testcontainers
+class CartAndStockIntegrationTest {
+    @Container static final PostgreSQLContainer postgres =
+        new PostgreSQLContainer("postgres:17-alpine")
+            .withDatabaseName("cart_stock_test").withUsername("test").withPassword("test");
+
+    @DynamicPropertySource
+    static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url",postgres::getJdbcUrl);
+        registry.add("spring.datasource.username",postgres::getUsername);
+        registry.add("spring.datasource.password",postgres::getPassword);
+    }
+
+    @Autowired JdbcTemplate jdbc;
+    @Autowired MockMvc mvc;
+    @Autowired CashCheckoutService checkout;
+
+    private record Customer(GuestPrincipal principal,String token) {}
+
+    private UUID visit() {
+        UUID staff=UUID.randomUUID(),table=UUID.randomUUID(),visit=UUID.randomUUID();
+        jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+            staff,"fixture-"+staff,"synthetic-only");
+        jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
+            table,table.toString(),"cart-"+table,4);
+        jdbc.update("""
+            INSERT INTO table_visits(id,table_id,opened_by,join_secret_hash)
+            VALUES (?,?,?,?)
+            """,visit,table,staff,"a".repeat(64));
+        return visit;
+    }
+
+    private Customer guest(UUID visit) {
+        UUID id=UUID.randomUUID();
+        String token=SecureToken.generate();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            id,visit,"Synthetic");
+        jdbc.update("""
+            INSERT INTO guest_sessions(token_hash,guest_id,visit_id,expires_at)
+            VALUES (?,?,?,now()+interval '1 hour')
+            """,SecureToken.sha256(token),id,visit);
+        return new Customer(new GuestPrincipal(id,visit,SecureToken.sha256(token)),token);
+    }
+
+    private UUID menu(long price,long remaining) {
+        UUID category=UUID.randomUUID(),item=UUID.randomUUID();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category,"Synthetic","fixture-"+category);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr)
+            VALUES (?,?,?,?)
+            """,item,category,"Synthetic Meal",price);
+        if(remaining>=0)jdbc.update("""
+            UPDATE item_availability SET limited_quantity=? WHERE menu_item_id=?
+            """,remaining,item);
+        return item;
+    }
+
+    private String field(String json,String name) {
+        var matcher=Pattern.compile("\\\""+name+"\\\":\\\"([^\\\"]+)\\\"").matcher(json);
+        assertTrue(matcher.find(),"Missing field "+name);
+        return matcher.group(1);
+    }
+
+    @Test void versionedCartIsOwnerScopedAndReplaysAfterConsumption() throws Exception {
+        UUID visit=visit(),item=menu(25000,10);
+        Customer a=guest(visit),b=guest(visit);
+        var empty=mvc.perform(get("/api/v1/me/cart").header("Authorization","Bearer "+a.token()))
+            .andReturn().getResponse();
+        assertEquals(200,empty.getStatus());
+        assertTrue(empty.getContentAsString().contains("\\"version\\":0"));
+        assertEquals(401,mvc.perform(get("/api/v1/me/cart")).andReturn().getResponse().getStatus());
+        String request="{\\"expectedVersion\\":0,\\"lines\\":[{\\"menuItemId\\":\\""
+            +item+"\\",\\"quantity\\":2}]}";
+        var replaced=mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+a.token()).contentType(MediaType.APPLICATION_JSON)
+            .content(request)).andReturn().getResponse();
+        assertEquals(200,replaced.getStatus(),replaced.getContentAsString());
+        assertTrue(replaced.getContentAsString().contains("\\"estimatedSubtotalIdr\\":50000"));
+        assertTrue(replaced.getContentAsString().contains("\\"version\\":1"));
+        assertEquals(409,mvc.perform(put("/api/v1/me/cart")
+            .header("Authorization","Bearer "+a.token()).contentType(MediaType.APPLICATION_JSON)
+            .content(request)).andReturn().getResponse().getStatus());
+        var other=mvc.perform(get("/api/v1/me/cart")
+            .header("Authorization","Bearer "+b.token())).andReturn().getResponse();
+        assertEquals(200,other.getStatus());
+        assertTrue(other.getContentAsString().contains("\\"lines\\":[]"));
+
+        String key="cart-checkout-"+UUID.randomUUID();
+        var ordered=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+a.token())
+            .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"cartVersion\\":1}")).andReturn().getResponse();
+        assertEquals(200,ordered.getStatus(),ordered.getContentAsString());
+        String id=field(ordered.getContentAsString(),"id");
+        assertTrue(ordered.getContentAsString().contains("\\"totalIdr\\":50000"));
+        var consumed=mvc.perform(get("/api/v1/me/cart")
+            .header("Authorization","Bearer "+a.token())).andReturn().getResponse();
+        assertTrue(consumed.getContentAsString().contains("\\"version\\":2"));
+        assertTrue(consumed.getContentAsString().contains("\\"lines\\":[]"));
+
+        var replay=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+a.token())
+            .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"cartVersion\\":1}")).andReturn().getResponse();
+        assertEquals(200,replay.getStatus());
+        assertEquals(id,field(replay.getContentAsString(),"id"));
+        assertEquals(409,mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+a.token())
+            .header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"cartVersion\\":2}")).andReturn().getResponse().getStatus());
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
+            Integer.class,a.principal().guestId()));
+        assertEquals(8,jdbc.queryForObject("""
+            SELECT limited_quantity FROM item_availability WHERE menu_item_id=?
+            """,Long.class,item));
+        jdbc.update("UPDATE menu_items SET base_price_idr=55000 WHERE id=?",item);
+        assertEquals(50000L,jdbc.queryForObject("""
+            SELECT total_idr FROM orders WHERE id=?
+            """,Long.class,UUID.fromString(id)));
+    }
+
+    @Test void twoGuestsCompetingForLastUnitOnlyCreateOneOrder() {
+        UUID visit=visit(),item=menu(10000,1);
+        var a=guest(visit);
+        var b=guest(visit);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        java.util.function.Supplier<Boolean> left=()->runCheckout(a,item,start);
+        java.util.function.Supplier<Boolean> right=()->runCheckout(b,item,start);
+        var first=CompletableFuture.supplyAsync(left);
+        var second=CompletableFuture.supplyAsync(right);
+        start.countDown();
+        int successes=(first.join()?1:0)+(second.join()?1:0);
+        assertEquals(1,successes);
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM orders WHERE visit_id=?",
+            Integer.class,visit));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT limited_quantity FROM item_availability WHERE menu_item_id=?
+            """,Long.class,item));
+    }
+
+    private boolean runCheckout(Customer guest,UUID item,java.util.concurrent.CountDownLatch start) {
+        try {
+            start.await();
+            checkout.checkout(guest.principal(),
+                List.of(new CashCheckoutService.Line(item,1)),"stock-"+UUID.randomUUID());
+            return true;
+        } catch(ApiFailureException ex) {
+            assertEquals("OUT_OF_STOCK",ex.code());
+            return false;
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(ex);
+        }
+    }
+
+    @Test void failedMultiItemCheckoutRollsBackPreviousStockUpdates() {
+        UUID visit=visit();
+        Customer guest=guest(visit);
+        UUID available=menu(5000,2),soldOut=menu(8000,0);
+        ApiFailureException failure=assertThrows(ApiFailureException.class,()->
+            checkout.checkout(guest.principal(),List.of(
+                new CashCheckoutService.Line(available,1),
+                new CashCheckoutService.Line(soldOut,1)),"rollback-"+UUID.randomUUID()));
+        assertEquals("OUT_OF_STOCK",failure.code());
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT limited_quantity FROM item_availability WHERE menu_item_id=?
+            """,Long.class,available));
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
+            Integer.class,guest.principal().guestId()));
+    }
+}
