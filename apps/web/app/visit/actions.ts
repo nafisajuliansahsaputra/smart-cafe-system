@@ -70,10 +70,16 @@ export async function joinTable(form: FormData): Promise<void> {
 }
 
 export async function exitVisit(): Promise<void> {
-  // No guest logout backend endpoint exists yet. Removing cookie ends browser access
-  // but DOES NOT revoke the old bearer token server-side.
+  const token = await guestToken();
+  const response = token
+    ? await guestApi("/api/v1/me/logout", "POST", token)
+    : { status: 401 };
   await clearVisitCookie();
-  redirect("/?notice=left");
+  // Never claim server revocation if the API was unreachable.
+  redirect(
+    response.status === 200 || response.status === 401
+      ? "/?notice=left" : "/?notice=revocation-unconfirmed",
+  );
 }
 
 async function updateCart(lines: { menuItemId: string; quantity: number; variantOptionIds: string[] }[],
