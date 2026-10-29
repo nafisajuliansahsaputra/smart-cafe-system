@@ -1,9 +1,7 @@
 package com.natsx.smartcafe.tables;
 
-import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.time.Duration;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -24,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class GuestJoinThrottle {
-    private static final Duration WINDOW = Duration.ofMinutes(10);
     private static final int MAX_PER_PEER = 1200;
     private static final int MAX_PER_TABLE = 60;
     private static final int MAX_PER_PAIR = 24;
