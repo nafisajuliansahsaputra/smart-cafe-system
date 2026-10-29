@@ -4,7 +4,6 @@ import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.GuestPrincipal;
 import com.natsx.smartcafe.identity.StaffPrincipal;
 import java.util.UUID;
-import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,16 +15,17 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class LiveCursorService {
-    private static final int MAX_LONG_POLLS = 48;
     private static final long LONG_POLL_MS = 14000;
     private static final long RECOVERY_CHECK_MS = 2500;
-    private final Semaphore admission = new Semaphore(MAX_LONG_POLLS, true);
+    private final LivePollCapacity admission;
     private final JdbcTemplate jdbc;
     private final LiveChangeWakeup wakeup;
 
-    public LiveCursorService(JdbcTemplate jdbc, LiveChangeWakeup wakeup) {
+    public LiveCursorService(JdbcTemplate jdbc, LiveChangeWakeup wakeup,
+                             LivePollCapacity admission) {
         this.jdbc = jdbc;
         this.wakeup = wakeup;
+        this.admission = admission;
     }
 
     public record Cursor(long cursor) { }
@@ -41,7 +41,7 @@ public class LiveCursorService {
                 """, Boolean.class, orderId,guest.guestId(),guest.visitId());
             if (!Boolean.TRUE.equals(owned)) throw missing();
         }
-        return await(after, stillAuthorized, () -> {
+        return await(after, stillAuthorized, guest.guestId(), LivePollCapacity.Kind.GUEST, () -> {
             String sql = """
                 SELECT COALESCE(MAX(l.sequence_id),0)
                 FROM live_order_signals l JOIN orders o ON o.id=l.order_id
@@ -63,7 +63,7 @@ public class LiveCursorService {
             if (!"orders".equals(topic) && !"order".equals(topic)) badTopic();
             if (("order".equals(topic)) != (orderId != null)) badTopic();
             if (orderId != null && !existsOrder(orderId)) throw missing();
-            return await(after, stillAuthorized, () -> orderId == null
+            return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF, () -> orderId == null
                 ? cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_order_signals")
                 : cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_order_signals WHERE order_id=?",orderId));
         }
@@ -71,7 +71,7 @@ public class LiveCursorService {
             if (!staff.roles().stream().anyMatch(r -> r.equals("KITCHEN") ||
                 r.equals("MANAGER") || r.equals("ADMIN"))) throw forbidden();
             if (!"kitchen".equals(topic) || orderId != null) badTopic();
-            return await(after, stillAuthorized, () -> cursor("""
+            return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF, () -> cursor("""
                 SELECT COALESCE(MAX(sequence_id),0) FROM live_order_signals
                 WHERE event_type IN ('ORDER_ACCEPTED','ORDER_PREPARING',
                                      'ORDER_READY','ORDER_SERVED','CASH_ORDER_REJECTED')
@@ -87,7 +87,7 @@ public class LiveCursorService {
                 // secret-rotation metadata, never the proof itself.
                 boolean supervisor = staff.roles().stream().anyMatch(r ->
                     r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"));
-                return await(after, stillAuthorized, () -> supervisor
+                return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF, () -> supervisor
                     ? cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_table_signals")
                     : cursor("""
                         SELECT COALESCE(MAX(s.sequence_id),0)
@@ -100,12 +100,12 @@ public class LiveCursorService {
             if (!"waiter".equals(topic) || orderId != null) badTopic();
             if (staff.roles().stream().anyMatch(r -> r.equals("CASHIER") ||
                 r.equals("MANAGER") || r.equals("ADMIN"))) {
-                return await(after, stillAuthorized, () -> cursor("""
+                return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF, () -> cursor("""
                     SELECT COALESCE(MAX(sequence_id),0) FROM live_order_signals
                     WHERE event_type IN ('ORDER_READY','ORDER_SERVED','CASH_PAYMENT_PAID')
                     """));
             }
-            return await(after, stillAuthorized, () -> cursor("""
+            return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF, () -> cursor("""
                 SELECT COALESCE(MAX(l.sequence_id),0)
                 FROM live_order_signals l
                 JOIN orders o ON o.id=l.order_id
@@ -119,13 +119,15 @@ public class LiveCursorService {
     }
 
     private Cursor await(Long after, Supplier<Boolean> stillAuthorized,
+                         UUID principalId, LivePollCapacity.Kind kind,
                          Supplier<Long> position) throws InterruptedException {
         if (after != null && after < 0) throw new ApiFailureException(
             HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Invalid event cursor");
         if (after == null) return new Cursor(position.get());
-        if (!admission.tryAcquire()) throw new ApiFailureException(
+        LivePollCapacity.Permit permit = admission.acquire(kind, principalId);
+        if (permit == null) throw new ApiFailureException(
             HttpStatus.TOO_MANY_REQUESTS,"RATE_LIMITED","Too many live subscribers");
-        try {
+        try (permit) {
             long deadline = System.nanoTime() + LONG_POLL_MS * 1_000_000L;
             while (true) {
                 if (!stillAuthorized.get()) throw new ApiFailureException(
@@ -137,8 +139,6 @@ public class LiveCursorService {
                 if (remaining <= 0) return new Cursor(current);
                 wakeup.await(observedGeneration, Math.min(RECOVERY_CHECK_MS, remaining));
             }
-        } finally {
-            admission.release();
         }
     }
 
