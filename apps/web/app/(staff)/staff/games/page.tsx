@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
-import { canUseWaiter, staffIdentity } from "@/lib/staff-server";
-import { adminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
+import { adminGameConditionHistory, adminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
 import { createPhysicalGame, registerGameCopy, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,10 @@ export default async function StaffGamesPage({searchParams}:{
   if(!canUseWaiter(identity.staff.roles)) notFound();
   const isManager=identity.staff.roles.some(r=>r==="MANAGER"||r==="ADMIN");
   const {notice}=await searchParams;
-  const [loans,catalog,copies]=await Promise.all([
-    staffGameLoans(),staffGames(),isManager ? adminGameCopies() : Promise.resolve(null),
+  const [loans,catalog,copies,history]=await Promise.all([
+    staffGameLoans(),staffGames(),
+    isManager ? adminGameCopies() : Promise.resolve(null),
+    isManager ? adminGameConditionHistory() : Promise.resolve(null),
   ]);
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
@@ -149,6 +151,21 @@ export default async function StaffGamesPage({searchParams}:{
             <p>Unit tidak dapat diaktifkan melalui alur karantina.</p>}
         </article>)}
       </div>}
+    </section>}
+    {isManager && <section className="staff-panel">
+      <h2>Riwayat pemeriksaan unit</h2>
+      <p className="staff-muted">100 perubahan kondisi terbaru. Catatan hanya untuk
+        operasional, bukan penetapan tanggung jawab atau denda pelanggan.</p>
+      {history && !history.ok && <p role="alert">Riwayat pemeriksaan belum bisa dimuat.
+        Periksa koneksi sebelum mengambil keputusan.</p>}
+      {history?.ok && history.data.length===0 && <p>Belum ada catatan perubahan kondisi.</p>}
+      {history?.ok && <ul>{history.data.map(item=><li key={item.id}>
+        <strong>{item.gameName} · {item.copyCode}</strong>
+        {" · "}{item.beforeCondition} → {item.afterCondition}
+        {" · "}{localTime(item.recordedAt)}
+        {" · Staf: "}{item.actorLogin}
+        <p>Catatan: {item.reason}</p>
+      </li>)}</ul>}
     </section>}
     {isManager && <section className="staff-panel"><h2>Tambahkan jenis permainan</h2>
       <form action={createPhysicalGame} className="staff-form">

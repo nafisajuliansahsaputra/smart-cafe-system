@@ -297,3 +297,12 @@ copies, repeat/other transitions → 409; invalid note → 400;
 wrong role → 403; missing copy → 404. Mutation responses are 200 in
 ApiEnvelope; list responses are no-store. No LOST/RETIRED transition
 or automatic damage penalty is exposed.
+
+## Manager-only game condition history (stacked draft PR #23)
+
+`GET /api/v1/admin/games/condition-history` returns up to 100 newest
+condition transitions with `id`, `copyId`, `gameName`, `copyCode`,
+`beforeCondition`, `afterCondition`, `reason`, `actorLogin`,
+`recordedAt` in a no-store 200 ApiEnvelope.data array. 401 unauthenticated,
+403 waiter/cashier/kitchen, with no guest or payment identifiers exposed.
+Rows are immutable evidence of staff inspection events, not monetary claims.

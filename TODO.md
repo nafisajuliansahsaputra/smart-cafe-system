@@ -206,3 +206,13 @@ Unauthorized, invalid and replayed actions are rejected; Java/PostgreSQL
 and HTTP/HTTPS browser acceptance gate this slice. No damage charge,
 refund, guest liability, lost-property or disposal resolution has been
 approved or implemented. Inventory-only updates are manually refreshed.
+
+### M4 copy-condition history screen (stacked draft PR #23)
+
+Manager/admin inventory dashboard now exposes the 100 latest immutable
+inspection/quarantine/restoration history entries through a separate
+role-gated no-store API; waiter/cashier/kitchen cannot read the notes.
+Historical reasons cannot be altered from the UI; no guest or financial
+data is included. Next still needed: paginated operational history,
+owner-approved LOST/RETIRED incident policy, inventory realtime updates,
+staff field trials, security review before a public pilot.
