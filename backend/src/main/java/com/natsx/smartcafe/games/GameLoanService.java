@@ -159,6 +159,7 @@ public class GameLoanService {
                 assigned_at=now(),assigned_by=? WHERE id=?
             """,copy,staff.staffId(),loanId);
         events.gameLoan(loanId,"GAME_LOAN_ASSIGNED");
+        events.gameInventory(loan.gameId());
         audit.staff(staff.staffId(),"GAME_COPY_ASSIGNED","GAME_LOAN",loanId,requestId);
         return one(loanId);
     }
@@ -225,6 +226,7 @@ public class GameLoanService {
                 returned_at=now(),returned_by=? WHERE id=?
             """,staff.staffId(),loanId);
         events.gameLoan(loanId,"GAME_LOAN_RETURNED");
+        events.gameInventory(loan.gameId());
         audit.staff(staff.staffId(),damageReason==null
             ? "GAME_COPY_RETURNED_INSPECTED" : "GAME_COPY_RETURNED_QUARANTINED",
             "GAME_LOAN",loanId,requestId);
@@ -288,6 +290,10 @@ public class GameLoanService {
             throw conflict("Cannot change condition while physical copy is assigned");
         jdbc.update("UPDATE physical_game_copies SET condition=? WHERE id=?",desired,copyId);
         recordCondition(copyId,null,staff.staffId(),current,desired,note);
+        UUID gameId=jdbc.queryForObject("""
+            SELECT game_id FROM physical_game_copies WHERE id=?
+            """,UUID.class,copyId);
+        events.gameInventory(gameId);
         audit.staff(staff.staffId(),"DAMAGED".equals(desired)
             ? "GAME_COPY_QUARANTINED" : "GAME_COPY_RESTORED_INSPECTED",
             "PHYSICAL_GAME_COPY",copyId,requestId);
@@ -334,6 +340,7 @@ public class GameLoanService {
         jdbc.update("INSERT INTO physical_games(id,name,description) VALUES (?,?,?)",
             id,name.strip(),description==null?null:description.strip());
         audit.staff(staff.staffId(),"GAME_CATALOG_CREATED","PHYSICAL_GAME",id,requestId);
+        events.gameInventory(id);
         return new GameView(id,name.strip(),description==null?null:description.strip(),0);
     }
 
@@ -348,6 +355,7 @@ public class GameLoanService {
             INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES (?,?,?)
             """,id,gameId,code.strip());
         audit.staff(staff.staffId(),"GAME_COPY_REGISTERED","PHYSICAL_GAME_COPY",id,requestId);
+        events.gameInventory(gameId);
         return id;
     }
 

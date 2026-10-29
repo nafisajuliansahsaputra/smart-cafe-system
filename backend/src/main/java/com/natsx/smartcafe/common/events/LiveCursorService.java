@@ -37,8 +37,9 @@ public class LiveCursorService {
             return await(after, stillAuthorized, guest.guestId(), LivePollCapacity.Kind.GUEST,
                 () -> cursor("""
                     SELECT COALESCE(MAX(s.sequence_id),0) FROM live_game_signals s
-                    JOIN physical_game_loans l ON l.id=s.loan_id
-                    WHERE l.guest_id=? AND l.visit_id=?
+                    LEFT JOIN physical_game_loans l ON l.id=s.loan_id
+                    WHERE s.game_id IS NOT NULL
+                       OR (l.guest_id=? AND l.visit_id=?)
                     """,guest.guestId(),guest.visitId()));
         }
         if (!"orders".equals(topic) && !"order".equals(topic)) badTopic();
@@ -98,9 +99,9 @@ public class LiveCursorService {
                         ? cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_game_signals")
                         : cursor("""
                             SELECT COALESCE(MAX(s.sequence_id),0) FROM live_game_signals s
-                            JOIN physical_game_loans l ON l.id=s.loan_id
-                            JOIN table_visits v ON v.id=l.visit_id
-                            WHERE v.opened_by=?
+                            LEFT JOIN physical_game_loans l ON l.id=s.loan_id
+                            LEFT JOIN table_visits v ON v.id=l.visit_id
+                            WHERE s.game_id IS NOT NULL OR v.opened_by=?
                             """,staff.staffId()));
             }
             if ("tables".equals(topic)) {

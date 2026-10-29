@@ -34,6 +34,15 @@ public class OutboxEvents {
             """,loanId,eventName);
     }
 
+    /** Inventory change is public-to-authenticated-visit signal only. No serial,
+     * borrower, condition note, or staff identity is sent to the live relay. */
+    public void gameInventory(UUID gameId) {
+        jdbc.update("""
+            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
+            VALUES ('GAME_INVENTORY',?,'GAME_INVENTORY_CHANGED','{}'::jsonb)
+            """,gameId);
+    }
+
     public void order(UUID orderId,String eventName) {
         jdbc.update("""
             INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
