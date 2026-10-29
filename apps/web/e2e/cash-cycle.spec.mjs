@@ -97,6 +97,33 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(await guest.evaluate(() => document.cookie.includes("scs_guest_session"))).toBe(false);
     expect(await guest.content()).not.toContain(guestCookie.value);
 
+    // Physical game loans are independent from food/cash, and cannot be
+    // digitally marked "delivered" until waiter verifies the physical unit.
+    await guest.goto("/visit/games");
+    await expect(guest.getByRole("heading", { name: "Pinjam permainan fisik." })).toBeVisible();
+    await expect(guest.getByRole("heading", { name: "UNO Demo" })).toBeVisible();
+    await guest.getByRole("checkbox", {
+      name: /Saya akan menjaga dan mengembalikan permainan/,
+    }).check();
+    await guest.getByRole("button", { name: "Ajukan pinjam" }).click();
+    await expect(guest.getByText("Menunggu waiter")).toBeVisible();
+    await waiter.goto("/staff/games");
+    await expect(waiter.getByText("REQUESTED", { exact: true })).toBeVisible();
+    await waiter.getByRole("checkbox", {
+      name: /Sudah memeriksa ketersediaan unit fisik/,
+    }).check();
+    await waiter.getByRole("button", { name: "Alokasikan unit" }).click();
+    await expect(waiter.getByText("ASSIGNED", { exact: true })).toBeVisible();
+    await expect(waiter.getByText(/UNO-E2E-001/)).toBeVisible();
+    await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
+    await waiter.getByRole("checkbox", {
+      name: /Unit telah diserahkan langsung ke pelanggan/,
+    }).check();
+    await waiter.getByRole("button", { name: "Konfirmasi serah-terima" }).click();
+    await expect(waiter.getByText("IN_USE", { exact: true })).toBeVisible();
+    await guest.goto("/visit/games");
+    await expect(guest.getByText("Sedang dipinjam")).toBeVisible();
+
     // Required + optional modifier groups must contribute to SERVER-priced cart.
     await guest.goto(`/visit/menu/${ITEM}`);
     await expect(guest.getByRole("heading", { name: "E2E Latte" })).toBeVisible();
@@ -212,7 +239,31 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByText(/Struk #/)).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
 
-    // Waiter cannot close a table with unsettled payments; this one is settled.
+    // Even after cash is PAID and food SERVED, a physical unit in use
+    // must block table closure until the waiter has inspected its return.
+    await waiter.goto("/staff/tables");
+    const gameUnreturned = waiter.locator("article").filter({
+      has: waiter.getByRole("heading", { name: `Meja ${TABLE}` }),
+    });
+    await gameUnreturned.getByRole("checkbox", {
+      name: /Semua pesanan dan pembayaran telah selesai/,
+    }).check();
+    await gameUnreturned.getByRole("button", { name: "Tutup kunjungan" }).click();
+    await expect(waiter.getByText(/outstanding physical game loan|permainan/i)).toBeVisible();
+    await expect(gameUnreturned).toContainText("TERISI");
+
+    await waiter.goto("/staff/games");
+    await expect(waiter.getByText("IN_USE", { exact: true })).toBeVisible();
+    await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
+    await waiter.getByRole("checkbox", {
+      name: /Unit diterima kembali dan sudah diperiksa kondisinya/,
+    }).check();
+    await waiter.getByRole("button", { name: "Tandai dikembalikan" }).click();
+    await expect(waiter.getByText("Belum ada pinjaman aktif")).toBeVisible();
+    await guest.goto("/visit/games");
+    await expect(guest.getByText("Sudah dikembalikan")).toBeVisible();
+
+    // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");
     const closeCard = waiter.locator("article").filter({
       has: waiter.getByRole("heading", { name: `Meja ${TABLE}` }),
