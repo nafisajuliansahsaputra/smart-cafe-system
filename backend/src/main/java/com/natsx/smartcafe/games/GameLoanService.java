@@ -171,6 +171,7 @@ public class GameLoanService {
                              String requestId) {
         Loan loan=lockLoanByVisit(loanId,staff);
         if (!loan.status().equals("ASSIGNED")) throw conflict("Game is not assigned");
+        requireNoPendingLossReport(loanId);
         // Require staff to physically read the correct serial number.
         if (confirmedCopyCode==null || !confirmedCopyCode.equals(loan.code()))
             throw conflict("Physical game copy code does not match");
@@ -207,6 +208,7 @@ public class GameLoanService {
             throw conflict("Game has not been handed over");
         if (confirmedCopyCode==null || !confirmedCopyCode.equals(loan.code()))
             throw conflict("Physical game copy code does not match");
+        requireNoPendingLossReport(loanId);
         // Serialize inspection with manager quarantine/restoration and
         // automatic assignment. Never release an already non-available copy.
         String condition=jdbc.query("""
@@ -387,6 +389,18 @@ public class GameLoanService {
                 (copy_id,loan_id,actor_id,before_condition,after_condition,reason)
             VALUES (?,?,?,?,?,?)
             """,copyId,loanId,actorId,before,after,reason);
+    }
+
+    /** An OPEN loss report must be reviewed before a routine handover/return
+     * can complete, preventing stale incident allegations after stock release.
+     */
+    private void requireNoPendingLossReport(UUID loanId) {
+        Boolean open=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM physical_game_loss_incidents
+                WHERE loan_id=? AND status='OPEN')
+            """,Boolean.class,loanId);
+        if (Boolean.TRUE.equals(open))
+            throw conflict("Manager must review the pending loss report first");
     }
 
     private String requiredReason(String value) {

@@ -25,7 +25,8 @@ public class OutboxEvents {
         if (!java.util.Set.of("GAME_LOAN_REQUESTED", "GAME_LOAN_ASSIGNED",
                 "GAME_LOAN_HANDED_OVER", "GAME_LOAN_RETURN_REQUESTED",
                 "GAME_LOAN_RETURNED",
-                "GAME_LOAN_CANCELLED").contains(eventName)) {
+                "GAME_LOAN_CANCELLED", "GAME_LOSS_REPORTED",
+                "GAME_LOSS_DISMISSED", "GAME_LOSS_CONFIRMED").contains(eventName)) {
             throw new IllegalArgumentException("Unknown safe game loan event");
         }
         jdbc.update("""
