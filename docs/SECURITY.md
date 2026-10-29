@@ -223,3 +223,15 @@ same catalogue. Outbox and browser SSE do not contain copy codes,
 inspection reasons, staff credentials, guest identities or financial
 data. A lost NOTIFY triggers the existing durable cursor catch-up.
 No PII-bearing realtime inventory details are authorized.
+
+## M4 manager game inventory search boundary (draft PR #25)
+
+Serialized physical copy IDs and conditions remain privileged, never
+available via a static table QR or a guest/waiter/cashier endpoint.
+A new role-gated, no-store, server-paginated lookup validates search,
+condition and page on the backend, uses prepared SQL arguments and
+literal substring semantics to avoid wildcard injection, and limits
+each response to 25 copies. GET filtering changes no physical
+condition and grants no ability to bypass staff audit, copy locks,
+damage reasons or guest loan ownership. Resource and query page
+caps are explicit until real operational volume/load review.

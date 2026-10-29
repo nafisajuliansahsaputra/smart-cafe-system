@@ -307,6 +307,17 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByRole("heading", { name: "Riwayat pemeriksaan unit" })).toBeVisible();
     await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
     await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang")).toBeVisible();
+    // Manager search is a DB-backed GET, not client-filtered first 250 copies.
+    await manager.getByLabel("Cari unit atau permainan").fill("NO-SUCH-E2E-UNIT");
+    await manager.getByRole("button", { name: "Cari unit" }).click();
+    await expect(manager.getByText("Tidak ada unit yang sesuai.")).toBeVisible();
+    await manager.getByRole("link", { name: "Reset pencarian" }).click();
+    await expect(manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }))
+      .toBeVisible();
+    await manager.getByLabel("Filter kondisi unit").selectOption("DAMAGED");
+    await manager.getByRole("button", { name: "Cari unit" }).click();
+    await expect(manager.getByText("Tidak ada unit yang sesuai.")).toBeVisible();
+    await manager.getByRole("link", { name: "Reset pencarian" }).click();
 
     // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");

@@ -8,6 +8,7 @@ export type GameCopyView = {
   id: string; gameId: string; gameName: string;
   copyCode: string; condition: "AVAILABLE" | "DAMAGED" | "LOST" | "RETIRED";
 };
+export type GameCopyPage = { items: GameCopyView[]; page: number; hasNext: boolean };
 export type GameConditionHistoryView = {
   id: string; copyId: string; gameName: string; copyCode: string;
   beforeCondition: "AVAILABLE" | "DAMAGED";
@@ -52,6 +53,12 @@ function gameCopy(value: unknown): value is GameCopyView {
 }
 const copies = (value: unknown): value is GameCopyView[] =>
   Array.isArray(value) && value.every(gameCopy);
+function copyPage(value: unknown): value is GameCopyPage {
+  return record(value) && Array.isArray(value.items) &&
+    value.items.length<=25 && value.items.every(gameCopy) &&
+    Number.isSafeInteger(value.page) && (value.page as number)>=0 &&
+    (value.page as number)<=2000 && typeof value.hasNext === "boolean";
+}
 function historyItem(value: unknown): value is GameConditionHistoryView {
   return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
     typeof value.copyId === "string" && uuid.test(value.copyId) &&
@@ -108,4 +115,16 @@ export async function adminGameConditionHistory(): Promise<Result<GameConditionH
   if (!token) return { ok: false, status: 401 };
   const r = await staffApi("/api/v1/admin/games/condition-history", "GET", token);
   return result(r.status, dataFromEnvelope(r.payload), history);
+}
+
+/** Paged, filtered manager inventory: backend does all searching. */
+export async function searchAdminGameCopies(
+  q: string, condition: string, page: number,
+): Promise<Result<GameCopyPage>> {
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const params=new URLSearchParams({q,condition,page:String(page)});
+  const r=await staffApi(`/api/v1/admin/games/copies/search?${params}`,"GET",token);
+  const parsed=result(r.status,dataFromEnvelope(r.payload),copyPage);
+  return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
 }

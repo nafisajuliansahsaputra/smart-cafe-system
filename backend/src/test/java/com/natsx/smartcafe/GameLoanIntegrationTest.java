@@ -519,4 +519,64 @@ class GameLoanIntegrationTest {
             """,Integer.class));
     }
 
+
+    @Test void managerInventorySearchIsBoundedFilteredAndActuallyPagedInPostgres() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,0);
+        String prefix="PAGE-"+UUID.randomUUID()+"-";
+        for (int i=0;i<53;i++) {
+            jdbc.update("""
+                INSERT INTO physical_game_copies(id,game_id,copy_code,condition)
+                VALUES (?,?,?,?)
+                """,UUID.randomUUID(),game,prefix+String.format("%03d",i),
+                i<4?"DAMAGED":"AVAILABLE");
+        }
+        String endpoint="/api/v1/admin/games/copies/search";
+        assertEquals(401,getAs(endpoint,null).getStatus());
+        assertEquals(403,getAs(endpoint,waiter.token()).getStatus());
+        assertEquals(403,getAs(endpoint,kitchen.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=-1",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=2001",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?condition=NOT_REAL",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?q="+"a".repeat(81),manager.token()).getStatus());
+
+        // Never search an in-memory first-page slice; page 2 has its own SQL.
+        String q=java.net.URLEncoder.encode(prefix,java.nio.charset.StandardCharsets.UTF_8);
+        String base=endpoint+"?q="+q+"&condition=";
+        var first=getAs(base+"&page=0",manager.token());
+        var second=getAs(base+"&page=1",manager.token());
+        var last=getAs(base+"&page=2",manager.token());
+        var pastLast=getAs(base+"&page=3",manager.token());
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertEquals(200,second.getStatus(),second.getContentAsString());
+        assertEquals(200,last.getStatus(),last.getContentAsString());
+        assertEquals(200,pastLast.getStatus(),pastLast.getContentAsString());
+        assertEquals(25,first.getContentAsString().split("\"copyCode\":",-1).length-1);
+        assertEquals(25,second.getContentAsString().split("\"copyCode\":",-1).length-1);
+        assertEquals(3,last.getContentAsString().split("\"copyCode\":",-1).length-1);
+        assertEquals(0,pastLast.getContentAsString().split("\"copyCode\":",-1).length-1);
+        assertTrue(first.getContentAsString().contains("\"page\":0"));
+        assertTrue(first.getContentAsString().contains("\"hasNext\":true"));
+        assertTrue(second.getContentAsString().contains(prefix+"025"));
+        assertFalse(second.getContentAsString().contains(prefix+"024"));
+        assertTrue(last.getContentAsString().contains(prefix+"052"));
+        assertTrue(last.getContentAsString().contains("\"hasNext\":false"));
+
+        var damaged=getAs(base+"DAMAGED&page=0",manager.token());
+        assertEquals(200,damaged.getStatus(),damaged.getContentAsString());
+        assertEquals(4,damaged.getContentAsString().split("\"copyCode\":",-1).length-1);
+        assertTrue(damaged.getContentAsString().contains(prefix+"003"));
+        var available=getAs(base+"AVAILABLE&page=1",manager.token());
+        assertEquals(200,available.getStatus(),available.getContentAsString());
+        assertTrue(available.getContentAsString().contains(prefix+"029"));
+        assertFalse(available.getContentAsString().contains(prefix+"004"));
+
+        // A wildcard-looking query is treated as literal text, not a SQL LIKE glob.
+        var literal=getAs(endpoint+"?q=%25%5F",manager.token());
+        assertEquals(200,literal.getStatus(),literal.getContentAsString());
+        assertEquals(0,literal.getContentAsString().split("\"copyCode\":",-1).length-1);
+        var injection=getAs(endpoint+"?q=%27%20OR%201%3D1",manager.token());
+        assertEquals(200,injection.getStatus(),injection.getContentAsString());
+        assertEquals(0,injection.getContentAsString().split("\"copyCode\":",-1).length-1);
+    }
 }

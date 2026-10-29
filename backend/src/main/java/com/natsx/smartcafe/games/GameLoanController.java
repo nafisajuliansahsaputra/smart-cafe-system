@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -143,6 +144,21 @@ public class GameLoanController {
         @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(games.copies(),RequestIdFilter.get(request)));
+    }
+
+    /** Manager-only, backend-paginated inventory; the old bounded list remains
+     * available for existing callers until its API retirement is planned.
+     */
+    @GetMapping("/admin/games/copies/search")
+    public ResponseEntity<ApiEnvelope<GameLoanService.CopyPage>> searchCopies(
+        @AuthenticationPrincipal StaffPrincipal staff,
+        @RequestParam(defaultValue="") String q,
+        @RequestParam(defaultValue="") String condition,
+        @RequestParam(defaultValue="0") int page,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.searchCopies(q,condition,page),
+                RequestIdFilter.get(request)));
     }
 
     @GetMapping("/admin/games/condition-history")

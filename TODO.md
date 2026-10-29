@@ -228,3 +228,15 @@ customer/financial data never enter live messages. PostgreSQL and
 HTTP/HTTPS browser tests cover cross-table stock updates. Production
 release still needs physical-device testing, operational inventory
 paging/notifications, additional damaged/lost policy and security review.
+
+### M4 indexed copy search and paging (stacked draft PR #25)
+
+Manager/admin game inventory now has backend-powered, case-insensitive
+game-name/serial search, condition filters, 25-item pages and
+previous/next navigation, rather than the initial unpaged 250-copy
+view. V18 adds a copy-condition/code index, keeps legacy API
+compatibility and adds PostgreSQL/Testcontainers and Chromium tests.
+Server validates all filters and caps expensive pagination; no new
+guest serial exposure, fee, loss liability or automatic maintenance
+resolution. Large-scale cursor pagination and history paging may be
+needed after real operational data is available.

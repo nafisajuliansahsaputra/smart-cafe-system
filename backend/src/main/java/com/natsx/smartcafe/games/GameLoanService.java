@@ -35,6 +35,7 @@ public class GameLoanService {
                            String tableCode, String copyCode, Instant requestedAt) {}
     public record CopyView(UUID id, UUID gameId, String gameName,
                            String copyCode, String condition) {}
+    public record CopyPage(List<CopyView> items, int page, boolean hasNext) {}
     public record ConditionHistoryView(UUID id, UUID copyId, String gameName,
             String copyCode, String beforeCondition, String afterCondition,
             String reason, String actorLogin, Instant recordedAt) {}
@@ -246,6 +247,37 @@ public class GameLoanService {
             """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
                 rs.getObject("game_id",UUID.class),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")));
+    }
+
+    /** A bounded server-side search, not a filtered version of the first 250 rows.
+     * The cursor is a page number capped to avoid unbounded OFFSET work.
+     * POSITION treats SQL %, _ and backslashes as literal user text.
+     */
+    @Transactional(readOnly = true)
+    public CopyPage searchCopies(String search, String condition, int page) {
+        String q=search==null?"":search.strip();
+        String filter=condition==null?"":condition.strip();
+        if (q.length()>80 || q.codePoints().anyMatch(Character::isISOControl)
+            || page<0 || page>2000 ||
+            !java.util.Set.of("","AVAILABLE","DAMAGED","LOST","RETIRED").contains(filter)) {
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Invalid inventory search or page");
+        }
+        final int size=25;
+        List<CopyView> rows=jdbc.query("""
+            SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
+            FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
+            WHERE (?='' OR POSITION(LOWER(?) IN LOWER(c.copy_code))>0
+                         OR POSITION(LOWER(?) IN LOWER(g.name))>0)
+              AND (?='' OR c.condition=?)
+            ORDER BY c.copy_code,c.id
+            LIMIT ? OFFSET ?
+            """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
+                rs.getObject("game_id",UUID.class),rs.getString("name"),
+                rs.getString("copy_code"),rs.getString("condition")),
+            q,q,q,filter,filter,size+1,page*size);
+        boolean hasNext=rows.size()>size && page<2000; // Never link beyond validated cap.
+        return new CopyPage(hasNext?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
     /** Bounded, manager-only inventory audit. No guest identity or payment data. */
