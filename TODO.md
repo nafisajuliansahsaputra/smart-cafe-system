@@ -99,3 +99,10 @@ Manager/admin category and item API writes with audit and revision checks have b
 ### M2 modifier groups V9
 
 V9 removes the old one-group-per-item limit and introduces normalized `cart_line_variant_options` while preserving the old `variantOptionId` client input for a single choice. The new `variantOptionIds` input accepts one choice per active group, with all required groups present (maximum eight groups). The backend canonicalizes options for idempotency, computes all deltas in checked integer IDR, and stores the combined label and immutable options array in the order snapshot. Public `/menu/{item}/variant-groups` lists all active groups. The singular legacy lookup refuses a multi-group item instead of omitting required choices. Multi-group options do **not** imply arbitrary topping quantities, per-option stock, or multiple differently customized cart lines for the same menu item. M2 catalog remains open until browser management and remaining rules pass full acceptance.
+
+
+### M2 staff browser follow-up (stacked PR #3)
+
+A first staff browser implementation is proposed on `feat/m2-staff-oc-browser`: server-side staff auth bridge (HttpOnly SameSite=Strict cookie), role-gated staff homepage, server-rendered OCC queue/filter/detail, and server-only approve/reject actions. Backend still performs authorization and transactional state transitions. The UI is **read/snapshot on reload**, not realtime. Staff sessions, cash lifecycle and rejection correctness are provided by PR #2.
+
+Keep the OCC and M2 full-flow checkboxes unchecked until the stacked PR passes final-head CI plus authenticated operator E2E, denial/CSRF checks, and full waiter/kitchen/receipt coverage. Manual browser acceptance is recorded in [docs/M2-STAFF-BROWSER.md](docs/M2-STAFF-BROWSER.md).

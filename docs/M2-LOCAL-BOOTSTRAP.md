@@ -12,3 +12,10 @@ This development capability is intentionally **disabled** by default. It does no
 **Strict warning:** this is a local onboarding mechanism only, not a production administrator provisioning or password-recovery system. It is explicitly opt-in by Spring profile and never used in automated tests. Real pilot requires formal staff management, credential lifecycle, TLS, secure browser auth and a reviewed operator recovery path.
 
 No actual payments, personal phones or real cafe operations are supported for public use.
+
+
+## Staff browser flow on stacked PR #3
+
+With PR #1, PR #2 and PR #3 code combined, and after removing temporary bootstrap variables, open `http://localhost:3000/staff/login`. Enter the locally bootstrapped credentials. Staff identity is verified through the backend; eligible CASHIER/MANAGER/ADMIN roles reach `/staff/orders`. No backend bearer token needs to be copied into browser developer tools or persisted in localStorage. Sessions are stored in a path-scoped HttpOnly cookie and checked against the revocable backend session on every protected page. The browser only sends credentials to the Next.js server action on its own origin.
+
+For non-local deployment, use HTTPS, configure a trusted origin/proxy, and run the full auth and CSRF review before enabling any live operators. Development bootstrap is not a public-user provisioning system.

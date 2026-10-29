@@ -80,6 +80,12 @@ jobs:
             sleep 3
           done
           grep -q 'API dan database terhubung' /tmp/scs-web.html
+          login_code=$(curl --silent --output /tmp/scs-login.html --write-out '%{http_code}' http://127.0.0.1:3000/staff/login)
+          test "$login_code" = "200"
+          grep -q 'Masuk sebagai staf' /tmp/scs-login.html
+          staff_code=$(curl --silent --output /tmp/scs-staff-guest.html --write-out '%{http_code}' http://127.0.0.1:3000/staff/orders)
+          test "$staff_code" = "307"
+          ! grep -q 'Order Control Center</h1>' /tmp/scs-staff-guest.html
       - name: Diagnose services if smoke test fails
         if: failure()
         run: docker compose logs --no-color --tail=150

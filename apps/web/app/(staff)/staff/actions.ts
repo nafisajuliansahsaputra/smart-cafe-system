@@ -64,12 +64,22 @@ export async function loginStaff(form: FormData): Promise<void> {
   redirect("/staff");
 }
 
+async function clearStaffCookie(): Promise<void> {
+  (await cookies()).set(STAFF_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/staff",
+    maxAge: 0,
+  });
+}
+
 export async function logoutStaff(): Promise<void> {
   const token = await staffToken();
   const result = token
     ? await staffApi("/api/v1/staff/auth/logout", "POST", token)
     : { status: 401 };
-  (await cookies()).delete(STAFF_COOKIE);
+  await clearStaffCookie();
   redirect(
     result.status === 200 || result.status === 401
       ? "/staff/login?status=signed-out"
@@ -98,7 +108,7 @@ async function command(form: FormData, kind: "approve" | "reject"): Promise<void
     kind === "reject" ? { reason: (reason as string).trim() } : undefined,
   );
   if (result.status === 401) {
-    (await cookies()).delete(STAFF_COOKIE);
+    await clearStaffCookie();
     redirect("/staff/login?status=expired");
   }
   if (result.status !== 200) {

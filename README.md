@@ -113,3 +113,10 @@ Managers/admins can create categories and menu items, publish or hide items, rev
 ### Multiple modifier groups (V9 development API)
 
 For a menu with Size (required), Milk (required), and Extra (optional), clients fetch `GET /api/v1/menu/{itemId}/variant-groups`, then submit `variantOptionIds: [sizeId, milkId]` in a cart or direct-order line. The server verifies one option per active group, enforces all required selections, and stores an immutable combined snapshot. Old `variantOptionId` still works for single-choice items. No client-supplied delta/price is trusted. [Implementation and limitations](docs/M2-CATALOG-VARIANTS.md).
+
+
+## M2 staff web interface (draft PR #3)
+
+A protected Next.js staff browser layer now exists on the separate stacked [PR #3](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/3): staff login at `/staff/login`, role-aware `/staff`, and cashier/manager/admin `/staff/orders` plus order details. The web server alone stores and forwards backend bearer tokens through an HttpOnly, SameSite=Strict, path-scoped cookie; the token is never returned to browser JavaScript. Backend authorization and financial state still own all decisions. OCC filters, approve/reject cash commands and manual snapshot refresh are available. This is **not** SSE, kitchen/waiter web UI, public staging access, or a claim that cash was paid.
+
+See [staff browser verification and security notes](docs/M2-STAFF-BROWSER.md). PR #3 remains draft, unmerged, and not deployed.
