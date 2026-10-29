@@ -90,14 +90,13 @@ test("oversized Server Action body cannot create staff session", async ({ browse
   }
 });
 
-test("cross-site POST on guest join action cannot bypass Origin guard", async ({ browser }) => {
+test("closed public QR cannot issue a guest session", async ({ browser }) => {
   const context = await browser.newContext({ baseURL: BASE });
   try {
     const page = await context.newPage();
     await page.goto("/t/e2e-01");
-    // After cash-cycle closes, this QR remains a public table locator, not
-    // authorization to join. The Server Action endpoint must still reject
-    // cross-origin requests before any guest token could be issued.
+    // After cash-cycle closes, the QR remains a public locator, not
+    // authorization to join. No guest form or credential should be exposed.
     // Closed visits omit the join form; no credential may be fetched.
     await expect(page.locator("form")).toHaveCount(0);
     expect((await context.cookies()).some((c) => c.name === "scs_guest_session")).toBe(false);
