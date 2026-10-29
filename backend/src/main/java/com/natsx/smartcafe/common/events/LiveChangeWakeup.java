@@ -1,9 +1,13 @@
 package com.natsx.smartcafe.common.events;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.sql.DataSource;
 import org.postgresql.PGConnection;
@@ -22,14 +26,21 @@ public class LiveChangeWakeup {
     private final boolean enabled;
     private final Object monitor = new Object();
     private final AtomicLong generation = new AtomicLong();
+    private final AtomicInteger connected = new AtomicInteger();
+    private final Counter failures;
     private volatile boolean running;
     private volatile Thread thread;
     private volatile Connection connection;
 
     public LiveChangeWakeup(DataSource datasource,
-                            @Value("${SCS_LIVE_LISTEN_ENABLED:false}") boolean enabled) {
+                            @Value("${SCS_LIVE_LISTEN_ENABLED:false}") boolean enabled,
+                            MeterRegistry metrics) {
         this.datasource = datasource;
         this.enabled = enabled;
+        failures = metrics.counter("scs.live.listener.failures");
+        Gauge.builder("scs.live.listener.connected", connected, AtomicInteger::get)
+            .description("Whether this API process is connected to PostgreSQL LISTEN")
+            .register(metrics);
     }
 
     @PostConstruct
@@ -40,6 +51,7 @@ public class LiveChangeWakeup {
     }
 
     public long generation() { return generation.get(); }
+    public boolean isConnected() { return connected.get() == 1; }
 
     public void await(long before, long millis) throws InterruptedException {
         synchronized (monitor) {
@@ -54,6 +66,7 @@ public class LiveChangeWakeup {
                 connection = conn;
                 conn.setAutoCommit(true);
                 statement.execute("LISTEN scs_order_live");
+                connected.set(1);
                 PGConnection pg = conn.unwrap(PGConnection.class);
                 while (running) {
                     PGNotification[] events = pg.getNotifications(1000);
@@ -65,12 +78,15 @@ public class LiveChangeWakeup {
                     }
                 }
             } catch (Exception ignored) {
-                // Missing notifications are recovered by durable cursor checks.
+                // No exception strings or token/PII enter metrics. A disconnected
+                // listener is recovered by the scoped durable cursor check.
+                if (running) failures.increment();
                 if (running) {
                     try { Thread.sleep(1500); }
                     catch (InterruptedException ex) { Thread.currentThread().interrupt(); break; }
                 }
             } finally {
+                connected.set(0);
                 connection = null;
             }
         }

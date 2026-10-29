@@ -154,3 +154,7 @@ Added shared PostgreSQL LISTEN wakeup, scoped durable cursor query, bounded 48-r
 ### M2 table lifecycle event subscriber (draft PR #14)
 
 Completed transactional TABLE_VISIT open, rotate and close events, V12 separate durable signal table, shared relay and scoped waiter `tables` cursor. A second staff browser tab validates live occupancy updates without reload. **Still open:** async subscriber capacity/soak tests, admin inventory events, offline and multi-replica recovery, poison-event monitoring, public HTTPS and live financial/consent policies. See docs/M2-TABLE-LIVE-EVENTS.md.
+
+### M2 live capacity and safe observability (draft PR #15)
+
+Added per-guest (2) and per-staff (6) long-poll identity limits within global cap (48), idempotent permit release, configurable bounded validation, aggregate Micrometer metrics for capacity/denials/listener/backlog, read-only PostgreSQL backlog sampling and virtual-thread race tests. Still open: servlet async executor, multi-instance distributed admission, load/soak benchmarks, measured p95 latency and DB connection headroom, metrics exporter/alerts, poison event quarantine and production approval. See docs/M2-LIVE-CAPACITY.md.

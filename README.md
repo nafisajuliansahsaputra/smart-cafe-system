@@ -174,3 +174,7 @@ Guest and staff order SSE feeds now react to PostgreSQL NOTIFY-backed **authoriz
 ## M2 table occupancy events (draft PR #14)
 
 Table visit open, join-proof rotation and close now publish transactional durable events, consumed by the same authorized live cursor/SSE pipeline as ORDER. Waiters see occupancy changes without refreshing; rotation metadata is only visible to the owning waiter or supervisor, and no join proof enters notifications. See [docs/M2-TABLE-LIVE-EVENTS.md](docs/M2-TABLE-LIVE-EVENTS.md). This does not approve production capacity or deployment.
+
+## M2 live subscription admission controls (draft PR #15)
+
+Live event cursor long-polls now have both global and **per-authenticated-principal** budgets, so one session cannot take all available subscriptions. Internal privacy-safe Micrometer counters/gauges track active waits, exhausted capacity, PG LISTEN connectivity and durable outbox backlog; unknown backlog reads are marked -1, not silently healthy. See [M2 live capacity](docs/M2-LIVE-CAPACITY.md). This is a safety/test slice, **not** production load certification or public metrics exposure.

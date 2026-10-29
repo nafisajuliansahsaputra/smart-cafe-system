@@ -179,3 +179,7 @@ A PostgreSQL Testcontainers/MockMvc regression exercises the new role/owner-scop
 ## M2 table live lifecycle (draft PR #14)
 
 `TableVisitIntegrationTest.tableLifecycleEventsAreDurableAndProofRotationIsOwnerScoped` validates OPEN, ROTATE and CLOSE produce durable table signals, other waiters are not notified of another visit's rotation, supervisors are notified, and no proof appears in outbox JSON. Chromium cash-cycle acceptance keeps a **second cashier table-management browser tab** open before the waiter opens a table and expects live TERSEDIA → TERISI → TERSEDIA changes without navigating. Tests run over ordinary HTTP and the local-only TLS proxy. See docs/M2-TABLE-LIVE-EVENTS.md.
+
+## Live subscriber admission and metrics (draft PR #15)
+
+`LivePollCapacityTest` runs 20 concurrent virtual-thread admission attempts with deliberately constrained aggregate, guest and staff budgets. It asserts active polls never exceed capacity, all permits release, per-principal throttling does not starve another user and invalid limit configs fail startup. `OutboxLiveTelemetryTest` verifies aggregate-only gauges and that failed samples become -1/unknown. `OutboxLiveRelayIntegrationTest` now samples real PostgreSQL pending event counts before/after a synthetic durable relay dispatch. All prior 38+ Java domain tests and both ordinary HTTP/HTTPS Chromium business flows must remain green. These are correctness/race tests, NOT measured throughput or soak tests.

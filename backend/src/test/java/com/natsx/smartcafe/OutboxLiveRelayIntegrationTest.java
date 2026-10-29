@@ -37,6 +37,7 @@ class OutboxLiveRelayIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired OutboxLiveRelay relay;
+    @Autowired com.natsx.smartcafe.common.events.OutboxLiveTelemetry telemetry;
     @Autowired OutboxEvents outbox;
 
     private UUID syntheticOrder() {
@@ -110,4 +111,22 @@ class OutboxLiveRelayIntegrationTest {
         // Ensure the synthetic invalid outbox row is removed after the test.
         jdbc.update("DELETE FROM outbox_events WHERE id=?", event);
     }
+    @Test void realPostgreSqlOutboxBacklogIsVisibleWithoutChangingBusinessState() {
+        telemetry.sample();
+        long prior = telemetry.pending();
+        UUID order = syntheticOrder();
+        outbox.order(order, "ORDER_SUBMITTED");
+        telemetry.sample();
+        assertEquals(prior + 1, telemetry.pending());
+        assertTrue(telemetry.oldestSeconds() >= 0);
+        assertTrue(relay.dispatchBatch() > 0);
+        telemetry.sample();
+        assertTrue(telemetry.pending() <= prior);
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_id=? AND live_published_at IS NOT NULL
+              AND processed_at IS NULL
+            """, Integer.class, order));
+    }
+
 }
