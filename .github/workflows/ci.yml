@@ -166,3 +166,91 @@ jobs:
       - name: Destroy isolated browser test database and containers
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  edge-https-e2e:
+    name: HTTPS edge / trusted headers / Chromium acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Configure isolated secrets and self-signed TLS certificate
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-edge-ephemeral-only/' .env
+          sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=edge-ci-only-disposable-hmac-secret-2026/' .env
+          mkdir -p infra/edge/local-tls
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
+            -keyout infra/edge/local-tls/key.pem -out infra/edge/local-tls/cert.pem \
+            -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost'
+          chmod 600 infra/edge/local-tls/key.pem
+          docker compose -f compose.yaml -f infra/edge/compose.edge.yaml config -q
+      - name: Start isolated HTTPS edge, API, web and PostgreSQL
+        run: docker compose -f compose.yaml -f infra/edge/compose.edge.yaml up --build --detach
+      - name: Verify TLS, Host and ingress limits with spoofed headers
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            if curl --fail --silent --insecure https://localhost:8443/staff/login > /tmp/scs-edge-login.html; then
+              break
+            fi
+            sleep 3
+          done
+          grep -q 'Masuk sebagai staf' /tmp/scs-edge-login.html
+          openssl s_client -connect localhost:8443 -servername localhost -tls1_2 < /dev/null 2>/dev/null |
+            grep -q 'Protocol  *: TLSv1.2' || true
+          hostile=$(curl --silent --insecure --output /tmp/scs-host-denied --write-out '%{http_code}' \
+            -H 'Host: attacker.invalid' https://localhost:8443/)
+          test "$hostile" = "421"
+          # Forged per-request XFF identities cannot reset the TCP-peer limiter.
+          blocked=0
+          for i in $(seq 1 30); do
+            code=$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' \
+              -X POST -H 'Origin: https://localhost:8443' \
+              -H "X-Forwarded-For: 192.0.2.$i" \
+              -H 'Content-Type: application/json' --data '{}' \
+              https://localhost:8443/t/e2e-01)
+            if [ "$code" = 429 ]; then blocked=1; break; fi
+          done
+          test "$blocked" = 1
+      - name: Seed synthetic staff, table and menu in disposable database
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 50); do
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/system/status > /tmp/scs-edge-db.json; then break; fi
+            sleep 3
+          done
+          grep -q '"database":"connected"' /tmp/scs-edge-db.json
+          docker compose -f compose.yaml -f infra/edge/compose.edge.yaml exec -T db \
+            sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' < infra/fixtures/e2e-browser.sql
+      - name: Install Chromium browser testing dependency
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Exercise full cash workflow and negative CSRF via HTTPS edge
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: https://localhost:8443
+          E2E_PROXY_TLS: "true"
+        run: npx playwright test --config e2e/playwright.config.mjs
+      - name: Upload HTTPS edge browser traces if failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-https-edge-failure
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Diagnose isolated edge on failure
+        if: failure()
+        run: docker compose -f compose.yaml -f infra/edge/compose.edge.yaml logs --no-color --tail=120
+      - name: Destroy isolated edge, synthetic database and local TLS private key
+        if: always()
+        run: |
+          docker compose -f compose.yaml -f infra/edge/compose.edge.yaml down --volumes --remove-orphans
+          rm -rf infra/edge/local-tls
