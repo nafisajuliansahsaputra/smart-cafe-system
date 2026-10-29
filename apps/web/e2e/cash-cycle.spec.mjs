@@ -424,10 +424,16 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     });
     const evidenceHref=await auditLink.getAttribute("href");
     expect(evidenceHref).toMatch(/^\/staff\/games\/incidents\/[0-9a-f-]{36}$/);
-    const waiterEvidence=await waiter.goto(evidenceHref);
+    const deniedWaiterTab=await waiter.context().newPage();
+    const waiterEvidence=await deniedWaiterTab.goto(evidenceHref);
     expect(waiterEvidence?.status()).toBe(404);
-    const cashierEvidence=await cashier.goto(evidenceHref);
+    await deniedWaiterTab.close();
+    const deniedCashierTab=await cashier.context().newPage();
+    const cashierEvidence=await deniedCashierTab.goto(evidenceHref);
     expect(cashierEvidence?.status()).toBe(404);
+    await deniedCashierTab.close();
+    // The original waiter and cashier tabs must keep their existing
+    // authenticated live subscriptions and operational page state.
     await auditLink.click();
     await expect(manager.getByRole("heading",{name:"Riwayat laporan unit"})).toBeVisible();
     await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
