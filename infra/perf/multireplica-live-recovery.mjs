@@ -62,6 +62,15 @@ async function cursor(base, token, after) {
   return { value, elapsedMs: Math.round(performance.now()-began) };
 }
 
+async function untilCursorAdvanced(base, token, previous) {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const seen = await cursor(base, token);
+    if (seen.value > previous) return seen;
+    await delay(250);
+  }
+  throw new Error("Durable relay failed to advance cursor");
+}
+
 async function mutate(base, token, method, path, body) {
   const response = await json(base + path, {
     method,
@@ -114,7 +123,7 @@ assert(report.openEvent.sameDurableCursor,
 compose("stop","api_replica");
 await mutate(baseA,waiterA,"POST",
   `/api/v1/waiter/table-visits/${opened.id}/join-proof`);
-const postRotationA = await cursor(baseA,cashierA);
+const postRotationA = await untilCursorAdvanced(baseA,cashierA,seenA.value);
 assert(postRotationA.value > seenA.value,
   "Live relay did not persist proof-rotation event");
 compose("start","api_replica");
