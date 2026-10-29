@@ -111,7 +111,7 @@ public class GameLossIncidentService {
             ORDER BY (i.status='OPEN') DESC,i.reported_at DESC,i.id DESC
             LIMIT ? OFFSET ?
             """,(rs,n)->map(rs),
-            state,state,q,q,q,q,q,q,q,q,size+1,page*size);
+            state,state,q,q,q,q,q,q,q,size+1,page*size);
         Long openCount=jdbc.queryForObject("""
             SELECT count(*) FROM physical_game_loss_incidents WHERE status='OPEN'
             """,Long.class);
