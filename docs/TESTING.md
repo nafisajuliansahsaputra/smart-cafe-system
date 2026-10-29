@@ -310,9 +310,9 @@ two inspection notes and keeps past incident CONFIRMED_LOST.
 
 ## M4 manager loss register paging and incident workload (draft PR #29)
 
-Testcontainers seeds 54 uniquely identified synthetic reports (53
+Testcontainers seeds 104 uniquely identified synthetic reports (103
 historically resolved + one OPEN) and confirms OPEN-first sort,
-25/25/4/0 pages and hasNext, results beyond legacy first-100 window
+25/25/25/25/4/0 pages and hasNext, results beyond legacy first-100 window
 via complete-database search, outcome filters, separately computed
 openCount independent of page and query, invalid page/filter inputs,
 case-insensitive safe literal search, wildcard/SQL-like input probes
