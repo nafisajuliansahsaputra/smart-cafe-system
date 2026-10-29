@@ -63,7 +63,7 @@ class GameLoanIntegrationTest {
         UUID table=UUID.randomUUID();
         String alias="game-"+table;
         jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,4)",
-            table,alias,alias);
+            table,table.toString(),alias);
         var r=postJson("/api/v1/waiter/table-visits",waiter.token(),
             "{\"tableId\":\""+table+"\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
