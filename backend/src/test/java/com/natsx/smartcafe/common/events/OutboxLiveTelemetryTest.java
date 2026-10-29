@@ -16,7 +16,8 @@ class OutboxLiveTelemetryTest {
         when(jdbc.queryForMap(anyString()))
             .thenReturn(Map.of("pending", 7L, "oldest_seconds", 42L))
             .thenThrow(new DataAccessResourceFailureException("synthetic test outage"));
-        try (var registry = new SimpleMeterRegistry()) {
+        { 
+            var registry = new SimpleMeterRegistry();
             var monitor = new OutboxLiveTelemetry(jdbc, registry, false);
             assertEquals(-1L, monitor.pending());
             monitor.sample();
@@ -32,7 +33,8 @@ class OutboxLiveTelemetryTest {
 
     @Test void disabledSchedulerDoesNotQueryDatabase() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        try (var registry = new SimpleMeterRegistry()) {
+        { 
+            var registry = new SimpleMeterRegistry();
             new OutboxLiveTelemetry(jdbc, registry, false).tick();
             verifyNoInteractions(jdbc);
         }

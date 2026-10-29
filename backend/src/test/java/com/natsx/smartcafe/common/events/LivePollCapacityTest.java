@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 
 class LivePollCapacityTest {
     @Test void oneSessionCannotStarveOtherGuestsAndPermitClosesOnlyOnce() {
-        try (var registry = new SimpleMeterRegistry()) {
+        { 
+            var registry = new SimpleMeterRegistry();
             var capacity = new LivePollCapacity(3, 2, 2, registry);
             UUID first = UUID.randomUUID(), second = UUID.randomUUID();
             var a = capacity.acquire(LivePollCapacity.Kind.GUEST, first);
@@ -45,8 +46,8 @@ class LivePollCapacityTest {
 
     @Test void parallelAcquireNeverExceedsGlobalOrIdentityLimitAndReleasesEverySlot()
         throws Exception {
-        try (var registry = new SimpleMeterRegistry();
-             var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var registry = new SimpleMeterRegistry();
             var capacity = new LivePollCapacity(5, 2, 3, registry);
             UUID guest = UUID.randomUUID(), staff = UUID.randomUUID();
             var start = new CountDownLatch(1);
@@ -93,7 +94,8 @@ class LivePollCapacityTest {
     }
 
     @Test void invalidLimitsFailClosed() {
-        try (var registry = new SimpleMeterRegistry()) {
+        { 
+            var registry = new SimpleMeterRegistry();
             assertThrows(IllegalArgumentException.class,
                 () -> new LivePollCapacity(0, 1, 1, registry));
             assertThrows(IllegalArgumentException.class,
