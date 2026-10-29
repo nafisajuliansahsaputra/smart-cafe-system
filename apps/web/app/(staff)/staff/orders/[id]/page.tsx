@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { approveCash, rejectCash, logoutStaff } from "../../actions";
 import { canUseOcc, idr, localTime, orderDetail, staffIdentity } from "@/lib/staff-server";
@@ -47,6 +48,7 @@ export default async function OrderDetailPage({
         <form action={logoutStaff}><button className="staff-secondary" type="submit">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><Link href="/staff/orders">Antrean</Link><span>/</span><strong>Detail</strong></nav>
+      <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=order&id=${id}`} /></div>
       {message && <p className="staff-notice" role="status">{message}</p>}
       {!order ? (
         <section className="staff-panel"><h2>Detail tidak dapat dimuat</h2><p>Periksa koneksi API dan izin staf. Tidak ada tindakan yang dilakukan.</p><Link href={`/staff/orders/${id}`}>Coba lagi</Link></section>

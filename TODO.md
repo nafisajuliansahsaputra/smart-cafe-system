@@ -138,3 +138,7 @@ Implemented explicit staff-role requirement for staff identity/logout as defense
 ### M2 HTTPS edge staging acceptance (draft PR #10)
 
 Added an isolated nginx:1.27-alpine HTTPS edge, strict localhost Host handling, forwarded-header overwrite, direct-peer POST-only login/join throttling and full browser acceptance CI through a self-signed TLS endpoint. **Public deployment remains blocked** on actual trusted certificate/domain/SNI configuration, authenticated staging topology, real-client limiter behind the real CDN/LB chain, CSP/HSTS and payments/privacy approval. See [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](docs/M2-HTTPS-EDGE-ACCEPTANCE.md).
+
+### M2 live update slice (draft PR #11)
+
+Implemented BFF-authorized, bounded, change-only SSE and server-render refresh across OCC/KDS/waiter/tables/guest orders. Browser tests verify cross-role updates without reload and foreign guest stream denial. Still open: event-driven outbox dispatcher, connection budgeting and load tests, production proxy and accessibility acceptance. See docs/M2-LIVE-UPDATES.md.

@@ -60,3 +60,6 @@
   .guest-top, .guest-breadcrumb, .guest-shell button { display: none !important; }
   .guest-panel { border: none; padding: 0; box-shadow: none; }
 }
+
+.guest-live-line { margin: 10px 0 16px; }
+.guest-live-line .staff-live-indicator { display: inline-block; font-size: .8rem; font-weight: 600; padding: 6px 12px; border: 1px solid currentColor; border-radius: 999px; }

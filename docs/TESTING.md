@@ -163,3 +163,7 @@ Existing Java TableVisitIntegrationTest now uses a valid GUEST token to call bot
 ## HTTPS reverse-proxy integration (draft PR #10)
 
 Separate CI job `edge-https-e2e` uses a throwaway 1-day self-signed localhost certificate, the Compose Nginx overlay and an ephemeral PostgreSQL/Next.js/Spring Boot stack. It verifies expected local HTTPS responses, Host 421 denial, ingress 429 across forged X-Forwarded-For values, then seeds synthetic fixtures and executes Playwright Chromium functional/security acceptance **through the edge**, not localhost:3000. A dedicated browser case injects hostile X-Forwarded-Host and Proto into a legitimate login and verifies a Secure/HttpOnly/Strict cookie. No real funds or private records; CI destroys its synthetic database and local key. See [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](docs/M2-HTTPS-EDGE-ACCEPTANCE.md).
+
+## Live SSE browser acceptance (draft PR #11)
+
+Chromium retains the OCC view before guest checkout, KDS before cashier approval, waiter dashboard before kitchen READY, and guest detail through PAID, checking the receiving page changes without navigation. Foreign-owned guest order streams return 404 and malformed UUIDs return 400. Both HTTP and local HTTPS proxy suites run the cash lifecycle. These tests do not certify production capacity.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { logoutStaff } from "../actions";
 import { canUseOcc, idr, localTime, orderQueue, staffIdentity } from "@/lib/staff-server";
@@ -36,6 +37,7 @@ export default async function OrdersPage({
         <form action={logoutStaff}><button className="staff-secondary" type="submit">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Antrean</strong></nav>
+      <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=orders`} /></div>
       <section className="staff-panel">
         <h2>Filter pesanan</h2>
         <form method="GET" className="staff-filters">
@@ -78,7 +80,7 @@ export default async function OrdersPage({
           </table></div>
         )}
       </section>
-      <p className="staff-footnote">Belum realtime: data diperbarui saat halaman dimuat atau tombol Segarkan ditekan. Tidak ada pembayaran sungguhan dalam demo ini.</p>
+      <p className="staff-footnote">Antrean diperiksa otomatis. Tombol Segarkan tetap tersedia saat koneksi terputus. Tidak ada pembayaran sungguhan dalam demo ini.</p>
     </main>
   );
 }
