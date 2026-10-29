@@ -10,7 +10,7 @@ export type GameLoanView = {
   tableCode: string; copyCode: string | null; requestedAt: string;
 };
 type Result<T> = { ok: true; data: T } | { ok: false; status: number };
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
