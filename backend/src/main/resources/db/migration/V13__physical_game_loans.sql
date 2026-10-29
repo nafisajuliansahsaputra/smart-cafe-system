@@ -11,6 +11,7 @@ CREATE TABLE physical_game_copies (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     game_id uuid NOT NULL REFERENCES physical_games(id),
     copy_code varchar(80) NOT NULL UNIQUE,
+    UNIQUE (id,game_id),
     condition varchar(20) NOT NULL DEFAULT 'AVAILABLE'
         CHECK (condition IN ('AVAILABLE','DAMAGED','LOST','RETIRED')),
     created_at timestamptz NOT NULL DEFAULT now()
@@ -23,7 +24,8 @@ CREATE TABLE physical_game_loans (
     visit_id uuid NOT NULL REFERENCES table_visits(id),
     guest_id uuid NOT NULL,
     game_id uuid NOT NULL REFERENCES physical_games(id),
-    copy_id uuid REFERENCES physical_game_copies(id),
+    copy_id uuid,
+    FOREIGN KEY (copy_id,game_id) REFERENCES physical_game_copies(id,game_id),
     status varchar(20) NOT NULL DEFAULT 'REQUESTED'
         CHECK (status IN ('REQUESTED','ASSIGNED','IN_USE','RETURNED','CANCELLED')),
     requested_at timestamptz NOT NULL DEFAULT now(),

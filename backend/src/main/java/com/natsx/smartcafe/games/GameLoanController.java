@@ -55,6 +55,20 @@ public class GameLoanController {
             .body(ApiEnvelope.of(games.request(guest,body.gameId()),RequestIdFilter.get(request)));
     }
 
+    @GetMapping("/waiter/games")
+    public ResponseEntity<ApiEnvelope<List<GameLoanService.GameView>>> staffCatalog(
+        @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.catalog(),RequestIdFilter.get(request)));
+    }
+
+    @GetMapping("/admin/games")
+    public ResponseEntity<ApiEnvelope<List<GameLoanService.GameView>>> adminCatalog(
+        @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.catalog(),RequestIdFilter.get(request)));
+    }
+
     @GetMapping("/waiter/game-loans")
     public ResponseEntity<ApiEnvelope<List<GameLoanService.LoanView>>> tasks(
         @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
