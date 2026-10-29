@@ -135,7 +135,7 @@ The HMAC secret is a mandatory 32-byte-or-longer environment variable `SCS_JOIN_
 
 ## 14. Staff principal isolation and Server Actions origin checks (draft PR #9)
 
-- Previously `/api/v1/staff/auth/me` and `/api/v1/staff/auth/logout` required `authenticated()`. This generic guard could authorize a valid GUEST token despite controllers expecting StaffPrincipal. It now explicitly requires a staff role (WAITER, CASHIER, KITCHEN, MANAGER, ADMIN), returning 403 for guest bearers and preserving their guest session.
+- Previously `/api/v1/staff/auth/me` and `/api/v1/staff/auth/logout` used a generic `authenticated()` guard. **The existing GuestBearerFilter already excludes staff-auth routes**, so a guest bearer received 401. Explicit staff role checks (WAITER, CASHIER, KITCHEN, MANAGER, ADMIN) add defense-in-depth against future filter changes; a guest bearer continues to receive 401, and its session remains active.
 - Next.js Server Actions remain POST-only with default Origin-versus-Host / X-Forwarded-Host CSRF validation. **No `allowedOrigins` exceptions**, wildcards or public domain bypass are configured. Actions are limited to 32KB form bodies; this app currently uses small text forms without uploads.
 - HTML pages under `/staff`, `/visit` and `/t` carry no-store/strict referrer where applicable; no-sniff, deny-frame and disabled camera/microphone/geolocation response headers have been added. Do not claim this constitutes a complete CSP.
 - Real Chromium negative tests submit an authenticated staff Server Action with an untrusted Origin and verify rejection without revoking the valid staff session, attempt oversized 64KB login action and check rejection without cookie issue, and verify waiter cannot close a table with an unsettled order.

@@ -156,6 +156,6 @@ CI retains screenshots and Playwright trace on failures for three days and destr
 
 ## M2 principal / Origin / negative Chromium acceptance (draft PR #9)
 
-Existing Java TableVisitIntegrationTest now uses a valid GUEST token to call both staff-authenticated `/me` and `/logout`, expecting 403; it then proves the original guest token still works. This guards against principal type confusion and accidental guest revocation.
+Existing Java TableVisitIntegrationTest now uses a valid GUEST token to call both staff-authenticated `/me` and `/logout`, expecting 401 because GuestBearerFilter excludes staff-auth routes; it then proves the original guest token still works. This guards against principal type confusion and accidental guest revocation.
 
 `apps/web/e2e/security-boundaries.spec.mjs` adds real Chromium/Next.js Server Action negative tests: foreign-Origin request with authenticated staff cookies cannot invoke logout; a 64KB synthetic form is rejected by the 32KB Server Action limit; closed public QR does not render a join form or issue a guest credential. `cash-cycle.spec.mjs` attempts to close an active table *before* tender and verifies backend refuses; after cash is paid it closes successfully. Run CI in ephemeral Compose only and retain the completed exact-head GitHub Actions run as evidence. This cannot replace a real HTTPS reverse-proxy Origin/Host assessment.

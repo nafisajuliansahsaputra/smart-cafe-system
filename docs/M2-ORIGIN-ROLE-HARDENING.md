@@ -4,7 +4,7 @@
 
 ## Issue addressed
 
-Spring Security formerly used a generic `authenticated()` rule on the staff `GET /api/v1/staff/auth/me` and `POST /api/v1/staff/auth/logout` endpoints. The bearer filter can also accept visit-scoped GUEST tokens on `/api/v1/me/**`, so an authenticated guest principal could pass a generic predicate despite those endpoints requiring a StaffPrincipal. The endpoint now requires a role in the staff role set before invoking those controllers. Regression tests confirm a GUEST bearer gets 403 for both and its own visit stays accessible.
+Spring Security formerly used a generic `authenticated()` rule on the staff `GET /api/v1/staff/auth/me` and `POST /api/v1/staff/auth/logout` endpoints. **Existing behavior already returned 401 for a guest bearer**: `GuestBearerFilter` only authenticates guest API paths, not `/staff/auth/**`. The new explicit staff role requirement is defense-in-depth in case filter scopes change later. Regression tests confirm guest bearer 401 for both staff endpoints and continued access to its own visit.
 
 ## Next.js Server Action protection
 
@@ -20,4 +20,4 @@ Localhost CI is not a deployed reverse-proxy/TLS/origin test. Correctly configur
 
 ## Verification
 
-CI must pass all five? The repository currently has **four** jobs: Java/Flyway/PostgreSQL, Next.js lint/types/build, clean-start Compose smoke and Chromium authenticated/negative browser suite. Only treat PR #9 complete when the exact final commit reports all four green. Synthetic test accounts and DB are removed at end of run.
+The repository has **four** required jobs: Java/Flyway/PostgreSQL, Next.js lint/types/build, clean-start Compose smoke and Chromium authenticated/negative browser suite. Only treat PR #9 complete when the exact final commit reports all four green. Synthetic test accounts and DB are removed at end of run.

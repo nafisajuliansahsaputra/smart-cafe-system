@@ -103,11 +103,12 @@ class TableVisitIntegrationTest {
         String guestToken=extract(guest.getContentAsString(),"accessToken");
         assertEquals(200,mvc.perform(get("/api/v1/me/visit")
             .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
-        // A GUEST bearer must not pass a generic .authenticated() staff auth gate,
-        // where @AuthenticationPrincipal requires StaffPrincipal.
-        assertEquals(403,mvc.perform(get("/api/v1/staff/auth/me")
+        // GuestBearerFilter intentionally ignores staff-auth routes, so a guest
+        // bearer is UNAUTHENTICATED here. The additional staff-role gate ensures
+        // future filter changes cannot turn it into a StaffPrincipal.
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
             .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
-        assertEquals(403,mvc.perform(post("/api/v1/staff/auth/logout")
+        assertEquals(401,mvc.perform(post("/api/v1/staff/auth/logout")
             .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(get("/api/v1/me/visit")
             .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
