@@ -177,10 +177,11 @@ export async function getOrders(): Promise<Result<GuestOrder[]>> {
 export async function getOrder(id: string): Promise<Result<OrderDetail>> {
   if (!UUID_PATTERN.test(id)) return { ok: false, status: 404 };
   const token = await guestToken();
-  return token ? getData(`/api/v1/me/orders/${id}`, (data): data is OrderDetail =>
-    isGuestOrder(data) && typeof (data as Record<string, unknown>).createdAt === "string" &&
-    Array.isArray((data as Record<string, unknown>).lines) &&
-    ((data as Record<string, unknown>).lines as unknown[]).every(isOrderLine), token)
+  return token ? getData(`/api/v1/me/orders/${id}`, (data): data is OrderDetail => {
+    if (!isGuestOrder(data) || !isRecord(data)) return false;
+    return typeof data.createdAt === "string" &&
+      Array.isArray(data.lines) && data.lines.every(isOrderLine);
+  }, token)
     : { ok: false, status: 401 };
 }
 function isReceipt(data: unknown): data is Receipt {
