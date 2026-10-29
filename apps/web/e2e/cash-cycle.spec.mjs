@@ -285,7 +285,30 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await guest.goto("/visit/games");
     await expect(guest.getByText("Sudah dikembalikan")).toBeVisible();
     await expect(guest.getByText("0 unit tersedia saat terakhir diperiksa")).toBeVisible();
+    // The manager-only landing alert uses the existing authenticated game
+    // stream and intentionally excludes private complaint notes.
     const manager = await staff("manager");
+    const managerHome=await manager.context().newPage();
+    await managerHome.goto("/staff");
+    await expect(managerHome.getByRole("heading", {
+      name:"Pemeriksaan laporan kehilangan",
+    })).toBeVisible();
+    await expect(managerHome.getByText(
+      "Tidak ada laporan kehilangan yang menunggu pemeriksaan.",
+    )).toBeVisible();
+    await expect(managerHome.getByText("Live · otomatis")).toBeVisible();
+    const cashierHome=await cashier.context().newPage();
+    await cashierHome.goto("/staff");
+    await expect(cashierHome.getByRole("heading",{
+      name:"Pemeriksaan laporan kehilangan",
+    })).toHaveCount(0);
+    await cashierHome.close();
+    const waiterHome=await waiter.context().newPage();
+    await waiterHome.goto("/staff");
+    await expect(waiterHome.getByRole("heading",{
+      name:"Pemeriksaan laporan kehilangan",
+    })).toHaveCount(0);
+    await waiterHome.close();
     await manager.goto("/staff/games");
     const quarantinedUnit=manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
@@ -363,6 +386,17 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByText(
       "Laporan staf: UNO deck missing during staff delivery check",
     )).toBeVisible({ timeout: 25000 });
+    await managerHome.bringToFront();
+    await expect(managerHome.getByText(
+      "1 laporan kehilangan memerlukan pemeriksaan manager.",
+    )).toBeVisible({ timeout:25000 });
+    await expect(managerHome.getByText("UNO-E2E-001")).toBeVisible();
+    await expect(managerHome.getByText("UNO deck missing during staff delivery check"))
+      .toHaveCount(0);
+    await expect(managerHome.getByRole("link",{
+      name:"Buka laporan menunggu pemeriksaan",
+    })).toHaveAttribute("href","/staff/games?istatus=OPEN");
+    await manager.bringToFront();
     // OPEN queue count is independent from manager filters; incident search
     // reaches the database and preserves copy/audit selections.
     await expect(manager.getByText("1 laporan kehilangan menunggu pemeriksaan manager."))
@@ -392,6 +426,14 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     }).check();
     await manager.getByRole("button", { name: "Konfirmasi unit hilang" }).click();
     await expect(manager.getByText("Status laporan: CONFIRMED_LOST")).toBeVisible();
+    await managerHome.bringToFront();
+    await expect(managerHome.getByText(
+      "Tidak ada laporan kehilangan yang menunggu pemeriksaan.",
+    )).toBeVisible({ timeout:25000 });
+    await expect(managerHome.getByText(
+      "1 laporan kehilangan memerlukan pemeriksaan manager.",
+    )).toHaveCount(0);
+    await manager.bringToFront();
     await expect(manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
     })).toContainText("LOST");

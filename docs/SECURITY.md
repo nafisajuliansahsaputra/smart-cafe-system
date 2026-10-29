@@ -294,3 +294,18 @@ loan events to staff and refreshes manager pages. Search is read-only;
 no inferred customer liability, collection, automatic fee, incident
 rewrite, or data export is introduced. Real-world evidence retention
 and appeals policies remain explicit release blockers.
+
+
+## Manager-only landing alerts and privacy (draft PR #30)
+
+`/api/v1/admin/games/loss-incidents/summary` is behind the existing
+Spring Security MANAGER/ADMIN role gate, no-store responses and
+server-side staff bearer. The Next.js landing page calls it ONLY after
+verifying role. Unauthorized staff pages neither call nor render the
+manager notice. The summary explicitly omits free-text inspection
+notes and personally identifiable customer and payment data.
+Browser SSE carries change markers from the existing authenticated
+staff game feed, not complaint content; refresh reads authoritative
+server state. Backend errors are surfaced as uncertain availability,
+not a "0 unresolved reports" claim. No irreversible or financial
+actions originate from the home alert.

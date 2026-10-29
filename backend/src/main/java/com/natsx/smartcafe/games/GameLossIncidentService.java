@@ -35,6 +35,13 @@ public class GameLossIncidentService {
             String reviewReason, Instant reportedAt) {}
     public record IncidentPage(List<IncidentView> items, int page,
                                boolean hasNext, long openCount) {}
+    /** Minimal operational notification. Never return complaint notes,
+     * guest identity, phone, payment info, or access credentials.
+     */
+    public record OpenIncidentPreview(String gameName, String copyCode,
+                                      String tableCode, Instant reportedAt) {}
+    public record OpenIncidentSummary(long openCount,
+                                      List<OpenIncidentPreview> recent) {}
     private record Loan(UUID id, UUID visitId, UUID copyId, UUID gameId,
                         String status, String code) {}
     private record Incident(UUID id, UUID loanId, String status) {}
@@ -75,6 +82,32 @@ public class GameLossIncidentService {
             JOIN cafe_tables t ON t.id=v.table_id
             ORDER BY (i.status='OPEN') DESC,i.reported_at DESC,i.id DESC LIMIT 100
             """,(rs,n)->map(rs));
+    }
+
+    /** Compact manager alert only: a total and at most three recent open
+     * serialized units, sourced from PostgreSQL rather than stale UI state.
+     * Access is enforced by the admin route security boundary.
+     */
+    @Transactional(readOnly=true)
+    public OpenIncidentSummary openIncidentSummary() {
+        Long count=jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents WHERE status='OPEN'
+            """,Long.class);
+        List<OpenIncidentPreview> recent=jdbc.query("""
+            SELECT g.name,c.copy_code,t.table_code,i.reported_at
+            FROM physical_game_loss_incidents i
+            JOIN physical_game_loans l ON l.id=i.loan_id
+            JOIN physical_game_copies c ON c.id=l.copy_id
+            JOIN physical_games g ON g.id=l.game_id
+            JOIN table_visits v ON v.id=l.visit_id
+            JOIN cafe_tables t ON t.id=v.table_id
+            WHERE i.status='OPEN'
+            ORDER BY i.reported_at DESC,i.id DESC LIMIT 3
+            """,(rs,n)->new OpenIncidentPreview(
+                rs.getString("name"),rs.getString("copy_code"),
+                rs.getString("table_code"),
+                rs.getTimestamp("reported_at").toInstant()));
+        return new OpenIncidentSummary(count==null?0:count,recent);
     }
 
     /** Full database, manager-only incident search. OPEN first, then newest.

@@ -411,3 +411,17 @@ UUID. `openCount` counts **all** OPEN incidents irrespective of the
 query, filter or current page. The legacy `GET /admin/games/loss-incidents`
 remains bounded/latest-100 for compatibility. No mutations, private
 guest/phone data, or financial fields.
+
+
+## M4 manager-only OPEN loss-alert summary (stacked draft PR #30)
+
+`GET /api/v1/admin/games/loss-incidents/summary` is manager/admin
+bearer-only, HTTP 200, no-store:
+`ApiEnvelope.data = {openCount, recent}`.
+`openCount` is a nonnegative count of ALL OPEN loss incidents.
+`recent` is an ordered array of at most 3 OPEN previews:
+`{gameName,copyCode,tableCode,reportedAt}`, newest first using
+`reported_at DESC,id DESC`. No incident text, borrower identity,
+guest ID, loan ID, phone, receipt, payment or token field is included.
+401 no valid staff authentication, 403 wrong authenticated staff role.
+No write action or notification delivery endpoint.

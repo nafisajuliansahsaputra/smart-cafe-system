@@ -23,6 +23,10 @@ export type GameLossIncidentView = {
   tableCode: string; status: "OPEN" | "DISMISSED" | "CONFIRMED_LOST";
   reason: string; reviewReason: string | null; reportedAt: string;
 };
+export type GameLossAlertSummary = {
+  openCount: number;
+  recent: { gameName: string; copyCode: string; tableCode: string; reportedAt: string }[];
+};
 export type GameLossIncidentPage = {
   items: GameLossIncidentView[]; page: number; hasNext: boolean; openCount: number;
 };
@@ -97,6 +101,17 @@ function gameLossIncident(value: unknown): value is GameLossIncidentView {
     typeof value.reason==="string" &&
     (value.reviewReason===null || typeof value.reviewReason==="string") &&
     typeof value.reportedAt==="string";
+}
+function gameLossAlertSummary(value:unknown):value is GameLossAlertSummary {
+  return record(value) &&
+    Number.isSafeInteger(value.openCount) && (value.openCount as number)>=0 &&
+    Array.isArray(value.recent) && value.recent.length<=3 &&
+    value.recent.every(item => record(item) &&
+      typeof item.gameName==="string" &&
+      typeof item.copyCode==="string" &&
+      typeof item.tableCode==="string" &&
+      typeof item.reportedAt==="string" &&
+      !Number.isNaN(Date.parse(item.reportedAt)));
 }
 const gameLossIncidents=(value:unknown): value is GameLossIncidentView[] =>
   Array.isArray(value) && value.length<=100 && value.every(gameLossIncident);
@@ -197,4 +212,14 @@ export async function searchAdminGameLossIncidents(
   const r=await staffApi(`/api/v1/admin/games/loss-incidents/search?${params}`,"GET",token);
   const parsed=result(r.status,dataFromEnvelope(r.payload),incidentPage);
   return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
+}
+
+/** Manager/admin-only count plus 3 actionable previews. No notes/guest data.
+ * Used by the staff landing page; fetched only after role verification.
+ */
+export async function managerGameLossAlerts():Promise<Result<GameLossAlertSummary>> {
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const r=await staffApi("/api/v1/admin/games/loss-incidents/summary","GET",token);
+  return result(r.status,dataFromEnvelope(r.payload),gameLossAlertSummary);
 }

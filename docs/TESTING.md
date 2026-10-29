@@ -320,3 +320,19 @@ and guest/waiter/cashier/kitchen access denial. Chromium HTTP/HTTPS
 validates manager live OPEN count, missing-result search, mismatching
 DISMISSED filter and reset before the manager confirms loss in the
 normal synthetic cash/order/physical-game acceptance flow.
+
+
+## M4 manager dashboard realtime loss alerts (stacked draft PR #30)
+
+PostgreSQL/Testcontainers validates anonymous/invalid token 401,
+waiter/cashier/kitchen 403, no-store manager success, four genuine
+allocated-unit loss reports causing an OPEN count increase by four,
+a **maximum three newest** minimal preview rows, strict omission of
+reason, loan/guest/payment identifiers and incident text, and count
+returning to baseline after four manager dismissals. Chromium HTTP
+and HTTPS keep a manager landing tab open through the existing guest
+cash/game E2E scenario and assert zero → one → zero unresolved alert
+transitions after waiter report and manager review. Tab foregrounding
+uses LiveRefresh's existing visibility recovery, not manual refresh.
+Browser tests verify cashier/waiter never see the manager alert
+and the link targets the OPEN-filtered manager queue.

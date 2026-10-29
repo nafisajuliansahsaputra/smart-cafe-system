@@ -291,3 +291,16 @@ validation, and PostgreSQL/Chromium regression coverage added.
 Legacy 100-entry API unchanged. Future work: keyset paging at scale,
 manager role-specific operational alert entry points, field usability,
 record retention/appeal rules and security/production review.
+
+
+### M4 manager dashboard incident alert (stacked draft PR #30)
+
+Main staff home now shows manager/admin-only OPEN incident totals,
+three newest minimal previews and a direct review-queue link.
+The existing game SSE revalidates server-rendered status in real time
+and after tab visibility resumes, without new polling or push
+infrastructure. An unavailable incident summary shows a warning.
+PostgreSQL role/data-minimization tests and Chromium HTTP/HTTPS
+0→1→0 manager notification lifecycle added. Remaining pilot work:
+operational review by staff, accessibility/mobile testing, incident
+record retention/appeals and authorized production rollout.

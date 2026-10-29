@@ -283,3 +283,25 @@ incident page as events land. No new notifications to third-party
 phones, personal contact fields, auto charges, silent manager actions,
 or edits to historical decisions. Legacy latest-100 incident GET is
 retained for compatibility. Index V22 supports OPEN-first sorting.
+
+
+## Manager home dashboard incident alerts (stacked draft PR #30)
+
+Manager/admin sees unresolved missing-game work **directly on the main
+`/staff` page**. A no-store, manager-only
+`GET /api/v1/admin/games/loss-incidents/summary` returns the total
+number of OPEN incidents and at most three newest previews: game name,
+serialized physical unit code, table code and report timestamp. The
+summary contains no free-text complaint/review notes, guest identity,
+phone number, payment data, loan ID or access token.
+
+Only a verified MANAGER/ADMIN role causes the landing page to call the
+privileged API or render the notice. Other staff roles never request it.
+A link opens `/staff/games?istatus=OPEN` so a manager may investigate
+and decide in the normal manager review workflow. There is no one-click
+loss confirmation, auto fine, SMS, browser push request or contact data
+in the alert. The already authenticated game live-cursor feed and
+LiveRefresh component update the server-rendered count and previews
+after a waiter reports a missing copy or a manager reviews a report,
+including on tab visibility resume. The panel shows a fail-closed
+"cannot verify" message when the API is unavailable, not a false zero.
