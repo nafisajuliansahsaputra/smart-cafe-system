@@ -6,7 +6,7 @@ import { staffApi, staffToken, dataFromEnvelope } from "@/lib/staff-server";
 export type GameView = { id: string; name: string; description: string | null; availableCopies: number };
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
-  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURNED" | "CANCELLED";
+  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
   tableCode: string; copyCode: string | null; requestedAt: string;
 };
 type Result<T> = { ok: true; data: T } | { ok: false; status: number };
@@ -25,7 +25,7 @@ function loan(value: unknown): value is GameLoanView {
   return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
     typeof value.gameId === "string" && uuid.test(value.gameId) &&
     typeof value.gameName === "string" &&
-    ["REQUESTED","ASSIGNED","IN_USE","RETURNED","CANCELLED"].includes(String(value.status)) &&
+    ["REQUESTED","ASSIGNED","IN_USE","RETURN_PENDING","RETURNED","CANCELLED"].includes(String(value.status)) &&
     typeof value.tableCode === "string" &&
     (value.copyCode === null || typeof value.copyCode === "string") &&
     typeof value.requestedAt === "string";

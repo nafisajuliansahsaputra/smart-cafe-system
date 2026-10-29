@@ -48,6 +48,8 @@ export default async function StaffGamesPage({searchParams}:{
         <div className="staff-task-head"><h2>Meja {l.tableCode} · {l.gameName}</h2>
           <strong className="staff-status">{l.status}</strong></div>
         {l.copyCode && <p>Unit: <strong>{l.copyCode}</strong></p>}
+        {l.status==="RETURN_PENDING" &&
+          <p role="status">Pelanggan meminta pengambilan. Pastikan unit sudah diterima dan diperiksa sebelum menyelesaikan.</p>}
         {l.status==="REQUESTED" && <>
           <form action={updateGameLoan} className="staff-form">
             <input type="hidden" name="loanId" value={l.id}/>
@@ -64,7 +66,7 @@ export default async function StaffGamesPage({searchParams}:{
             <button className="staff-secondary">Batalkan permintaan</button>
           </form>
         </>}
-        {(l.status==="ASSIGNED"||l.status==="IN_USE") && <form action={updateGameLoan} className="staff-form">
+        {(l.status==="ASSIGNED"||l.status==="IN_USE"||l.status==="RETURN_PENDING") && <form action={updateGameLoan} className="staff-form">
           <input type="hidden" name="loanId" value={l.id}/>
           <input type="hidden" name="operation" value={l.status==="ASSIGNED"?"handover":"return"}/>
           <label htmlFor={`game-unit-${l.id}`}>Masukkan kode pada unit fisik</label>

@@ -132,3 +132,13 @@ Cash may be approved for cooking and even served while still AWAITING_CASH. In t
 ### M4 executable physical game loan state machine (draft PR #19)
 
 Guest ACTIVE visit + chosen game → REQUESTED (no assigned copy). Opening waiter/supervisor physically checks inventory → ASSIGNED (specific copy locked/reserved under unique active-copy DB index). Staff physically verifies serial code → IN_USE (handed to guest). Staff inspects the undamaged copy and confirms matching serial → RETURNED; unit may be assigned again. A REQUESTED-only request may be CANCELLED by an authorized waiter; ASSIGNED and IN_USE cannot be cancelled or falsely returned. While status is REQUESTED, ASSIGNED or IN_USE, the table cannot close, even if payment is PAID. Manager override, fee, lost/damaged and deposit workflows are not available in this initial slice, rather than silently charging or clearing a liability. See ADR-0007.
+
+### Guest pickup request (draft PR #21)
+
+An active guest may request a physical collection from IN_USE to
+RETURN_PENDING (same loan ID, idempotent on retry). This is only a
+notification/task, not an inventory release. Only physical staff
+confirmation with the exact copy serial transitions IN_USE or
+RETURN_PENDING to RETURNED. The unit stays exclusively assigned
+through RETURN_PENDING and the table cannot close. No damage policy,
+fee, override or loss handling is introduced by this change.

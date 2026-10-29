@@ -280,4 +280,58 @@ class GameLoanIntegrationTest {
         assertEquals(beforeForeignWaiter,liveCursor(staffPath,foreignWaiter.token()));
         assertEquals(beforeSameVisit,liveCursor(guestPath,otherGuestSameVisit.token()));
     }
+
+    @Test void guestPickupRequestNeverFreesPhysicalCopyAndIsOwnerOnly() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),otherWaiter=staff("WAITER");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter),otherVisit=open(otherWaiter);
+        User guest=join(visit),otherGuestSameTable=join(visit),foreignGuest=join(otherVisit);
+        UUID loan=requestLoan(guest,game);
+        String base="/api/v1/me/game-loans/"+loan+"/request-return";
+        assertEquals(409,postEmpty(base,guest.token()).getStatus()); // request not handed over
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String code=field(assigned.getContentAsString(),"copyCode");
+        assertEquals(409,postEmpty(base,guest.token()).getStatus()); // still assigned
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertEquals(404,postEmpty(base,otherGuestSameTable.token()).getStatus());
+        assertEquals(404,postEmpty(base,foreignGuest.token()).getStatus());
+        assertEquals(403,postEmpty(base,waiter.token()).getStatus());
+        assertEquals(401,postEmpty(base,null).getStatus());
+        var requested=postEmpty(base,guest.token());
+        assertEquals(200,requested.getStatus(),requested.getContentAsString());
+        assertTrue(requested.getContentAsString().contains("RETURN_PENDING"));
+        assertEquals(200,postEmpty(base,guest.token()).getStatus()); // retry has no new event
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events WHERE aggregate_type='GAME_LOAN'
+                AND aggregate_id=? AND event_type='GAME_LOAN_RETURN_REQUESTED'
+            """,Integer.class,loan));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loans
+            WHERE id=? AND status='RETURN_PENDING'
+                AND return_requested_at IS NOT NULL
+            """,Integer.class,loan));
+        assertEquals(409,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+        assertTrue(getAs("/api/v1/me/games",guest.token()).getContentAsString()
+            .contains("\"availableCopies\":0"));
+        UUID anotherLoan=requestLoan(foreignGuest,game);
+        assertEquals(409,postEmpty("/api/v1/waiter/game-loans/"+anotherLoan+"/assign",
+            otherWaiter.token()).getStatus());
+        assertEquals(409,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
+            waiter.token(),"{\"copyCode\":\"WRONG\"}").getStatus());
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertTrue(relay.dispatchBatch() > 0);
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM live_game_signals s JOIN outbox_events e ON e.id=s.outbox_id
+            WHERE s.loan_id=? AND s.event_type='GAME_LOAN_RETURN_REQUESTED'
+                AND e.processed_at IS NULL
+            """,Integer.class,loan));
+        assertEquals(200,postEmpty("/api/v1/waiter/game-loans/"+anotherLoan+"/assign",
+            otherWaiter.token()).getStatus());
+        assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+    }
 }
