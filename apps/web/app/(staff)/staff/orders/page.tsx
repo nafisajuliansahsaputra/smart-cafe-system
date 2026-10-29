@@ -6,7 +6,7 @@ import { canUseOcc, idr, localTime, orderQueue, staffIdentity } from "@/lib/staf
 export const dynamic = "force-dynamic";
 
 const orderStatuses = ["", "SUBMITTED", "ACCEPTED", "PREPARING", "READY", "SERVED", "REJECTED", "CANCELLED"];
-const paymentStatuses = ["", "AWAITING_CASH", "UNPAID", "PENDING", "PAID", "REFUNDED", "DISPUTED"];
+const paymentStatuses = ["", "AWAITING_CASH", "UNPAID", "PENDING", "PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED"];
 
 export default async function OrdersPage({
   searchParams,
@@ -49,7 +49,12 @@ export default async function OrdersPage({
       <section className="staff-panel">
         <div className="staff-header staff-panel-header">
           <div><h2>Pesanan</h2><p className="staff-muted">Persetujuan cash hanya mengirim pesanan ke dapur, bukan menandai PAID.</p></div>
-          <Link className="staff-link-button" href={`/staff/orders${filters.size ? `?${filters}` : ""}`}>Segarkan</Link>
+          <form method="GET">
+            {status && <input type="hidden" name="status" value={status} />}
+            {paymentStatus && <input type="hidden" name="paymentStatus" value={paymentStatus} />}
+            {tableCode && <input type="hidden" name="tableCode" value={tableCode} />}
+            <button className="staff-secondary" type="submit">Segarkan</button>
+          </form>
         </div>
         {queue.ok && queue.data.length === 0 && <p role="status">Tidak ada pesanan untuk filter ini.</p>}
         {!queue.ok && (
