@@ -103,6 +103,18 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "Pinjam permainan fisik." })).toBeVisible();
     // Assert the synthetic catalogue entry and include the rendered status in
     // failure output, so an unavailable API cannot look like empty inventory.
+    // Diagnostic contract: verify the same scoped guest token against
+    // the internal backend in this disposable CI environment, then verify
+    // Next.js server-side parsing separately.
+    const gameBackendResponse = await guestContext.request.get(
+      "http://127.0.0.1:8080/api/v1/me/games",
+      { headers: { Authorization: `Bearer ${guestCookie.value}` } },
+    );
+    expect(gameBackendResponse.status()).toBe(200);
+    const gameBackendData = await gameBackendResponse.json();
+    expect(gameBackendData.data.some((game) => game.name === "UNO Demo")).toBe(true);
+    const catalogStatus = await guest.locator(".guest-category").getAttribute("data-catalog-status");
+    expect(catalogStatus).toBe("ok");
     expect(await guest.locator("main").innerText()).toContain("UNO Demo");
     await guest.getByRole("checkbox", {
       name: /Saya akan menjaga dan mengembalikan permainan/,

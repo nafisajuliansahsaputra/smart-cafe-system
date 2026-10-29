@@ -61,7 +61,7 @@ export default async function GuestGamesPage({ searchParams }: {
           </li>)}</ul>}
         <form method="GET"><button className="guest-secondary" type="submit">Segarkan pinjaman</button></form>
       </section>
-      <section className="guest-category">
+      <section className="guest-category" data-catalog-status={catalog.ok ? "ok" : String(catalog.status)}>
         <h2>Koleksi permainan</h2>
         {!catalog.ok && <p role="alert">Katalog permainan belum dapat dimuat.</p>}
         {catalog.ok && catalog.data.length===0 && <p>Belum ada permainan tersedia di katalog.</p>}
