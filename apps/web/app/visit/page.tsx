@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { exitVisit } from "./actions";
 import { getMenu, guestIdentity, idr } from "@/lib/guest-server";
 
