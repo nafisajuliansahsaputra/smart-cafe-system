@@ -152,3 +152,10 @@ A dedicated GitHub Actions Chromium job starts an ephemeral Docker Compose web+A
 The suite verifies navigation and real server actions with separate waiter, cashier and kitchen accounts plus two guest browser contexts. It checks role route denial, transient table join proof, required+optional modifiers and authoritative IDR subtotal, order AWAITING_CASH before tender, staff OCC approve, kitchen prepare/ready, waiter handover and cash/change, own paid receipt, cross-guest 404, and closing the visit revoking guest access. Browser token safety checks require HttpOnly, SameSite-Strict, path-scoped cookie with no token rendered in HTML.
 
 CI retains screenshots and Playwright trace on failures for three days and destroys its database volume afterward. Exact-head green status, not merely existence of a test, is required for any completion claims. No real cafe, phone number, funds or external messages involved.
+
+
+## M2 principal / Origin / negative Chromium acceptance (draft PR #9)
+
+Existing Java TableVisitIntegrationTest now uses a valid GUEST token to call both staff-authenticated `/me` and `/logout`, expecting 403; it then proves the original guest token still works. This guards against principal type confusion and accidental guest revocation.
+
+`apps/web/e2e/security-boundaries.spec.mjs` adds real Chromium/Next.js Server Action negative tests: foreign-Origin request with authenticated staff cookies cannot invoke logout; a 64KB synthetic form is rejected by the 32KB Server Action limit; closed public QR does not render a join form or issue a guest credential. `cash-cycle.spec.mjs` attempts to close an active table *before* tender and verifies backend refuses; after cash is paid it closes successfully. Run CI in ephemeral Compose only and retain the completed exact-head GitHub Actions run as evidence. This cannot replace a real HTTPS reverse-proxy Origin/Host assessment.

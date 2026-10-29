@@ -129,3 +129,8 @@ Added a PostgreSQL V10 fixed-window HMAC-keyed rate limiter with safe HTTP 429 a
 ### M2 Chromium real browser E2E (stacked draft PR #8)
 
 Added isolated Chromium workflow with ephemeral synthetic PostgreSQL fixture and independent waiter/cashier/kitchen/guest sessions, covering the full cash/receipt/table lifecycle. Role isolation, unauthorized cross-guest read, cookie security attributes, modifier pricing and non-PAID-before-cash also covered. **Do not mark production acceptance complete**: actual proxy/origin/CSRF/TLS, manual mobile/a11y, payment policy and external provider remain open. See [docs/M2-BROWSER-E2E.md](docs/M2-BROWSER-E2E.md).
+
+
+### M2 origin/role boundary (draft PR #9)
+
+Implemented explicit staff-role requirement for staff identity/logout to prevent a GUEST bearer from being considered a generic authenticated user, plus Java regression assertions. Server Action body size capped at 32KB; new Chromium negative tests attack forged Origin and large payload, and assert unsettled table cannot close. **Remain open:** real HTTPS reverse-proxy forwarded-host/Origin review, trusted edge request limits, native mobile/accessibility and external money/PII approval. See [docs/M2-ORIGIN-ROLE-HARDENING.md](docs/M2-ORIGIN-ROLE-HARDENING.md).

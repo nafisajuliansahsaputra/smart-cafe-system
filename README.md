@@ -149,3 +149,8 @@ A new PostgreSQL-backed, fixed-window guest join throttle limits well-formed joi
 A real Chromium acceptance suite now exercises `/staff/tables` → `/t/e2e-01` → guest menu/modifiers/cart/checkout → cashier approve → kitchen start/ready → waiter serve/collect cash → paid-only guest receipt → settle/close visit. Playwright uses distinct waiter, cashier, kitchen and two independent guest browser contexts against an isolated Docker/PostgreSQL app, with a **synthetic CI-only fixture**. No application path or real funds are touched in testing. CI job logs/traces are the evidence; check the exact commit before treating E2E as passing.
 
 See [browser acceptance notes](docs/M2-BROWSER-E2E.md). This does not certify production HTTPS, edge anti-abuse or real payment gateways.
+
+
+## M2 cross-role and Server Action hardening (draft PR #9)
+
+[PR #9](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/9) closes a principal-type authorization gap: authenticated guests can no longer call staff `/auth/me` or `/auth/logout`. Next.js keeps its default same-origin Server Actions protection, now with a 32KB body size limit and explicit page security headers. Chromium negative acceptance covers foreign-Origin staff logout attempts, oversized form rejection and declining a waiter close while cash is unsettled. See [Origin and role security notes](docs/M2-ORIGIN-ROLE-HARDENING.md). Do not treat CI as a real public HTTPS proxy security audit.
