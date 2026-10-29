@@ -158,3 +158,7 @@ Completed transactional TABLE_VISIT open, rotate and close events, V12 separate 
 ### M2 live capacity and safe observability (draft PR #15)
 
 Added per-guest (2) and per-staff (6) long-poll identity limits within global cap (48), idempotent permit release, configurable bounded validation, aggregate Micrometer metrics for capacity/denials/listener/backlog, read-only PostgreSQL backlog sampling and virtual-thread race tests. Still open: servlet async executor, multi-instance distributed admission, load/soak benchmarks, measured p95 latency and DB connection headroom, metrics exporter/alerts, poison event quarantine and production approval. See docs/M2-LIVE-CAPACITY.md.
+
+### M2 async cursor and measured admission gate (draft PR #16)
+
+Moved live-cursor waits with an `after` parameter to Spring MVC asynchronous Callable + JDK virtual threads, retaining the global and per-principal resource budgets from PR #15. Added integration async-dispatch checks and an independent synthetic multi-identity load CI measuring concurrent accepted/rejected waits, health responsiveness, elapsed duration and p50/p95. **Still open:** measured distributed/multi-replica soak and network-disconnect behavior, DB pool sizing, secured telemetry dashboards/alerts, p95 customer notification SLA, production TLS and ingress gates. See docs/M2-ASYNC-LIVE-LOAD.md.

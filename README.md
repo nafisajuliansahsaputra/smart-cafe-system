@@ -178,3 +178,7 @@ Table visit open, join-proof rotation and close now publish transactional durabl
 ## M2 live subscription admission controls (draft PR #15)
 
 Live event cursor long-polls now have both global and **per-authenticated-principal** budgets, so one session cannot take all available subscriptions. Internal privacy-safe Micrometer counters/gauges track active waits, exhausted capacity, PG LISTEN connectivity and durable outbox backlog; unknown backlog reads are marked -1, not silently healthy. See [M2 live capacity](docs/M2-LIVE-CAPACITY.md). This is a safety/test slice, **not** production load certification or public metrics exposure.
+
+## M2 asynchronous long polls and synthetic performance evidence (draft PR #16)
+
+After-cursor live requests now use Servlet async dispatch on JDK 21 virtual threads, returning the HTTP worker to the pool while waiting for a PostgreSQL event. Initial cursor reads and authorization contracts are unchanged. A dedicated disposable Docker CI benchmark checks concurrent admission/429 behavior, health responsiveness during outstanding waits, and per-staff fairness. See [M2 async live benchmark](docs/M2-ASYNC-LIVE-LOAD.md). CI observations are **not** a production throughput claim.

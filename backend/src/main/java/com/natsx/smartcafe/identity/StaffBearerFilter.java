@@ -15,6 +15,14 @@ public final class StaffBearerFilter extends OncePerRequestFilter {
 
     public StaffBearerFilter(StaffAuthService auth) { this.auth = auth; }
 
+    // Servlet async dispatch re-enters the stateless security filter chain.
+    // Reauthenticate the original Bearer on ASYNC response dispatch instead
+    // of accidentally returning 401 or bypassing authorization.
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
