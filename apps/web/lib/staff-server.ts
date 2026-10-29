@@ -283,3 +283,42 @@ export async function waiterTasks(): Promise<LoadResult<WaiterTask[]>> {
   }
   return { ok: true, data };
 }
+
+export type StaffTable = {
+  tableId: string;
+  tableCode: string;
+  publicAlias: string;
+  capacity: number;
+  tableStatus: "AVAILABLE" | "OUT_OF_SERVICE";
+  activeVisit: boolean;
+  manageableVisitId: string | null;
+  proofExpiresAt: string | null;
+};
+const staffUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function isStaffTable(value: unknown): value is StaffTable {
+  return (
+    record(value) &&
+    typeof value.tableId === "string" && staffUuid.test(value.tableId) &&
+    typeof value.tableCode === "string" &&
+    typeof value.publicAlias === "string" &&
+    typeof value.capacity === "number" && Number.isInteger(value.capacity) && value.capacity > 0 &&
+    (value.tableStatus === "AVAILABLE" || value.tableStatus === "OUT_OF_SERVICE") &&
+    typeof value.activeVisit === "boolean" &&
+    (value.manageableVisitId === null ||
+      (typeof value.manageableVisitId === "string" && staffUuid.test(value.manageableVisitId))) &&
+    (value.proofExpiresAt === null || typeof value.proofExpiresAt === "string")
+  );
+}
+
+export async function staffTables(): Promise<LoadResult<StaffTable[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const result = await staffApi("/api/v1/waiter/tables", "GET", token);
+  if (result.status !== 200) return { ok: false, status: result.status };
+  const data = dataFromEnvelope(result.payload);
+  if (!Array.isArray(data) || !data.every(isStaffTable)) {
+    return { ok: false, status: 502 };
+  }
+  return { ok: true, data };
+}

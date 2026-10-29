@@ -146,4 +146,57 @@ class TableVisitIntegrationTest {
         assertEquals(403,mvc.perform(get("/api/v1/me/visit")
             .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
     }
+
+    @Test void waiterTableInventoryHidesForeignVisitIdsAndAllJoinProofs() throws Exception {
+        var table = table();
+        var waiter = staff("WAITER");
+        var otherWaiter = staff("WAITER");
+        var cashier = staff("CASHIER");
+        var kitchen = staff("KITCHEN");
+
+        var before = mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
+        assertEquals(200, before.getStatus());
+        assertTrue(before.getContentAsString().contains(table.id().toString()));
+        assertTrue(before.getContentAsString().contains("\"activeVisit\":false"));
+
+        var opened = open(waiter, table);
+        String visitId = extract(opened, "id");
+        String proof = extract(opened, "joinProof");
+
+        var mine = mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
+        assertEquals(200, mine.getStatus());
+        assertTrue(mine.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(mine.getContentAsString().contains("\"activeVisit\":true"));
+        assertTrue(mine.getContentAsString().contains(visitId));
+        assertFalse(mine.getContentAsString().contains(proof));
+        assertFalse(mine.getContentAsString().contains("joinProof"));
+
+        var foreign = mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + otherWaiter)).andReturn().getResponse();
+        assertEquals(200, foreign.getStatus());
+        assertTrue(foreign.getContentAsString().contains("\"activeVisit\":true"));
+        assertFalse(foreign.getContentAsString().contains(visitId));
+        assertFalse(foreign.getContentAsString().contains(proof));
+
+        var supervised = mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + cashier)).andReturn().getResponse();
+        assertEquals(200, supervised.getStatus());
+        assertTrue(supervised.getContentAsString().contains(visitId));
+        assertFalse(supervised.getContentAsString().contains(proof));
+
+        assertEquals(403, mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(401, mvc.perform(get("/api/v1/waiter/tables"))
+            .andReturn().getResponse().getStatus());
+
+        assertEquals(200, mvc.perform(post("/api/v1/waiter/table-visits/" + visitId + "/close")
+            .header("Authorization", "Bearer " + waiter)).andReturn().getResponse().getStatus());
+        var closed = mvc.perform(get("/api/v1/waiter/tables")
+            .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
+        assertEquals(200, closed.getStatus());
+        assertFalse(closed.getContentAsString().contains(visitId));
+    }
+
 }

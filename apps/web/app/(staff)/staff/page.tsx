@@ -43,6 +43,13 @@ export default async function StaffPage() {
       )}
       {canUseWaiter(current.staff.roles) && (
         <section className="staff-panel">
+          <h2>Table Management</h2>
+          <p>Buka atau tutup kunjungan meja, serta buat kode bergabung sementara untuk tamu. Kode hanya ditampilkan setelah tindakan yang diotorisasi.</p>
+          <Link className="staff-link-button" href="/staff/tables">Kelola meja</Link>
+        </section>
+      )}
+      {canUseWaiter(current.staff.roles) && (
+        <section className="staff-panel">
           <h2>Waiter &amp; Cash</h2>
           <p>Daftar pengantaran dan penerimaan uang tunai, dibatasi berdasarkan meja yang ditangani. Cash baru lunas setelah dicatat oleh server.</p>
           <Link className="staff-link-button" href="/staff/waiter">Buka tugas waiter</Link>
