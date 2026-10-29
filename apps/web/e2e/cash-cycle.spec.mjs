@@ -101,7 +101,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     // digitally marked "delivered" until waiter verifies the physical unit.
     await guest.goto("/visit/games");
     await expect(guest.getByRole("heading", { name: "Pinjam permainan fisik." })).toBeVisible();
-    await expect(guest.getByRole("heading", { name: "UNO Demo" })).toBeVisible();
+    // Assert the synthetic catalogue entry and include the rendered status in
+    // failure output, so an unavailable API cannot look like empty inventory.
+    expect(await guest.locator("main").innerText()).toContain("UNO Demo");
     await guest.getByRole("checkbox", {
       name: /Saya akan menjaga dan mengembalikan permainan/,
     }).check();
