@@ -162,3 +162,7 @@ Backend endpoints `/api/v1/me/live-cursor`, `/api/v1/ops/live-cursor`, `/api/v1/
 ## 19. Scoped table visit signals (draft PR #14)
 
 V12 `live_table_signals` stores table/visit UUIDs, restricted event type and sequence only. Opening, rotation and closing occur in a transaction with a safe outbox event. The hashed join proof and new plaintext proof are never sent via the relay, NOTIFY or browser SSE. All waiter roles can subscribe to occupancy changes already present in the table list, while proof rotation only advances the owning waiter or supervisor's scoped cursor. Kitchen/anonymous requests cannot subscribe. The original business outbox processing marker is not consumed. No claim of production-scale connections or public deployment.
+
+## 20. Per-principal live poll admission (draft PR #15)
+
+The backend long-poll gate now enforces a bounded global concurrent-request limit **and** distinct caps per authenticated guest and staff UUID, with atomic concurrent updates and scoped idempotent permit cleanup. An abusive credential cannot monopolize all 48 default slots. Exhaustion fails closed at HTTP 429, without changing money, table or guest access truth. Registered metrics are low-cardinality and contain no credential/user/visit/order data. Outbox-backlog query errors produce -1/unknown metrics, not stale zero. Public metrics HTTP endpoints remain disabled; actual ingress/DDoS and distributed admission controls remain production requirements.
