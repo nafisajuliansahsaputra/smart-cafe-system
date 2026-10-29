@@ -220,3 +220,7 @@ The existing POST operations `/api/v1/waiter/table-visits`, `/{id}/join-proof`, 
 `POST /api/v1/table-visits/join` may now return `429 Too Many Requests` with `error.code=RATE_LIMITED`, a safe generic message, `Retry-After: 600` (seconds), and `Cache-Control: no-store`. The browser maps that response to a generic Indonesian "try again in about 10 minutes" message. No guest credential is issued. A 10-minute fixed window is shared via PostgreSQL; counters commit before checking the join proof.
 
 Throttling uses the backend socket peer and table alias, not an untrusted client IP header. Behind a shared Next.js BFF it cannot accurately distinguish individual guests. A trusted edge rate limiter remains required for public launch.
+
+## BFF-only SSE (draft PR #11)
+
+GET `/staff/live?topic=orders|kitchen|waiter|tables` or `?topic=order&id=<uuid>` uses staff cookie. GET `/visit/live?topic=orders` or `?topic=order&id=<uuid>` uses guest cookie. Unknown topics/extraneous fields/invalid UUID → 400; no session → 401; backend forbidden/foreign order → 403/404. On 200, `text/event-stream` contains only empty `ready`, `changed`, `unavailable`, `auth-expired`, and heartbeat frames, with no-store, no-transform and no buffering. Each poll is re-authorized and the connection is bounded to 55 seconds.

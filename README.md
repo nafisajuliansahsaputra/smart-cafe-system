@@ -158,3 +158,7 @@ See [browser acceptance notes](docs/M2-BROWSER-E2E.md). This does not certify pr
 ## M2 HTTPS edge integration acceptance (draft PR #10)
 
 A new **local-only** TLS reverse-proxy Compose overlay and an independent CI Chromium job exercise Next.js Server Actions through an actual HTTPS ingress, with hostile Host, X-Forwarded-Host and spoofed X-Forwarded-For tests. The edge is bound only to 127.0.0.1, uses a short-lived disposable self-signed cert and stores no keys in Git. See [HTTPS edge acceptance](docs/M2-HTTPS-EDGE-ACCEPTANCE.md). This is not a public-ready reverse proxy.
+
+## M2 live updates (draft PR #11)
+
+Authenticated OCC, KDS, waiter, table and guest order pages now subscribe to same-origin SSE signals using their existing HttpOnly cookies. Next.js observes backend-authorized snapshots every five seconds and sends only change signals, not order data or tokens. See [M2 live updates](docs/M2-LIVE-UPDATES.md); this is SSE via polling, not an outbox dispatcher.
