@@ -138,6 +138,11 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await waiter.getByRole("button", { name: "Konfirmasi serah-terima" }).click();
     await expect(waiter.getByText("IN_USE", { exact: true })).toBeVisible();
     await expect(guest.getByText("Sedang dipinjam")).toBeVisible({ timeout: 25000 });
+    // Customer can request pickup, but stock remains borrowed until staff inspection.
+    await guest.getByRole("checkbox", { name: /Saya ingin waiter mengambil permainan ini/ }).check();
+    await guest.getByRole("button", { name: "Minta pengambilan" }).click();
+    await expect(guest.getByText("Menunggu pengambilan waiter")).toBeVisible();
+    await expect(waiter.getByText("RETURN_PENDING", { exact: true })).toBeVisible({ timeout: 25000 });
 
     // Required + optional modifier groups must contribute to SERVER-priced cart.
     await guest.goto(`/visit/menu/${ITEM}`);
@@ -268,7 +273,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(gameUnreturned).toContainText("TERISI");
 
     await waiter.goto("/staff/games");
-    await expect(waiter.getByText("IN_USE", { exact: true })).toBeVisible();
+    await expect(waiter.getByText("RETURN_PENDING", { exact: true })).toBeVisible();
     await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
     await waiter.getByRole("checkbox", {
       name: /Unit diterima kembali dan sudah diperiksa kondisinya/,

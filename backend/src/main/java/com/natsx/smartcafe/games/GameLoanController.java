@@ -55,6 +55,16 @@ public class GameLoanController {
             .body(ApiEnvelope.of(games.request(guest,body.gameId()),RequestIdFilter.get(request)));
     }
 
+    /** Customer requests pickup; this never confirms a physical return. */
+    @PostMapping("/me/game-loans/{id}/request-return")
+    public ResponseEntity<ApiEnvelope<GameLoanService.LoanView>> requestReturn(
+        @AuthenticationPrincipal GuestPrincipal guest,@PathVariable UUID id,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.requestReturn(guest,id),
+                RequestIdFilter.get(request)));
+    }
+
     @GetMapping("/waiter/games")
     public ResponseEntity<ApiEnvelope<List<GameLoanService.GameView>>> staffCatalog(
         @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {

@@ -44,7 +44,7 @@ public class GameLoanService {
                 WHERE c.game_id=g.id AND c.condition='AVAILABLE'
                   AND NOT EXISTS (
                     SELECT 1 FROM physical_game_loans l
-                    WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE')
+                    WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE','RETURN_PENDING')
                   )
             ),0) AS available
             FROM physical_games g WHERE g.active=true ORDER BY g.name LIMIT 100
@@ -56,7 +56,8 @@ public class GameLoanService {
     public List<LoanView> mine(GuestPrincipal guest) {
         return jdbc.query("""
             SELECT l.id,l.game_id,g.name,l.status,t.table_code,
-                   CASE WHEN l.status='IN_USE' THEN c.copy_code ELSE NULL END AS copy_code,
+                   CASE WHEN l.status IN ('IN_USE','RETURN_PENDING')
+                        THEN c.copy_code ELSE NULL END AS copy_code,
                    l.requested_at
             FROM physical_game_loans l JOIN physical_games g ON g.id=l.game_id
             JOIN table_visits v ON v.id=l.visit_id
@@ -82,7 +83,7 @@ public class GameLoanService {
         if (!Boolean.TRUE.equals(available)) throw missing();
         Boolean duplicate=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
-              WHERE visit_id=? AND game_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE'))
+              WHERE visit_id=? AND game_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING'))
             """,Boolean.class,guest.visitId(),gameId);
         if (Boolean.TRUE.equals(duplicate)) throw conflict("A game request is already active for this table");
         // A REQUESTED loan does not reserve a copy. Waiter rechecks units at
@@ -96,6 +97,30 @@ public class GameLoanService {
         return one(id);
     }
 
+    /** Customer can request collection of their own handed-over unit only.
+     * This is not a physical return and must never release inventory.
+     * Lock visit first to exclude concurrent table close.
+     */
+    @Transactional
+    public LoanView requestReturn(GuestPrincipal guest, UUID loanId) {
+        requireActiveVisitExclusive(guest.visitId());
+        String state = jdbc.query("""
+            SELECT status FROM physical_game_loans
+            WHERE id=? AND guest_id=? AND visit_id=?
+            FOR UPDATE
+            """, rs -> rs.next()?rs.getString(1):null,
+            loanId,guest.guestId(),guest.visitId());
+        if (state == null) throw missing(); // foreign loans never disclose existence
+        if ("RETURN_PENDING".equals(state)) return one(loanId); // idempotent retry
+        if (!"IN_USE".equals(state)) throw conflict("Game is not in guest possession");
+        jdbc.update("""
+            UPDATE physical_game_loans SET status='RETURN_PENDING',
+                return_requested_at=now() WHERE id=?
+            """,loanId);
+        events.gameLoan(loanId,"GAME_LOAN_RETURN_REQUESTED");
+        return one(loanId);
+    }
+
     @Transactional(readOnly = true)
     public List<LoanView> tasks(StaffPrincipal staff) {
         boolean supervisor=supervisor(staff);
@@ -106,7 +131,7 @@ public class GameLoanService {
             JOIN table_visits v ON v.id=l.visit_id
             JOIN cafe_tables t ON t.id=v.table_id
             LEFT JOIN physical_game_copies c ON c.id=l.copy_id
-            WHERE l.status IN ('REQUESTED','ASSIGNED','IN_USE')
+            WHERE l.status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING')
             """+(supervisor?"":" AND v.opened_by=? ")+
             " ORDER BY l.requested_at ASC LIMIT 100",
             (rs,n)->map(rs),supervisor?new Object[]{}:new Object[]{staff.staffId()});
@@ -154,7 +179,8 @@ public class GameLoanService {
     public LoanView returnCopy(UUID loanId, String confirmedCopyCode, StaffPrincipal staff,
                                String requestId) {
         Loan loan=lockLoanByVisit(loanId,staff);
-        if (!loan.status().equals("IN_USE")) throw conflict("Game has not been handed over");
+        if (!loan.status().equals("IN_USE") && !loan.status().equals("RETURN_PENDING"))
+            throw conflict("Game has not been handed over");
         if (confirmedCopyCode==null || !confirmedCopyCode.equals(loan.code()))
             throw conflict("Physical game copy code does not match");
         jdbc.update("""

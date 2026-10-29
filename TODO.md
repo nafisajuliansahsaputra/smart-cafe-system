@@ -185,3 +185,12 @@ server data from change-only SSE, including offline snapshot recovery.
 CI verification pending. Catalog-only inventory edits still require manual
 refresh and M4 damage/loss/maintenance, guest return request and staff physical
 acceptance are not done. See docs/M4-PHYSICAL-GAME-LOANS.md.
+
+### M4 guest return-pending slice (stacked draft PR #21)
+
+Added V15 return request state with an owner-scoped guest API and UI, durable
+game update event, waiter inspection workflow, allocation exclusivity, table
+close guard and PostgreSQL/Chromium tests. An accepted pickup request is
+**not** a return: the physical copy remains assigned until staff verifies
+its serial. CI acceptance pending. Damage/loss, maintenance, guest disputes
+and policy-dependent fees remain unimplemented.

@@ -6,7 +6,7 @@ import { staffApi, staffToken, dataFromEnvelope } from "@/lib/staff-server";
 export type GameView = { id: string; name: string; description: string | null; availableCopies: number };
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
-  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURNED" | "CANCELLED";
+  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
   tableCode: string; copyCode: string | null; requestedAt: string;
 };
 type Result<T> = { ok: true; data: T } | { ok: false; status: number };

@@ -265,3 +265,15 @@ receives empty `ready`/`changed`/heartbeat frames and retrieves the
 authoritative game list again. A declined network connection does not
 change loan state or imply handover. Game *catalogue-only* inserts do not
 yet publish this event family and can still require manual refresh.
+
+## Guest game pickup request (stacked draft PR #21)
+
+POST `/api/v1/me/game-loans/{id}/request-return` requires an active,
+authenticated guest who owns that exact loan. IN_USE → RETURN_PENDING
+returns 200 with the updated loan in ApiEnvelope.data. A duplicate
+RETURN_PENDING request returns 200 idempotently with no new outbox event.
+Wrong guest → 404; other invalid transitions → 409; staff/anonymous
+denied. This status remains an active occupied copy. Waiter
+`POST /api/v1/waiter/game-loans/{id}/return` now accepts physical
+IN_USE or RETURN_PENDING only with a matching copy code and inspection
+confirmation. Guest-only request is never final return/payment truth.

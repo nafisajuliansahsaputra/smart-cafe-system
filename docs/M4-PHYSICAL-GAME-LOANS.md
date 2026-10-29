@@ -77,3 +77,23 @@ Acceptance: isolated PostgreSQL game event and role/ownership test, existing
 HTTP and HTTPS Chromium cash+physical-loan lifecycle extended with live
 waiter request and guest handover checks. Not production-ready; retain draft
 and review exact-head CI before marking any rollout gate complete.
+
+## Guest return pickup request (stacked draft PR #21)
+
+The guest who physically holds the copy can request waiter pickup after
+handover. This changes IN_USE → RETURN_PENDING; it **does not** change
+copy ownership, mark returned, release stock, or close the table. Only a
+responsible waiter/supervisor may perform RETURN_PENDING → RETURNED after
+matching the physical unit code and confirming inspection. Existing direct
+IN_USE → RETURNED remains allowed for proactive physical handover.
+
+POST `/api/v1/me/game-loans/{id}/request-return` is guest-Bearer only.
+It checks the active visit and exact owning guest under visit/loan locks.
+Foreign guest IDs return a safe 404. An already-pending duplicate request
+returns the same state without a second event. The safe
+GAME_LOAN_RETURN_REQUESTED event is stored transactionally and projected
+into V15-aware live signals; guest and responsible waiter subscribe through
+the existing scoped cursor. V15 also extends all partial unique indexes
+and close-visit rules to RETURN_PENDING, so a duplicate assignment or
+early closure is impossible. No fee, deposit, condition judgment, automatic
+damage charge or "automatic return" is implied.

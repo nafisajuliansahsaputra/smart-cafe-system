@@ -153,7 +153,7 @@ public class TableVisitService {
         // games block closure independently from order/cash settlement.
         Boolean borrowed=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
-                WHERE visit_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE'))
+                WHERE visit_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING'))
             """,Boolean.class,visitId);
         if (Boolean.TRUE.equals(borrowed)) {
             throw conflict("Visit has an outstanding physical game loan");

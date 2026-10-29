@@ -2,11 +2,12 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { guestIdentity } from "@/lib/guest-server";
 import { guestGames, myGameLoans } from "@/lib/game-server";
-import { requestPhysicalGame } from "./actions";
+import { requestPhysicalGame, requestReturnPhysicalGame } from "./actions";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string,string> = {
   requested: "Permintaan permainan sudah tercatat. Tunggu waiter mengantarkan unit fisiknya.",
+  "return-requested": "Permintaan pengambilan tercatat. Pegang unit sampai waiter menerimanya kembali.",
   conflict: "Permintaan permainan tersebut sudah aktif atau sedang diproses.",
   invalid: "Permintaan tidak valid. Periksa pilihan dan konfirmasi.",
   offline: "Server tidak bisa mengonfirmasi permintaan. Periksa daftar pinjaman sebelum mencoba lagi.",
@@ -15,6 +16,7 @@ const statuses: Record<string,string> = {
   REQUESTED: "Menunggu waiter",
   ASSIGNED: "Unit disiapkan",
   IN_USE: "Sedang dipinjam",
+  RETURN_PENDING: "Menunggu pengambilan waiter",
   RETURNED: "Sudah dikembalikan",
   CANCELLED: "Dibatalkan",
 };
@@ -36,7 +38,7 @@ export default async function GuestGamesPage({ searchParams }: {
   const { notice } = await searchParams;
   const [catalog, current] = await Promise.all([guestGames(), myGameLoans()]);
   const active = current.ok ? new Set(current.data
-    .filter((l) => ["REQUESTED","ASSIGNED","IN_USE"].includes(l.status))
+    .filter((l) => ["REQUESTED","ASSIGNED","IN_USE","RETURN_PENDING"].includes(l.status))
     .map((l) => l.gameId)) : new Set<string>();
   return (
     <main className="guest-shell guest-wide">
@@ -60,6 +62,12 @@ export default async function GuestGamesPage({ searchParams }: {
           <ul>{current.data.map((l) => <li key={l.id}>
             <strong>{l.gameName}</strong> · {statuses[l.status] ?? l.status}
             {l.copyCode && <span> · Unit {l.copyCode}</span>}
+            {l.status==="IN_USE" && <form action={requestReturnPhysicalGame}>
+              <input type="hidden" name="loanId" value={l.id}/>
+              <label><input type="checkbox" name="confirm" value="yes" required/>
+                Saya ingin waiter mengambil permainan ini</label>
+              <button className="guest-secondary">Minta pengambilan</button>
+            </form>}
           </li>)}</ul>}
         <form method="GET"><button className="guest-secondary" type="submit">Segarkan pinjaman</button></form>
       </section>
