@@ -54,6 +54,17 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await cashier.goto("/staff/orders");
     await expect(cashier.getByText("Live · otomatis")).toBeVisible();
 
+    // Cashier watches the SAME table from a different authenticated tab,
+    // before the waiter changes it. Event-backed updates must render without
+    // a manual reload or a full-page navigation.
+    const cashierTables = await cashier.context().newPage();
+    await cashierTables.goto("/staff/tables");
+    await expect(cashierTables.getByText("Live · otomatis")).toBeVisible();
+    const watchedTable = cashierTables.locator("article").filter({
+      has: cashierTables.getByRole("heading", { name: `Meja ${TABLE}` }),
+    });
+    await expect(watchedTable).toContainText("TERSEDIA");
+
     // Waiter must physically verify the table before opening the visit.
     await waiter.goto("/staff/tables");
     const tableCard = waiter.locator("article").filter({
@@ -65,6 +76,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
 
     const proofInput = waiter.getByLabel("Kode bergabung sementara");
     await expect(proofInput).toBeVisible();
+    await expect(watchedTable).toContainText("TERISI", { timeout: 25000 });
     const proof = await proofInput.inputValue();
     expect(proof).toMatch(/^[A-Za-z0-9_-]{43}$/);
     // No proof may be exposed by the public QR landing.
@@ -201,6 +213,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     }).check();
     await closeCard.getByRole("button", { name: "Tutup kunjungan" }).click();
     await expect(waiter.getByText(/Kunjungan meja berhasil ditutup/)).toBeVisible();
+    await expect(watchedTable).toContainText("TERSEDIA", { timeout: 25000 });
     await guest.goto("/visit");
     await expect(guest.getByRole("heading", { name: "Belum bergabung ke meja" })).toBeVisible();
   } finally {

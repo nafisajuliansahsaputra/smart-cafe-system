@@ -9,6 +9,17 @@ import org.springframework.stereotype.Service;
 public class OutboxEvents {
     private final JdbcTemplate jdbc;
     public OutboxEvents(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public void tableVisit(UUID visitId, String eventName) {
+        if (!java.util.Set.of("TABLE_VISIT_OPENED", "TABLE_JOIN_PROOF_ROTATED",
+                              "TABLE_VISIT_CLOSED").contains(eventName)) {
+            throw new IllegalArgumentException("Unknown safe table event");
+        }
+        jdbc.update("""
+            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
+            VALUES ('TABLE_VISIT',?,?,'{}'::jsonb)
+            """,visitId,eventName);
+    }
+
     public void order(UUID orderId,String eventName) {
         jdbc.update("""
             INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)

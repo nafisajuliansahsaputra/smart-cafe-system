@@ -232,3 +232,7 @@ Backend internal database schema V11 adds `outbox_events.live_published_at` and 
 ## M2 durable live backend cursor (draft PR #13)
 
 Role-guarded backend GET routes `/api/v1/me/live-cursor?topic=orders|order&orderId=<uuid>`, `/api/v1/ops/live-cursor?topic=orders|order&orderId=<uuid>`, `/api/v1/kitchen/live-cursor?topic=kitchen` and `/api/v1/waiter/live-cursor?topic=waiter` now return `ApiEnvelope.data.cursor` (nonnegative signed-long). Optional `after=<cursor>` waits up to 14 seconds for a scoped change; immediate read without after. Role/ownership unauthorized → 401/403/404, invalid topic or negative cursor → 400, occupied long-poll capacity → 429. This endpoint is server-only and a raw global cursor is never exposed anonymously. Existing browser SSE event payload remains empty `{}` and unchanged; Next BFF does not forward cursor numbers to browser. Lost NOTIFY is recovered via durable query.
+
+## TABLE_VISIT durable live cursor (draft PR #14)
+
+`GET /api/v1/waiter/live-cursor?topic=tables` uses an existing role-checked waiter/cashier/manager/admin Bearer token and optionally `after=<cursor>`. Immediate read returns a scoped cursor; `after` blocks up to 14 seconds subject to existing 48-request admission control. All waiters observe open/close occupancy; a rotation event advances the cursor only for the opening waiter and supervisor. `/staff/live?topic=tables` uses the HttpOnly-cookie BFF bridge and sends empty `changed` SSE notifications, not secret proof or raw cursor.

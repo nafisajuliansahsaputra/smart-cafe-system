@@ -175,3 +175,7 @@ V11 introduces distinct live publication state. New PostgreSQL Testcontainers in
 ## M2 durable live cursor (draft PR #13)
 
 A PostgreSQL Testcontainers/MockMvc regression exercises the new role/owner-scoped live cursor endpoint after actual checkout/approval/kitchen transitions and durable outbox publication. It checks foreign guest 404, guest-without-auth 401, cross-role 403, waiter not responsible for a visit cannot observe its event cursor, and previous cursor still detects a change after publication. Existing Chromium cash lifecycle now exercises order SSE using the real NOTIFY/cursor BFF bridge over HTTP and local HTTPS. No performance or production proxy capacity guarantee.
+
+## M2 table live lifecycle (draft PR #14)
+
+`TableVisitIntegrationTest.tableLifecycleEventsAreDurableAndProofRotationIsOwnerScoped` validates OPEN, ROTATE and CLOSE produce durable table signals, other waiters are not notified of another visit's rotation, supervisors are notified, and no proof appears in outbox JSON. Chromium cash-cycle acceptance keeps a **second cashier table-management browser tab** open before the waiter opens a table and expects live TERSEDIA → TERISI → TERSEDIA changes without navigating. Tests run over ordinary HTTP and the local-only TLS proxy. See docs/M2-TABLE-LIVE-EVENTS.md.

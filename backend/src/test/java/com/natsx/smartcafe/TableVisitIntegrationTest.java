@@ -41,6 +41,7 @@ class TableVisitIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PasswordEncoder passwords;
+    @Autowired com.natsx.smartcafe.common.events.OutboxLiveRelay liveRelay;
 
     private String extract(String json, String field) {
         var matcher = Pattern.compile("\"" + field + "\":\"([^\"]+)\"").matcher(json);
@@ -262,6 +263,97 @@ class TableVisitIntegrationTest {
                 + extract(nextOpen,"joinProof") + "\",\"displayName\":\"Synthetic Other\"}"))
             .andReturn().getResponse();
         assertEquals(200,otherValid.getStatus(),otherValid.getContentAsString());
+    }
+
+
+    private long tableCursor(String token) throws Exception {
+        var response=mvc.perform(get("/api/v1/waiter/live-cursor")
+            .param("topic","tables").header("Authorization","Bearer "+token))
+            .andReturn().getResponse();
+        assertEquals(200,response.getStatus(),response.getContentAsString());
+        var matcher=Pattern.compile("\"cursor\":(\\d+)").matcher(response.getContentAsString());
+        assertTrue(matcher.find(),"Missing authorized table cursor");
+        return Long.parseLong(matcher.group(1));
+    }
+
+    @Test void tableLifecycleEventsAreDurableAndProofRotationIsOwnerScoped() throws Exception {
+        var table=table();
+        var owner=staff("WAITER");
+        var otherWaiter=staff("WAITER");
+        var cashier=staff("CASHIER");
+        var kitchen=staff("KITCHEN");
+
+        // Reset the test fixture's prior unpublished table events before
+        // establishing baselines, without touching the business outbox marker.
+        liveRelay.dispatchBatch();
+        long beforeOwner=tableCursor(owner);
+        long beforeOther=tableCursor(otherWaiter);
+        long beforeSupervisor=tableCursor(cashier);
+        assertEquals(403,mvc.perform(get("/api/v1/waiter/live-cursor")
+            .param("topic","tables").header("Authorization","Bearer "+kitchen))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(get("/api/v1/waiter/live-cursor")
+            .param("topic","tables").param("orderId",UUID.randomUUID().toString())
+            .header("Authorization","Bearer "+owner))
+            .andReturn().getResponse().getStatus());
+
+        String opened=open(owner,table);
+        UUID visit=UUID.fromString(extract(opened,"id"));
+        String secret=extract(opened,"joinProof");
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_type='TABLE_VISIT' AND aggregate_id=? AND
+                  event_type='TABLE_VISIT_OPENED' AND live_published_at IS NULL
+            """,Integer.class,visit));
+        assertTrue(liveRelay.dispatchBatch()>0);
+        long openedCursor=tableCursor(owner);
+        assertTrue(openedCursor>beforeOwner);
+        assertTrue(tableCursor(otherWaiter)>beforeOther);
+        assertTrue(tableCursor(cashier)>beforeSupervisor);
+
+        var rotation=mvc.perform(post("/api/v1/waiter/table-visits/"+visit+"/join-proof")
+            .header("Authorization","Bearer "+owner)).andReturn().getResponse();
+        assertEquals(200,rotation.getStatus(),rotation.getContentAsString());
+        assertEquals(403,mvc.perform(post("/api/v1/waiter/table-visits/"+visit+"/join-proof")
+            .header("Authorization","Bearer "+otherWaiter)).andReturn().getResponse().getStatus());
+        long foreignBefore=tableCursor(otherWaiter);
+        long supervisorBefore=tableCursor(cashier);
+        assertTrue(liveRelay.dispatchBatch()>0);
+        long rotatedCursor=tableCursor(owner);
+        assertTrue(rotatedCursor>openedCursor);
+        assertEquals(foreignBefore,tableCursor(otherWaiter));
+        assertTrue(tableCursor(cashier)>supervisorBefore);
+
+        var stored=jdbc.queryForMap("""
+            SELECT event_type,table_id FROM live_table_signals
+            WHERE visit_id=? AND event_type='TABLE_JOIN_PROOF_ROTATED'
+            """,visit);
+        assertEquals(table.id(),stored.get("table_id"));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_id=? AND live_published_at IS NULL
+            """,Integer.class,visit));
+        var json=jdbc.queryForObject("""
+            SELECT string_agg(payload_safe::text,',') FROM outbox_events
+            WHERE aggregate_type='TABLE_VISIT' AND aggregate_id=?
+            """,String.class,visit);
+        assertFalse(json.contains(secret));
+        assertFalse(json.contains(extract(rotation.getContentAsString(),"joinProof")));
+
+        long foreignBeforeClose=tableCursor(otherWaiter);
+        assertEquals(200,mvc.perform(post("/api/v1/waiter/table-visits/"+visit+"/close")
+            .header("Authorization","Bearer "+owner)).andReturn().getResponse().getStatus());
+        assertTrue(liveRelay.dispatchBatch()>0);
+        assertTrue(tableCursor(otherWaiter)>foreignBeforeClose);
+        assertTrue(tableCursor(owner)>rotatedCursor);
+        assertEquals(3,jdbc.queryForObject("""
+            SELECT count(*) FROM live_table_signals WHERE visit_id=?
+            """,Integer.class,visit));
+        assertEquals(3,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events WHERE aggregate_type='TABLE_VISIT'
+            AND aggregate_id=? AND live_published_at IS NOT NULL AND processed_at IS NULL
+            """,Integer.class,visit));
+        assertEquals(0,liveRelay.dispatchBatch());
     }
 
 }

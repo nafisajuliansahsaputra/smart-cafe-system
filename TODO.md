@@ -150,3 +150,7 @@ Added V11 live signals, transaction-locked multi-instance-safe outbox relay and 
 ### M2 scoped durable subscriber (draft PR #13)
 
 Added shared PostgreSQL LISTEN wakeup, scoped durable cursor query, bounded 48-request backend long-poll, revocation rechecks and BFF SSE bridge for OCC, Kitchen, Waiter and guest orders/receipts. Only event-change notifications leave Next.js, with no token/PII. Table status watcher still polls. **Production open:** async concurrency/load tests, request executor sizing, proxy failure recovery and metrics, poison-event retries/quarantine, outbox retention, mobile/accessibility, real TLS setup and payment rules. See docs/M2-LIVE-EVENT-SUBSCRIBER.md.
+
+### M2 table lifecycle event subscriber (draft PR #14)
+
+Completed transactional TABLE_VISIT open, rotate and close events, V12 separate durable signal table, shared relay and scoped waiter `tables` cursor. A second staff browser tab validates live occupancy updates without reload. **Still open:** async subscriber capacity/soak tests, admin inventory events, offline and multi-replica recovery, poison-event monitoring, public HTTPS and live financial/consent policies. See docs/M2-TABLE-LIVE-EVENTS.md.
