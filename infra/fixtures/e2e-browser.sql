@@ -51,3 +51,12 @@ ON CONFLICT (id) DO NOTHING;
 -- Quantity is supplied by V6 item insert trigger; set a finite demo inventory.
 UPDATE item_availability SET limited_quantity=100, available=true
 WHERE menu_item_id='cccccccc-cccc-4ccc-8ccc-cccccccc1111';
+
+-- Synthetic physical game copies for browser-only loan acceptance.
+INSERT INTO physical_games(id,name,description) VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff1111','UNO Demo','Permainan kartu fisik untuk tes browser')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff2222',
+   'ffffffff-ffff-4fff-8fff-ffffffff1111','UNO-E2E-001')
+ON CONFLICT (id) DO NOTHING;
