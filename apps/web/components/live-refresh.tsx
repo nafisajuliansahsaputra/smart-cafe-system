@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 
 type Mode = "connecting" | "live" | "reconnecting";
 
+const MIN_RETRY_MS = 1000;
+const MAX_RETRY_MS = 30000;
+
 /**
- * Browser receives only change signals. router.refresh() re-reads the
- * authorized server component instead of rendering untrusted stream data.
+ * Browser receives change signals only. Never place session tokens, cursors
+ * or order data inside JavaScript, a URL or the EventSource payload.
  */
 export function LiveRefresh({ url }: { url: string }) {
   const router = useRouter();
@@ -17,13 +20,25 @@ export function LiveRefresh({ url }: { url: string }) {
     let source: EventSource | null = null;
     let lastRefresh = 0;
     let trailingTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retries = 0;
+    let offline = !navigator.onLine;
+    let unauthorized = false;
 
     const clearTrailing = () => {
       if (trailingTimer !== null) clearTimeout(trailingTimer);
       trailingTimer = null;
     };
+    const clearRetry = () => {
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+    };
+    const closeSource = () => {
+      source?.close();
+      source = null;
+    };
     const refresh = (force = false) => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || offline) return;
       const now = Date.now();
       const remaining = force ? 0 : Math.max(0, 1200 - (now - lastRefresh));
       if (remaining === 0) {
@@ -31,56 +46,106 @@ export function LiveRefresh({ url }: { url: string }) {
         lastRefresh = now;
         router.refresh();
       } else if (trailingTimer === null) {
-        // Never discard a change that arrives just after the ready event:
-        // coalesce fast events but always perform the trailing refresh.
+        // Coalesce bursts but never discard a change after a ready event.
         trailingTimer = setTimeout(() => {
           trailingTimer = null;
-          if (document.visibilityState !== "visible") return;
+          if (document.visibilityState !== "visible" || offline) return;
           lastRefresh = Date.now();
           router.refresh();
         }, remaining);
       }
     };
+    const canConnect = () =>
+      !offline && !unauthorized && document.visibilityState === "visible";
+
     const connect = () => {
-      if (document.visibilityState !== "visible" || source) return;
+      if (!canConnect() || source) return;
       setMode("connecting");
-      source = new EventSource(url);
-      source.onopen = () => setMode("live");
-      source.onerror = () => setMode("reconnecting");
-      source.addEventListener("changed", () => refresh());
-      source.addEventListener("auth-expired", () => {
-        setMode("reconnecting");
-        source?.close();
-        source = null;
-        refresh(true);
-      });
-      source.addEventListener("unavailable", () => setMode("reconnecting"));
-      source.addEventListener("ready", () => {
+      const opened = new EventSource(url);
+      source = opened;
+      opened.onopen = () => {
+        if (source !== opened) return;
+        clearRetry();
+        retries = 0;
         setMode("live");
-        // Guard an initial-render race where a mutation occurred just before
-        // the connection started observing.
+      };
+      opened.onerror = () => {
+        if (source !== opened) return;
+        closeSource();
+        setMode("reconnecting");
+        // Do not let browser auto-retry unboundedly on proxy/429 errors.
+        // Application owns a capped exponential backoff.
+        scheduleRetry();
+      };
+      opened.addEventListener("changed", () => {
+        if (source !== opened) return;
+        setMode("live");
         refresh();
       });
+      opened.addEventListener("auth-expired", () => {
+        if (source !== opened) return;
+        unauthorized = true;
+        closeSource();
+        clearRetry();
+        setMode("reconnecting");
+        refresh(true); // protected server page handles expired authorization
+      });
+      opened.addEventListener("unavailable", () => {
+        if (source === opened) setMode("reconnecting");
+      });
+      opened.addEventListener("ready", () => {
+        if (source !== opened) return;
+        setMode("live");
+        refresh(); // recover missed events from authoritative server state
+      });
+    };
+    const scheduleRetry = () => {
+      if (!canConnect() || retryTimer !== null) return;
+      const delay = Math.min(MAX_RETRY_MS, MIN_RETRY_MS * (2 ** Math.min(5, retries)));
+      retries += 1;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        connect();
+      }, delay);
+    };
+    const disconnect = () => {
+      clearTrailing();
+      clearRetry();
+      closeSource();
+      setMode("reconnecting");
     };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        clearTrailing();
-        source?.close();
-        source = null;
-        setMode("reconnecting");
-      } else {
+      if (document.visibilityState === "hidden") disconnect();
+      else if (canConnect()) {
+        retries = 0;
         refresh(true);
         connect();
       }
     };
+    const onOffline = () => {
+      offline = true;
+      disconnect();
+    };
+    const onOnline = () => {
+      offline = false;
+      if (canConnect()) {
+        retries = 0;
+        refresh(true);
+        connect();
+      }
+    };
+
     document.addEventListener("visibilitychange", onVisibility);
-    connect();
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    if (offline) setMode("reconnecting");
+    else connect();
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      clearTrailing();
-      source?.close();
-      source = null;
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+      disconnect();
     };
   }, [router, url]);
 
