@@ -149,7 +149,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await cashier.getByRole("button", { name: "Setujui untuk dapur" }).click();
     await expect(cashier.getByText("ACCEPTED", { exact: true })).toBeVisible();
     // Guest and kitchen should update when cashier acts, without reload.
-    await expect(guest.getByText("ACCEPTED", { exact: true })).toBeVisible({
+    await expect(guest.getByRole("heading", { name: "ACCEPTED" })).toBeVisible({
       timeout: 25000,
     });
     await expect(guest.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
