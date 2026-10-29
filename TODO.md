@@ -174,3 +174,14 @@ Added explicit cancellable DeferredResult live cursor workers, idempotent interr
 ### M4 physical game loans initial vertical slice (stacked draft PR #19)
 
 Added V13 serialized game inventory, request/assign/handover/return/cancel status machine, active-copy and active-visit uniqueness, responsible-waiter restrictions, manager/admin catalog registration, guest/staff pages, guest session and close-visit protection, synthetic concurrency/browsers tests. **Still open for full M4:** damaged/lost/maintenance/incident policy; guest return-pending; event-driven live task notifications; production UI/accessibility and physical staff acceptance; complete catalog/admin edit/inactive management; fees/deposits only after owner approval. See docs/M4-PHYSICAL-GAME-LOANS.md and ADR-0007. Do not mark the original M4 checklist fully completed.
+
+### M4 game loan live event follow-up (stacked draft PR #20)
+
+V14 adds durable GAME_LOAN live signals and same-transaction outbox publication
+for request/assign/handover/return/cancel. Guest live cursors are scoped to
+**the owning guest and visit**; waiter cursors only to visits opened by that
+waiter, with supervisor override. Guest/staff game pages refresh authorized
+server data from change-only SSE, including offline snapshot recovery.
+CI verification pending. Catalog-only inventory edits still require manual
+refresh and M4 damage/loss/maintenance, guest return request and staff physical
+acceptance are not done. See docs/M4-PHYSICAL-GAME-LOANS.md.

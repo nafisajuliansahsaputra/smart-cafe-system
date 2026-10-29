@@ -20,6 +20,19 @@ public class OutboxEvents {
             """,visitId,eventName);
     }
 
+    /** Only explicit physical-loan state changes are published; never serials or guest data. */
+    public void gameLoan(UUID loanId, String eventName) {
+        if (!java.util.Set.of("GAME_LOAN_REQUESTED", "GAME_LOAN_ASSIGNED",
+                "GAME_LOAN_HANDED_OVER", "GAME_LOAN_RETURNED",
+                "GAME_LOAN_CANCELLED").contains(eventName)) {
+            throw new IllegalArgumentException("Unknown safe game loan event");
+        }
+        jdbc.update("""
+            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
+            VALUES ('GAME_LOAN',?,?,'{}'::jsonb)
+            """,loanId,eventName);
+    }
+
     public void order(UUID orderId,String eventName) {
         jdbc.update("""
             INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)

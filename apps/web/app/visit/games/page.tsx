@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { guestIdentity } from "@/lib/guest-server";
 import { guestGames, myGameLoans } from "@/lib/game-server";
 import { requestPhysicalGame } from "./actions";
@@ -49,6 +50,7 @@ export default async function GuestGamesPage({ searchParams }: {
         <h1>Pinjam permainan fisik.</h1>
         <p className="guest-subtitle">Pilih UNO atau board game, lalu tunggu waiter menyiapkan dan menyerahkan unit fisiknya. Tidak ada biaya peminjaman pada versi ini.</p>
       </div>
+      <LiveRefresh url="/visit/live?topic=games" />
       {notice && Object.hasOwn(messages, notice) &&
         <p className="guest-alert" role="status">{messages[notice]}</p>}
       <section className="guest-panel">

@@ -32,6 +32,15 @@ public class LiveCursorService {
 
     public Cursor guest(String topic, UUID orderId, Long after, GuestPrincipal guest,
                         Supplier<Boolean> stillAuthorized) throws InterruptedException {
+        if ("games".equals(topic)) {
+            if (orderId != null) badTopic();
+            return await(after, stillAuthorized, guest.guestId(), LivePollCapacity.Kind.GUEST,
+                () -> cursor("""
+                    SELECT COALESCE(MAX(s.sequence_id),0) FROM live_game_signals s
+                    JOIN physical_game_loans l ON l.id=s.loan_id
+                    WHERE l.guest_id=? AND l.visit_id=?
+                    """,guest.guestId(),guest.visitId()));
+        }
         if (!"orders".equals(topic) && !"order".equals(topic)) badTopic();
         if (("order".equals(topic)) != (orderId != null)) badTopic();
         if ("order".equals(topic)) {
@@ -80,6 +89,20 @@ public class LiveCursorService {
         if ("waiter".equals(scope)) {
             if (!staff.roles().stream().anyMatch(r -> r.equals("WAITER") ||
                 r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"))) throw forbidden();
+            if ("games".equals(topic)) {
+                if (orderId != null) badTopic();
+                boolean supervisor = staff.roles().stream().anyMatch(r ->
+                    r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"));
+                return await(after, stillAuthorized, staff.staffId(), LivePollCapacity.Kind.STAFF,
+                    () -> supervisor
+                        ? cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_game_signals")
+                        : cursor("""
+                            SELECT COALESCE(MAX(s.sequence_id),0) FROM live_game_signals s
+                            JOIN physical_game_loans l ON l.id=s.loan_id
+                            JOIN table_visits v ON v.id=l.visit_id
+                            WHERE v.opened_by=?
+                            """,staff.staffId()));
+            }
             if ("tables".equals(topic)) {
                 if (orderId != null) badTopic();
                 // Every waiter may see table occupancy open/close (same as

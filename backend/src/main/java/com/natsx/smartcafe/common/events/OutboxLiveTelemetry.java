@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Low-frequency aggregated backlog metrics for both ORDER and TABLE_VISIT.
+ * Low-frequency aggregated backlog metrics for ORDER, TABLE_VISIT and GAME_LOAN.
  * Emits counts/seconds only. No customer, payment or bearer data is logged.
  * -1 means unknown after a failed sample; never report stale healthy values.
  */
@@ -50,7 +50,7 @@ public class OutboxLiveTelemetry {
                   COALESCE(EXTRACT(EPOCH FROM (now()-MIN(created_at))),0)::bigint
                     AS oldest_seconds
                 FROM outbox_events
-                WHERE aggregate_type IN ('ORDER','TABLE_VISIT')
+                WHERE aggregate_type IN ('ORDER','TABLE_VISIT','GAME_LOAN')
                   AND live_published_at IS NULL
                 """);
             long count = ((Number)row.get("pending")).longValue();

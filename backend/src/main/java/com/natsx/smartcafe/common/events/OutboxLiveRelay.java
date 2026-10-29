@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Crash-safe, multi-replica relay for ORDER and TABLE_VISIT outbox changes. A PostgreSQL
+ * Crash-safe, multi-replica relay for ORDER, TABLE_VISIT and GAME_LOAN changes. A PostgreSQL
  * transaction advisory lock ensures only one instance assigns live sequence
  * numbers at a time, avoiding out-of-commit-order cursor gaps.
  *
@@ -35,7 +35,7 @@ public class OutboxLiveRelay {
         List<Pending> pending = jdbc.query("""
             SELECT id, aggregate_id, aggregate_type, event_type
             FROM outbox_events
-            WHERE aggregate_type IN ('ORDER','TABLE_VISIT') AND live_published_at IS NULL
+            WHERE aggregate_type IN ('ORDER','TABLE_VISIT','GAME_LOAN') AND live_published_at IS NULL
             ORDER BY created_at, id
             LIMIT ?
             FOR UPDATE SKIP LOCKED
@@ -65,6 +65,19 @@ public class OutboxLiveRelay {
                     SELECT EXISTS(SELECT 1 FROM live_table_signals WHERE outbox_id=?)
                     """, Boolean.class, event.id()))) {
                     throw new IllegalStateException("Table visit event has no visit");
+                }
+            } else if ("GAME_LOAN".equals(event.aggregateType())) {
+                // Resolve the loan from persisted relational state, never outbox JSON.
+                // A missing loan must not be acknowledged as a published event.
+                inserted = jdbc.update("""
+                    INSERT INTO live_game_signals(outbox_id,loan_id,event_type)
+                    SELECT ?, l.id, ? FROM physical_game_loans l WHERE l.id=?
+                    ON CONFLICT (outbox_id) DO NOTHING
+                    """, event.id(), event.eventType(), event.aggregateId());
+                if (inserted == 0 && !Boolean.TRUE.equals(jdbc.queryForObject("""
+                    SELECT EXISTS(SELECT 1 FROM live_game_signals WHERE outbox_id=?)
+                    """, Boolean.class, event.id()))) {
+                    throw new IllegalStateException("Game loan event has no loan");
                 }
             } else {
                 throw new IllegalStateException("Unknown live aggregate type");
