@@ -307,3 +307,56 @@ jobs:
       - name: Destroy disposable load-test database
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  live-replica-recovery:
+    name: PostgreSQL live / two replicas / restart catch-up
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Configure disposable two-backend isolated environment
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=two-replica-ci-disposable-only/' .env
+          sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=two-replica-ci-disposable-HMAC-secret/' .env
+          docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml config -q
+      - name: Start both isolated backends on shared disposable PostgreSQL
+        run: |
+          docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml up --build --detach db api api_replica
+      - name: Check both backend database connections and insert synthetic roles
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/system/status > /tmp/scs-replica-a.json \
+              && curl --fail --silent http://127.0.0.1:8081/api/v1/system/status > /tmp/scs-replica-b.json; then
+              break
+            fi
+            sleep 3
+          done
+          grep -q '"database":"connected"' /tmp/scs-replica-a.json
+          grep -q '"database":"connected"' /tmp/scs-replica-b.json
+          docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml exec -T db \
+            sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+            < infra/fixtures/e2e-browser.sql
+      - name: Test two listeners and missed NOTIFY recovery after replica restart
+        run: |
+          set -euo pipefail
+          node infra/perf/multireplica-live-recovery.mjs | tee /tmp/scs-replica-evidence.json
+          {
+            echo '### Two-replica live recovery (disposable CI)'
+            echo ''
+            echo 'Synthetic table visit and both API instances share a disposable PostgreSQL.'
+            echo '```json'
+            cat /tmp/scs-replica-evidence.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnose isolated services if acceptance fails
+        if: failure()
+        run: docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml logs --no-color --tail=120 api api_replica db
+      - name: Remove two backend replicas and ephemeral database
+        if: always()
+        run: docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml down --volumes --remove-orphans
