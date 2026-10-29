@@ -938,7 +938,7 @@ class GameLoanIntegrationTest {
             """,loan,waiter.id(),prefix+"-open");
         String endpoint="/api/v1/admin/games/loss-incidents/search";
         assertEquals(401,getAs(endpoint,null).getStatus());
-        assertEquals(403,getAs(endpoint,guest.token()).getStatus());
+        assertEquals(401,getAs(endpoint,guest.token()).getStatus());
         assertEquals(403,getAs(endpoint,waiter.token()).getStatus());
         assertEquals(403,getAs(endpoint,cashier.token()).getStatus());
         assertEquals(403,getAs(endpoint,kitchen.token()).getStatus());
