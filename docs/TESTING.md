@@ -187,3 +187,7 @@ A PostgreSQL Testcontainers/MockMvc regression exercises the new role/owner-scop
 ## Live-cursor async dispatch and synthetic load (draft PR #16)
 
 MockMvc regression now uses `asyncDispatch` when `after` is provided, asserting that real deferred long-poll requests release the MVC request thread. A dedicated CI job seeds only synthetic staff in disposable PostgreSQL and performs simultaneous authenticated `after=0` requests, counts admission 200 versus 429, measures response p50/p95 and tests health responsiveness during active subscriptions. A second wave verifies an abusive single staff credential cannot exhaust all global slots. No test credentials/real PII are committed as runtime secrets. This is a short bounded synthetic stress gate, not a full production load/soak benchmark. See docs/M2-ASYNC-LIVE-LOAD.md.
+
+## Two backend replicas / missed NOTIFY recovery (draft PR #17)
+
+Independent GitHub Actions job `live-replica-recovery` starts two genuine API containers on 127.0.0.1:8080/8081 with one isolated PostgreSQL database, seeds only fake staff/table records, and drives actual authenticated waiter/table APIs. It proves both instances observe a committed table-open event via long-poll, stops replica B while A commits a join-proof rotation, restarts B and requires its initial durable cursor read to catch up, then checks B receives a subsequent table close. Anonymous access and kitchen's waiter-table cursor access are denied. No real funds/PII or public network are used. This is not a benchmark or certified multi-AZ failover.
