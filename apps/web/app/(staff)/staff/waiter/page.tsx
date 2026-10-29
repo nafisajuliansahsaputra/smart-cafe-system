@@ -84,7 +84,11 @@ export default async function WaiterPage({
                 </form>
               )}
               {task.orderStatus === "SERVED" && task.paymentStatus === "PAID" && (
-                <p className="staff-paid"><strong>LUNAS</strong> · pembayaran sudah tercatat di backend.</p>
+                <p className="staff-paid"><strong>LUNAS</strong> · pembayaran sudah tercatat di backend.
+                  {task.receivedIdr !== null && task.changeGivenIdr !== null && (
+                    <span className="staff-change">Diterima: {idr(task.receivedIdr)} · Kembalian: {idr(task.changeGivenIdr)}</span>
+                  )}
+                </p>
               )}
             </article>
           ))}

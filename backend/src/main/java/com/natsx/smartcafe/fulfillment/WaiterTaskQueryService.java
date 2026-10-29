@@ -23,11 +23,11 @@ public class WaiterTaskQueryService {
     public record TaskLine(String name, int quantity, String variantLabel, String notes) {}
     public record WaiterTask(UUID orderId, UUID paymentIntentId, String tableCode,
                              String orderStatus, String paymentStatus, long totalIdr,
-                             Instant createdAt, List<TaskLine> lines) {}
+                             Instant createdAt, Long receivedIdr, Long changeGivenIdr, List<TaskLine> lines) {}
 
     private record Base(UUID orderId, UUID paymentIntentId, String tableCode,
                         String orderStatus, String paymentStatus, long totalIdr,
-                        Instant createdAt) {}
+                        Instant createdAt, Long receivedIdr, Long changeGivenIdr) {}
 
     @Transactional(readOnly = true)
     public List<WaiterTask> tasks(StaffPrincipal staff) {
@@ -36,11 +36,15 @@ public class WaiterTaskQueryService {
         String sql = """
             SELECT o.id AS order_id,p.id AS payment_intent_id,t.table_code,
                    o.status AS order_status,p.aggregate_status AS payment_status,
-                   o.total_idr,o.created_at
+                   o.total_idr,o.created_at, cash.amount_received_idr, cash.change_given_idr
             FROM orders o
             JOIN payment_intents p ON p.order_id=o.id
             JOIN table_visits v ON v.id=o.visit_id
             JOIN cafe_tables t ON t.id=v.table_id
+            LEFT JOIN LATERAL (
+                SELECT amount_received_idr,change_given_idr FROM cash_tenders
+                WHERE payment_intent_id=p.id ORDER BY recorded_at DESC LIMIT 1
+            ) cash ON true
             WHERE (
               o.status='READY'
               OR (o.status='SERVED' AND p.aggregate_status='AWAITING_CASH')
@@ -54,7 +58,9 @@ public class WaiterTaskQueryService {
             rs.getObject("payment_intent_id", UUID.class),
             rs.getString("table_code"), rs.getString("order_status"),
             rs.getString("payment_status"), rs.getLong("total_idr"),
-            rs.getTimestamp("created_at").toInstant()),
+            rs.getTimestamp("created_at").toInstant(),
+            rs.getObject("amount_received_idr", Long.class),
+            rs.getObject("change_given_idr", Long.class)),
             supervisor ? new Object[] {} : new Object[] {staff.staffId()});
         return rows.stream().map(row -> {
             var lines = jdbc.query("""
@@ -64,7 +70,8 @@ public class WaiterTaskQueryService {
                 rs.getString("name_snapshot"),rs.getInt("quantity"),
                 rs.getString("variant_label"),rs.getString("notes")),row.orderId());
             return new WaiterTask(row.orderId(),row.paymentIntentId(),row.tableCode(),
-                row.orderStatus(),row.paymentStatus(),row.totalIdr(),row.createdAt(),lines);
+                row.orderStatus(),row.paymentStatus(),row.totalIdr(),row.createdAt(),
+                row.receivedIdr(),row.changeGivenIdr(),lines);
         }).toList();
     }
 }
