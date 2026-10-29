@@ -190,3 +190,7 @@ The repository now includes an isolated two-Spring-Boot-instance Compose overlay
 ## M2 offline reconnect and cancellable long-polls (draft PR #18)
 
 Authenticated backend cursor waits now use cancellation-aware Servlet DeferredResult virtual-thread workers: timeout/error/completion lifecycle callbacks interrupt abandoned waits so global/per-identity capacity is released when the container observes a disconnect. Staff and guest EventSource subscriptions close when offline or hidden, reconnect with bounded backoff and re-read latest authorized state when online. A Chromium cash-cycle regression takes kitchen offline during cashier approval and verifies automatic catch-up. See [docs/M2-DISCONNECT-RECOVERY.md](docs/M2-DISCONNECT-RECOVERY.md). Instant TCP disconnect detection is not guaranteed behind real proxies.
+
+## M4 Physical Game Loans (Draft PR #19)
+
+Guests can request physical UNO/board-game types during an active QR/NFC table visit. Staff assign a serialized copy, confirm code at physical handover and inspected return; outstanding requests and units block table close even after payment. Unique PostgreSQL constraints prevent allocating the same unit twice. Manager/admin can register game types and copies. First vertical slice is **free of fees/deposits**, with manual refresh; damages/losses and live notifications remain future work. See [M4 game loans](docs/M4-PHYSICAL-GAME-LOANS.md).
