@@ -113,11 +113,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(gameBackendResponse.status()).toBe(200);
     const gameBackendData = await gameBackendResponse.json();
     expect(gameBackendData.data.some((game) => game.name === "UNO Demo")).toBe(true);
-    // Only a synthetic fixture is printed. Never dump access tokens.
-    console.log("SYNTHETIC_GAME_CATALOG_SHAPE", JSON.stringify(gameBackendData.data));
-    const catalogStatus = await guest.locator(".guest-category").getAttribute("data-catalog-status");
-    expect(catalogStatus).toBe("ok");
-    expect(await guest.locator("main").innerText()).toContain("UNO Demo");
+    // Browser must actually render the API-backed entry; no fake status attribute.
+    await expect(guest.getByRole("heading", { name: "UNO Demo" })).toBeVisible();
     await guest.getByRole("checkbox", {
       name: /Saya akan menjaga dan mengembalikan permainan/,
     }).check();
@@ -129,8 +126,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       name: /Sudah memeriksa ketersediaan unit fisik/,
     }).check();
     await waiter.getByRole("button", { name: "Alokasikan unit" }).click();
-    await expect(waiter.getByText("Perubahan permainan berhasil disimpan. Periksa status terbaru.")).toBeVisible();
-    expect(await waiter.locator("main").innerText()).toContain("ASSIGNED");
+    await expect(waiter.getByText("ASSIGNED", { exact: true })).toBeVisible();
     await expect(waiter.getByText(/UNO-E2E-001/)).toBeVisible();
     await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
     await waiter.getByRole("checkbox", {

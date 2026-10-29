@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { staffApi, staffToken } from "@/lib/staff-server";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Shared canonical UUID shape: 8-4-4-4-12. A missing segment rejected real loan IDs.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[A-Za-z0-9_-]{1,80}$/;
 function error(status: number): string {
   if (status === 409) return "conflict";
