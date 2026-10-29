@@ -37,8 +37,8 @@ public class OutboxLiveRelay {
             FROM outbox_events
             WHERE aggregate_type='ORDER' AND live_published_at IS NULL
             ORDER BY created_at, id
-            FOR UPDATE SKIP LOCKED
             LIMIT ?
+            FOR UPDATE SKIP LOCKED
             """, (rs, row) -> new Pending(
                 rs.getObject("id", UUID.class),
                 rs.getObject("aggregate_id", UUID.class),
