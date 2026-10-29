@@ -276,7 +276,7 @@ public class GameLoanService {
                 rs.getObject("game_id",UUID.class),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")),
             q,q,q,filter,filter,size+1,page*size);
-        boolean hasNext=rows.size()>size;
+        boolean hasNext=rows.size()>size && page<2000; // Never link beyond validated cap.
         return new CopyPage(hasNext?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
