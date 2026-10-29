@@ -168,6 +168,19 @@ public class GameLoanController {
             .body(ApiEnvelope.of(games.conditionHistory(),RequestIdFilter.get(request)));
     }
 
+    /** The legacy latest-100 endpoint remains for existing integrations. */
+    @GetMapping("/admin/games/condition-history/search")
+    public ResponseEntity<ApiEnvelope<GameLoanService.ConditionHistoryPage>> searchHistory(
+        @AuthenticationPrincipal StaffPrincipal staff,
+        @RequestParam(defaultValue="") String q,
+        @RequestParam(defaultValue="") String change,
+        @RequestParam(defaultValue="0") int page,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.searchConditionHistory(q,change,page),
+                RequestIdFilter.get(request)));
+    }
+
     @PostMapping("/admin/games/copies/{id}/condition")
     public ApiEnvelope<GameLoanService.CopyView> changeCondition(
         @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,

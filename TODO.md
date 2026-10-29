@@ -240,3 +240,16 @@ Server validates all filters and caps expensive pagination; no new
 guest serial exposure, fee, loss liability or automatic maintenance
 resolution. Large-scale cursor pagination and history paging may be
 needed after real operational data is available.
+
+### M4 condition audit search + pagination (stacked draft PR #26)
+
+Manager/admin can now search all physical-copy condition history by
+unit, game, staff or reason and filter outcome DAMAGED/AVAILABLE in
+25-entry pages, instead of relying on only the latest 100 entries.
+V19 includes sort/filter indexes, the legacy API stays compatible and
+read-only audit records cannot be rewritten. History and unit filters
+have separate page states in the staff UI. PostgreSQL and HTTP/HTTPS
+browser tests cover old records, access denial and query validation.
+Still open: operational policy for truly LOST/RETIRED copies, incident
+ownership, high-volume keyset pagination, manager field trials and
+production security gates.

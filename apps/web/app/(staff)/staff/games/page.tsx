@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
-import { adminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
 import { createPhysicalGame, registerGameCopy, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,10 @@ const messages: Record<string,string> = {
 };
 
 export default async function StaffGamesPage({searchParams}:{
-  searchParams: Promise<{notice?:string;q?:string;condition?:string;page?:string}>;
+  searchParams: Promise<{
+    notice?:string;q?:string;condition?:string;page?:string;
+    hq?:string;hchange?:string;hpage?:string;
+  }>;
 }) {
   const identity=await staffIdentity();
   if(identity.kind==="signed-out") redirect("/staff/login?status=expired");
@@ -24,19 +27,33 @@ export default async function StaffGamesPage({searchParams}:{
     <Link href="/staff">Kembali</Link></main>;
   if(!canUseWaiter(identity.staff.roles)) notFound();
   const isManager=identity.staff.roles.some(r=>r==="MANAGER"||r==="ADMIN");
-  const {notice,q:rawQuery,condition:rawCondition,page:rawPage}=await searchParams;
+  const {
+    notice,q:rawQuery,condition:rawCondition,page:rawPage,
+    hq:rawHistoryQuery,hchange:rawHistoryChange,hpage:rawHistoryPage,
+  }=await searchParams;
   const query=typeof rawQuery==="string"?rawQuery.trim().slice(0,80):"";
   const condition=typeof rawCondition==="string" &&
     ["AVAILABLE","DAMAGED","LOST","RETIRED"].includes(rawCondition)?rawCondition:"";
   const pageIndex=typeof rawPage==="string" && /^(0|[1-9][0-9]{0,3})$/.test(rawPage)
     ? Math.min(2000,Number(rawPage)):0;
-  const pageLink=(index:number)=>`/staff/games?${new URLSearchParams({
-    q:query,condition,page:String(index),
-  })}`;
+  const historyQuery=typeof rawHistoryQuery==="string"?
+    rawHistoryQuery.trim().slice(0,80):"";
+  const historyChange=typeof rawHistoryChange==="string" &&
+    ["AVAILABLE","DAMAGED"].includes(rawHistoryChange)?rawHistoryChange:"";
+  const historyPage=typeof rawHistoryPage==="string" &&
+    /^(0|[1-9][0-9]{0,3})$/.test(rawHistoryPage)?
+    Math.min(2000,Number(rawHistoryPage)):0;
+  const urlFor=(copyPage:number,auditPage:number,copyQ=query,copyCondition=condition,
+                historyQ=historyQuery,historyTo=historyChange)=>
+    `/staff/games?${new URLSearchParams({
+      q:copyQ,condition:copyCondition,page:String(copyPage),
+      hq:historyQ,hchange:historyTo,hpage:String(auditPage),
+    })}`;
   const [loans,catalog,copies,history]=await Promise.all([
     staffGameLoans(),staffGames(),
     isManager ? searchAdminGameCopies(query,condition,pageIndex) : Promise.resolve(null),
-    isManager ? adminGameConditionHistory() : Promise.resolve(null),
+    isManager ? searchAdminGameConditionHistory(historyQuery,historyChange,historyPage)
+      : Promise.resolve(null),
   ]);
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
@@ -129,6 +146,9 @@ export default async function StaffGamesPage({searchParams}:{
       <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.
         Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Tidak ada denda otomatis.</p>
       <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <input type="hidden" name="hq" value={historyQuery}/>
+        <input type="hidden" name="hchange" value={historyChange}/>
+        <input type="hidden" name="hpage" value={historyPage}/>
         <label htmlFor="game-copy-search">Cari unit atau permainan</label>
         <input id="game-copy-search" name="q" defaultValue={query} maxLength={80}
           placeholder="Kode unit atau nama permainan"/>
@@ -141,7 +161,7 @@ export default async function StaffGamesPage({searchParams}:{
           <option value="RETIRED">RETIRED</option>
         </select>
         <button className="staff-secondary" type="submit">Cari unit</button>
-        <Link href="/staff/games">Reset pencarian</Link>
+        <Link href={urlFor(0,historyPage,"","")}>Reset pencarian</Link>
       </form>
       {copies && !copies.ok && <p role="alert">Inventaris unit tidak tersedia.
         Tidak ada tindakan yang dapat dikonfirmasi.</p>}
@@ -180,28 +200,56 @@ export default async function StaffGamesPage({searchParams}:{
       </div>}
       {copies?.ok && <nav aria-label="Navigasi halaman inventaris"
         className="staff-breadcrumb">
-        {copies.data.page>0 && <Link href={pageLink(copies.data.page-1)}>
+        {copies.data.page>0 && <Link href={urlFor(copies.data.page-1,historyPage)}>
           Halaman sebelumnya
         </Link>}
-        {copies.data.hasNext && <Link href={pageLink(copies.data.page+1)}>
+        {copies.data.hasNext && <Link href={urlFor(copies.data.page+1,historyPage)}>
           Halaman berikutnya
         </Link>}
       </nav>}
     </section>}
     {isManager && <section className="staff-panel">
       <h2>Riwayat pemeriksaan unit</h2>
-      <p className="staff-muted">100 perubahan kondisi terbaru. Catatan hanya untuk
-        operasional, bukan penetapan tanggung jawab atau denda pelanggan.</p>
+      <p className="staff-muted">Cari catatan perubahan kondisi lama di seluruh database.
+        Catatan hanya untuk operasional, bukan penetapan tanggung jawab atau denda pelanggan.</p>
+      <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <input type="hidden" name="q" value={query}/>
+        <input type="hidden" name="condition" value={condition}/>
+        <input type="hidden" name="page" value={pageIndex}/>
+        <label htmlFor="game-audit-search">Cari catatan, staf, nama game atau kode unit</label>
+        <input id="game-audit-search" name="hq" defaultValue={historyQuery}
+          maxLength={80} placeholder="Contoh: kartu rusak"/>
+        <label htmlFor="game-audit-change">Filter hasil pemeriksaan</label>
+        <select id="game-audit-change" name="hchange" defaultValue={historyChange}>
+          <option value="">Semua perubahan</option>
+          <option value="DAMAGED">Menjadi DAMAGED</option>
+          <option value="AVAILABLE">Menjadi AVAILABLE</option>
+        </select>
+        <button type="submit" className="staff-secondary">Cari riwayat</button>
+        <Link href={urlFor(pageIndex,0,query,condition,"","")}>Reset riwayat</Link>
+      </form>
       {history && !history.ok && <p role="alert">Riwayat pemeriksaan belum bisa dimuat.
         Periksa koneksi sebelum mengambil keputusan.</p>}
-      {history?.ok && history.data.length===0 && <p>Belum ada catatan perubahan kondisi.</p>}
-      {history?.ok && <ul>{history.data.map(item=><li key={item.id}>
+      {history?.ok && history.data.items.length===0 && <p>Riwayat pemeriksaan tidak ditemukan.</p>}
+      {history?.ok && <p className="staff-muted">
+        Halaman riwayat {history.data.page+1} · Maksimal 25 catatan per halaman
+      </p>}
+      {history?.ok && <ul>{history.data.items.map(item=><li key={item.id}>
         <strong>{item.gameName} · {item.copyCode}</strong>
         {" · "}{item.beforeCondition} → {item.afterCondition}
         {" · "}{localTime(item.recordedAt)}
         {" · Staf: "}{item.actorLogin}
         <p>Catatan: {item.reason}</p>
       </li>)}</ul>}
+      {history?.ok && <nav aria-label="Navigasi halaman riwayat pemeriksaan"
+        className="staff-breadcrumb">
+        {history.data.page>0 && <Link href={urlFor(pageIndex,history.data.page-1)}>
+          Riwayat sebelumnya
+        </Link>}
+        {history.data.hasNext && <Link href={urlFor(pageIndex,history.data.page+1)}>
+          Riwayat berikutnya
+        </Link>}
+      </nav>}
     </section>}
     {isManager && <section className="staff-panel"><h2>Tambahkan jenis permainan</h2>
       <form action={createPhysicalGame} className="staff-form">

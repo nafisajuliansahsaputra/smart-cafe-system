@@ -334,3 +334,20 @@ and no write side effects. Success 200/no-store with
 (25 per page, 26 fetched). Order is stable by copy code then ID.
 This extends, rather than breaks, the legacy bounded 250-copy list
 endpoint while its consumers migrate.
+
+## M4 manager condition-history search (stacked draft PR #26)
+
+Manager/admin bearer only:
+`GET /api/v1/admin/games/condition-history/search?q=&change=&page=0`.
+Search `q` (0..80 printable chars) is a case-insensitive **literal
+substring** over game name, serialized copy code, staff login and
+inspection reason; SQL `%`/`_` characters are not wildcards.
+`change` can be blank, `DAMAGED` or `AVAILABLE` (the resulting
+condition). `page` is zero-based, 0..2000 inclusive; 400 for invalid
+filters/page, 401 for missing auth, 403 outside manager/admin. Success
+is HTTP 200/no-store `ApiEnvelope.data = {items, page, hasNext}`,
+where `items` contains at most 25 existing `ConditionHistoryView`
+records. Sort is descending timestamp, then event UUID. No guest,
+payment, receipt or join token is returned. This is read-only.
+The original `GET /admin/games/condition-history` latest-100 endpoint
+remains available during migration.

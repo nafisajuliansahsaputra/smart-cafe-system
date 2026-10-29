@@ -579,4 +579,72 @@ class GameLoanIntegrationTest {
         assertEquals(200,injection.getStatus(),injection.getContentAsString());
         assertEquals(0,injection.getContentAsString().split("\"copyCode\":",-1).length-1);
     }
+
+    @Test void managerConditionHistoryFiltersAndPagesBeyondOldHundredRowCap() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        UUID copy=jdbc.queryForObject("SELECT id FROM physical_game_copies WHERE game_id=?",
+            UUID.class,game);
+        String prefix="AUDIT-"+UUID.randomUUID();
+        String endpoint="/api/v1/admin/games/condition-history/search";
+        for (int i=0;i<53;i++) {
+            String after=i%2==0?"DAMAGED":"AVAILABLE";
+            jdbc.update("""
+                INSERT INTO physical_game_copy_condition_events
+                    (copy_id,actor_id,before_condition,after_condition,reason,recorded_at)
+                VALUES (?,?,?,?,?,now() - (? * interval '1 minute'))
+                """,copy,manager.id(),after.equals("DAMAGED")?"AVAILABLE":"DAMAGED",
+                after,prefix+"-"+String.format("%03d",i),i+1);
+        }
+        assertEquals(401,getAs(endpoint,null).getStatus());
+        assertEquals(403,getAs(endpoint,waiter.token()).getStatus());
+        assertEquals(403,getAs(endpoint,cashier.token()).getStatus());
+        assertEquals(403,getAs(endpoint,kitchen.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=-1",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=2001",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?change=RETIRED",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?q="+"x".repeat(81),manager.token()).getStatus());
+        String q=java.net.URLEncoder.encode(prefix,java.nio.charset.StandardCharsets.UTF_8);
+        String base=endpoint+"?q="+q+"&change=";
+        var first=getAs(base+"&page=0",manager.token());
+        var second=getAs(base+"&page=1",manager.token());
+        var last=getAs(base+"&page=2",manager.token());
+        var none=getAs(base+"&page=3",manager.token());
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertEquals(200,second.getStatus(),second.getContentAsString());
+        assertEquals(200,last.getStatus(),last.getContentAsString());
+        assertEquals(200,none.getStatus(),none.getContentAsString());
+        assertEquals(25,first.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertEquals(25,second.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertEquals(3,last.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertEquals(0,none.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertTrue(first.getContentAsString().contains(prefix+"-000"));
+        assertFalse(first.getContentAsString().contains(prefix+"-025"));
+        assertTrue(second.getContentAsString().contains(prefix+"-025"));
+        assertTrue(last.getContentAsString().contains(prefix+"-052"));
+        assertTrue(first.getContentAsString().contains("\"hasNext\":true"));
+        assertTrue(last.getContentAsString().contains("\"hasNext\":false"));
+        var damaged=getAs(base+"DAMAGED&page=0",manager.token());
+        var damagedNext=getAs(base+"DAMAGED&page=1",manager.token());
+        assertEquals(200,damaged.getStatus(),damaged.getContentAsString());
+        assertEquals(25,damaged.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertTrue(damaged.getContentAsString().contains(prefix+"-000"));
+        assertTrue(damagedNext.getContentAsString().contains(prefix+"-050"));
+        assertEquals(2,damagedNext.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        var repaired=getAs(base+"AVAILABLE&page=0",manager.token());
+        assertEquals(200,repaired.getStatus(),repaired.getContentAsString());
+        assertTrue(repaired.getContentAsString().contains(prefix+"-001"));
+        assertFalse(repaired.getContentAsString().contains(prefix+"-000"));
+        var literal=getAs(endpoint+"?q=%25%5F",manager.token());
+        assertEquals(200,literal.getStatus(),literal.getContentAsString());
+        assertEquals(0,literal.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        var injection=getAs(endpoint+"?q=%27%20OR%201%3D1",manager.token());
+        assertEquals(200,injection.getStatus(),injection.getContentAsString());
+        assertEquals(0,injection.getContentAsString().split("\"actorLogin\":",-1).length-1);
+        assertEquals(53,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events
+            WHERE copy_id=? AND reason LIKE ?
+            """,Integer.class,copy,prefix+"%"));
+    }
 }

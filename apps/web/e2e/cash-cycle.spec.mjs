@@ -307,6 +307,20 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByRole("heading", { name: "Riwayat pemeriksaan unit" })).toBeVisible();
     await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
     await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang")).toBeVisible();
+    // Audit history search is independent from the inventory stock search.
+    await manager.getByLabel("Cari catatan, staf, nama game atau kode unit")
+      .fill("Dua kartu terlipat");
+    await manager.getByRole("button", { name: "Cari riwayat" }).click();
+    await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
+    await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang"))
+      .toHaveCount(0);
+    await manager.getByLabel("Filter hasil pemeriksaan").selectOption("AVAILABLE");
+    await manager.getByRole("button", { name: "Cari riwayat" }).click();
+    await expect(manager.getByText("Riwayat pemeriksaan tidak ditemukan.")).toBeVisible();
+    await manager.getByRole("link", { name: "Reset riwayat" }).click();
+    await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
+    await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang"))
+      .toBeVisible();
     // Manager search is a DB-backed GET, not client-filtered first 250 copies.
     await manager.getByLabel("Cari unit atau permainan").fill("NO-SUCH-E2E-UNIT");
     await manager.getByRole("button", { name: "Cari unit" }).click();

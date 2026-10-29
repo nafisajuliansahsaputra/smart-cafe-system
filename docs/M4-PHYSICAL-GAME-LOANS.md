@@ -180,3 +180,29 @@ query parameters never grant any mutation authority. Inventory
 realtime change signals still refresh the currently displayed page.
 The V16 100-event condition-history panel is deliberately separate.
 This is not unbounded export or full incident disposition.
+
+## Server-paged inspection audit history (stacked draft PR #26)
+
+The previous manager inspection-history panel loaded only the newest 100
+condition events. A new `GET /api/v1/admin/games/condition-history/search`
+provides a **full database search** by game name, unit code, staff login or
+inspection reason, with a filter for resulting condition (DAMAGED or
+AVAILABLE). PostgreSQL returns at most 25 records per page, newest first
+(`recorded_at DESC,id DESC`), and `hasNext` via 26th-row probing.
+Page numbers are restricted to 0..2000; query text has a maximum of 80
+printable characters. V19 adds newest-first and condition+time indexes.
+
+The manager dashboard has separate GET forms for copy inventory versus
+condition audit: search/filter/pagination changes in one preserve the
+other's selections. Query text is treated literally (not a SQL wildcard
+or expression) and bound through prepared JDBC. The existing
+latest-100 endpoint is retained for legacy clients. Records remain
+append-only; no editing, deleting, automated liability finding, or
+automatic customer damage charges are added.
+
+PostgreSQL tests generate 53 synthetic older events to verify 25/25/3
+pages, before/after filters, injection-like text handling and role gates.
+Chromium HTTP/HTTPS exercises manager history search, filters and reset
+while retaining the guest cash-and-game scenario. Page-based navigation
+may shift when new events are recorded during browsing; keyset paging
+is future work for larger-scale operational history.

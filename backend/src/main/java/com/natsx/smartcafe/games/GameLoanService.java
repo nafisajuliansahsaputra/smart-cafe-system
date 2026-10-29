@@ -39,6 +39,7 @@ public class GameLoanService {
     public record ConditionHistoryView(UUID id, UUID copyId, String gameName,
             String copyCode, String beforeCondition, String afterCondition,
             String reason, String actorLogin, Instant recordedAt) {}
+    public record ConditionHistoryPage(List<ConditionHistoryView> items, int page, boolean hasNext) {}
     private record Loan(UUID id, UUID visitId, String status, UUID gameId, UUID copyId,
                         UUID guestId, String code) {}
 
@@ -277,7 +278,7 @@ public class GameLoanService {
                 rs.getString("copy_code"),rs.getString("condition")),
             q,q,q,filter,filter,size+1,page*size);
         boolean hasNext=rows.size()>size && page<2000; // Never link beyond validated cap.
-        return new CopyPage(hasNext?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
+        return new CopyPage(rows.size()>size?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
     /** Bounded, manager-only inventory audit. No guest identity or payment data. */
@@ -298,6 +299,47 @@ public class GameLoanService {
                 rs.getString("before_condition"),rs.getString("after_condition"),
                 rs.getString("reason"),rs.getString("actor_login"),
                 rs.getTimestamp("recorded_at").toInstant()));
+    }
+
+    /** Bounded manager-only audit history: search is over the full event table,
+     * not an in-memory filter of the latest 100 rows. No delete/edit path.
+     */
+    @Transactional(readOnly = true)
+    public ConditionHistoryPage searchConditionHistory(String search, String change, int page) {
+        String q=search==null?"":search.strip();
+        String next=change==null?"":change.strip();
+        if (q.length()>80 || q.codePoints().anyMatch(Character::isISOControl)
+            || page<0 || page>2000
+            || !java.util.Set.of("","AVAILABLE","DAMAGED").contains(next)) {
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Invalid condition history search or page");
+        }
+        final int size=25;
+        List<ConditionHistoryView> rows=jdbc.query("""
+            SELECT e.id,e.copy_id,g.name,c.copy_code,
+                   e.before_condition,e.after_condition,e.reason,
+                   s.login AS actor_login,e.recorded_at
+            FROM physical_game_copy_condition_events e
+            JOIN physical_game_copies c ON c.id=e.copy_id
+            JOIN physical_games g ON g.id=c.game_id
+            JOIN staff_users s ON s.id=e.actor_id
+            WHERE (?='' OR POSITION(LOWER(?) IN LOWER(c.copy_code))>0
+                         OR POSITION(LOWER(?) IN LOWER(g.name))>0
+                         OR POSITION(LOWER(?) IN LOWER(s.login))>0
+                         OR POSITION(LOWER(?) IN LOWER(e.reason))>0)
+              AND (?='' OR e.after_condition=?)
+            ORDER BY e.recorded_at DESC,e.id DESC
+            LIMIT ? OFFSET ?
+            """,(rs,n)->new ConditionHistoryView(
+                rs.getObject("id",UUID.class),rs.getObject("copy_id",UUID.class),
+                rs.getString("name"),rs.getString("copy_code"),
+                rs.getString("before_condition"),rs.getString("after_condition"),
+                rs.getString("reason"),rs.getString("actor_login"),
+                rs.getTimestamp("recorded_at").toInstant()),
+            q,q,q,q,q,next,next,size+1,page*size);
+        boolean hasNext=rows.size()>size && page<2000;
+        return new ConditionHistoryPage(
+            rows.size()>size?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
     @Transactional
