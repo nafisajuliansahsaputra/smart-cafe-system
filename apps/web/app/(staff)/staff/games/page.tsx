@@ -215,6 +215,9 @@ export default async function StaffGamesPage({searchParams}:{
           <h3>Meja {incident.tableCode} · {incident.gameName}</h3>
           <p>Unit: <strong>{incident.copyCode}</strong></p>
           <p>Status laporan: <strong>{incident.status}</strong></p>
+          <p><Link href={`/staff/games/incidents/${incident.id}`}>
+            Lihat jejak aktivitas staf
+          </Link></p>
           <p>Laporan staf: {incident.reason}</p>
           {incident.reviewReason && <p>Hasil pemeriksaan: {incident.reviewReason}</p>}
           {incident.status==="OPEN" && <>

@@ -336,3 +336,20 @@ transitions after waiter report and manager review. Tab foregrounding
 uses LiveRefresh's existing visibility recovery, not manual refresh.
 Browser tests verify cashier/waiter never see the manager alert
 and the link targets the OPEN-filtered manager queue.
+
+
+## M4 attributed incident audit acceptance (draft PR #31)
+
+PostgreSQL/Testcontainers validates manager-only evidence under
+anonymous/guest/waiter/cashier/kitchen denial, invalid UUID and
+missing-id handling, no-store delivery, original reporter and pending
+reviewer null, request correlation ID and exactly one report audit,
+then confirms manager loss and verifies separate manager actor,
+review timestamp, audit event ordering, two persisted audit entries,
+unchanged terminal LOST loan/copy and replay refusal. Response
+must omit guest ID, contact, payment and generic audit diffs.
+Chromium HTTP/HTTPS starts a real waiter incident, follows the
+manager-only evidence link and verifies report/staff attribution
+and pending decision, denies cashier/waiter page access, then reviews
+and reopens timeline to verify final manager decision and staff
+attribution while the existing full cash/game lifecycle remains intact.

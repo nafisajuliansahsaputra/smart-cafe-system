@@ -27,6 +27,15 @@ export type GameLossAlertSummary = {
   openCount: number;
   recent: { gameName: string; copyCode: string; tableCode: string; reportedAt: string }[];
 };
+export type GameLossIncidentActivity = {
+  id:string; operation:"GAME_LOSS_REPORTED"|"GAME_LOSS_DISMISSED"|"GAME_LOSS_CONFIRMED";
+  actorLogin:string; occurredAt:string; correlationId:string;
+};
+export type GameLossIncidentEvidence = {
+  incident:GameLossIncidentView; reporterLogin:string;
+  reviewerLogin:string|null; reviewedAt:string|null;
+  activity:GameLossIncidentActivity[];
+};
 export type GameLossIncidentPage = {
   items: GameLossIncidentView[]; page: number; hasNext: boolean; openCount: number;
 };
@@ -101,6 +110,21 @@ function gameLossIncident(value: unknown): value is GameLossIncidentView {
     typeof value.reason==="string" &&
     (value.reviewReason===null || typeof value.reviewReason==="string") &&
     typeof value.reportedAt==="string";
+}
+function gameLossEvidence(value:unknown):value is GameLossIncidentEvidence {
+  return record(value) && gameLossIncident(value.incident) &&
+    typeof value.reporterLogin==="string" && value.reporterLogin.length>0 &&
+    (value.reviewerLogin===null ||
+      (typeof value.reviewerLogin==="string" && value.reviewerLogin.length>0)) &&
+    (value.reviewedAt===null ||
+      (typeof value.reviewedAt==="string" && !Number.isNaN(Date.parse(value.reviewedAt)))) &&
+    Array.isArray(value.activity) && value.activity.length<=25 &&
+    value.activity.every(a=>record(a) &&
+      typeof a.id==="string" && uuid.test(a.id) &&
+      ["GAME_LOSS_REPORTED","GAME_LOSS_DISMISSED","GAME_LOSS_CONFIRMED"].includes(String(a.operation)) &&
+      typeof a.actorLogin==="string" && a.actorLogin.length>0 &&
+      typeof a.occurredAt==="string" && !Number.isNaN(Date.parse(a.occurredAt)) &&
+      typeof a.correlationId==="string");
 }
 function gameLossAlertSummary(value:unknown):value is GameLossAlertSummary {
   return record(value) &&
@@ -222,4 +246,17 @@ export async function managerGameLossAlerts():Promise<Result<GameLossAlertSummar
   if (!token) return {ok:false,status:401};
   const r=await staffApi("/api/v1/admin/games/loss-incidents/summary","GET",token);
   return result(r.status,dataFromEnvelope(r.payload),gameLossAlertSummary);
+}
+
+/** Only called after server-verifying manager/admin identity.
+ * Never deserialize or return any guest, payment or contact information.
+ */
+export async function adminGameLossEvidence(
+  id:string,
+):Promise<Result<GameLossIncidentEvidence>> {
+  if (!uuid.test(id)) return {ok:false,status:400};
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const r=await staffApi(`/api/v1/admin/games/loss-incidents/${id}/evidence`,"GET",token);
+  return result(r.status,dataFromEnvelope(r.payload),gameLossEvidence);
 }

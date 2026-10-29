@@ -1073,4 +1073,81 @@ class GameLoanIntegrationTest {
         for (String code:codes) assertFalse(resolved.getContentAsString().contains(code),
             "Our four reports must disappear from the OPEN manager preview");
     }
+
+    @Test void incidentEvidenceShowsAttributedImmutableAuditWithoutGuestData()
+        throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter);
+        User guest=join(visit);
+        UUID loan=requestLoan(guest,game);
+        var allocated=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,allocated.getStatus(),allocated.getContentAsString());
+        String copyCode=field(allocated.getContentAsString(),"copyCode");
+        var report=postJson("/api/v1/waiter/game-loans/"+loan+"/report-loss",
+            waiter.token(),"{\"reason\":\"UNO unit missing during physical shift check\"}");
+        assertEquals(200,report.getStatus(),report.getContentAsString());
+        UUID incident=UUID.fromString(field(report.getContentAsString(),"id"));
+        String evidence="/api/v1/admin/games/loss-incidents/"+incident+"/evidence";
+        assertEquals(401,getAs(evidence,null).getStatus());
+        assertEquals(401,getAs(evidence,guest.token()).getStatus());
+        assertEquals(403,getAs(evidence,waiter.token()).getStatus());
+        assertEquals(403,getAs(evidence,cashier.token()).getStatus());
+        assertEquals(403,getAs(evidence,kitchen.token()).getStatus());
+        assertEquals(404,getAs("/api/v1/admin/games/loss-incidents/"+
+            UUID.randomUUID()+"/evidence",manager.token()).getStatus());
+        assertEquals(400,getAs("/api/v1/admin/games/loss-incidents/xyz/evidence",
+            manager.token()).getStatus());
+        var before=getAs(evidence,manager.token());
+        assertEquals(200,before.getStatus(),before.getContentAsString());
+        assertEquals("no-store",before.getHeader("Cache-Control"));
+        String original=before.getContentAsString();
+        assertTrue(original.contains("\"reporterLogin\":\"game-"+waiter.id()+"\""),original);
+        assertTrue(original.contains("\"reviewerLogin\":null"),original);
+        assertTrue(original.contains("\"reviewedAt\":null"),original);
+        assertTrue(original.contains("\"operation\":\"GAME_LOSS_REPORTED\""),original);
+        assertTrue(original.contains("\"actorLogin\":\"game-"+waiter.id()+"\""),original);
+        assertTrue(original.contains("\"correlationId\":"),original);
+        assertTrue(original.contains("\"activity\":["),original);
+        assertEquals(1,original.split("\"operation\":",-1).length-1,original);
+        assertTrue(original.contains("\"copyCode\":\""+copyCode+"\""),original);
+        assertTrue(original.contains("\"status\":\"OPEN\""),original);
+        assertFalse(original.contains(guest.id().toString()),original);
+        assertFalse(original.contains("\"guestId\""),original);
+        assertFalse(original.contains("\"phone\""),original);
+        assertFalse(original.contains("\"payment\""),original);
+        assertFalse(original.contains("\"safeBeforeAfterDiff\""),original);
+
+        String review="/api/v1/admin/games/loss-incidents/"+incident+"/review";
+        assertEquals(200,postJson(review,manager.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\""+copyCode+"\","+
+            "\"reason\":\"Staff manager verified inventory and marked loss\"}").getStatus());
+        var after=getAs(evidence,manager.token());
+        assertEquals(200,after.getStatus(),after.getContentAsString());
+        String audited=after.getContentAsString();
+        assertTrue(audited.contains("\"status\":\"CONFIRMED_LOST\""),audited);
+        assertTrue(audited.contains("\"reporterLogin\":\"game-"+waiter.id()+"\""),audited);
+        assertTrue(audited.contains("\"reviewerLogin\":\"game-"+manager.id()+"\""),audited);
+        assertTrue(audited.contains("\"reviewedAt\":"),audited);
+        assertTrue(audited.contains("\"operation\":\"GAME_LOSS_CONFIRMED\""),audited);
+        assertTrue(audited.contains("\"actorLogin\":\"game-"+manager.id()+"\""),audited);
+        assertEquals(2,audited.split("\"operation\":",-1).length-1,audited);
+        assertTrue(audited.indexOf("GAME_LOSS_REPORTED") <
+            audited.indexOf("GAME_LOSS_CONFIRMED"),audited);
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_type='GAME_LOSS_INCIDENT' AND resource_id=?
+            """,Integer.class,incident));
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT status FROM physical_game_loans WHERE id=?
+            """,String.class,loan));
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE copy_code=?
+            """,String.class,copyCode));
+        assertEquals(200,getAs(evidence,manager.token()).getStatus(),
+            "Evidence remains available after confirming a loss");
+        assertEquals(409,postJson(review,manager.token(),
+            "{\"decision\":\"DISMISS\",\"reason\":\"Replay must be rejected\"}").getStatus());
+    }
 }

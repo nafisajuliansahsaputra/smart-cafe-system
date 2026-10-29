@@ -425,3 +425,19 @@ bearer-only, HTTP 200, no-store:
 guest ID, loan ID, phone, receipt, payment or token field is included.
 401 no valid staff authentication, 403 wrong authenticated staff role.
 No write action or notification delivery endpoint.
+
+
+## M4 manager incident evidence (stacked draft PR #31)
+
+`GET /api/v1/admin/games/loss-incidents/{id}/evidence`:
+MANAGER/ADMIN only, no-store 200 envelope.
+`data = { incident: IncidentView, reporterLogin: string,
+  reviewerLogin: string|null, reviewedAt: Instant|null,
+  activity: IncidentActivity[] }`.
+The activity array is bounded to 25 chronological entries with
+`{id,operation,actorLogin,occurredAt,correlationId}`. Allowed
+operations only: GAME_LOSS_REPORTED, GAME_LOSS_DISMISSED,
+GAME_LOSS_CONFIRMED. Report/review notes remain manager-only within
+incident; no guest ID, contact, payment or unrestricted audit diff.
+401 unauthenticated/guest bearer, 403 waiter/cashier/kitchen,
+404 missing incident, 400 invalid UUID. Read-only, no side effects.

@@ -418,6 +418,31 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByText(
       "Laporan staf: UNO deck missing during staff delivery check",
     )).toBeVisible();
+    // Manager-only evidence page exposes attributed server-side audit.
+    const auditLink=manager.getByRole("link",{
+      name:"Lihat jejak aktivitas staf",
+    });
+    const evidenceHref=await auditLink.getAttribute("href");
+    expect(evidenceHref).toMatch(/^\/staff\/games\/incidents\/[0-9a-f-]{36}$/);
+    const deniedWaiterTab=await waiter.context().newPage();
+    const waiterEvidence=await deniedWaiterTab.goto(evidenceHref);
+    expect(waiterEvidence?.status()).toBe(404);
+    await deniedWaiterTab.close();
+    const deniedCashierTab=await cashier.context().newPage();
+    const cashierEvidence=await deniedCashierTab.goto(evidenceHref);
+    expect(cashierEvidence?.status()).toBe(404);
+    await deniedCashierTab.close();
+    // The original waiter and cashier tabs must keep their existing
+    // authenticated live subscriptions and operational page state.
+    await auditLink.click();
+    await expect(manager.getByRole("heading",{name:"Riwayat laporan unit"})).toBeVisible();
+    await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
+    await expect(manager.getByText("Staf melaporkan unit belum ditemukan")).toBeVisible();
+    await expect(manager.getByText("Belum ada keputusan manager untuk laporan ini."))
+      .toBeVisible();
+    await manager.getByRole("link",{name:"Kembali ke daftar laporan"}).click();
+    await expect(manager.getByText("Laporan staf: UNO deck missing during staff delivery check"))
+      .toBeVisible();
     await manager.getByLabel("Verifikasi kode unit yang hilang").fill("UNO-E2E-001");
     await manager.getByLabel("Alasan konfirmasi kehilangan")
       .fill("Counted all game units and verified this serial is missing");
@@ -426,6 +451,14 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     }).check();
     await manager.getByRole("button", { name: "Konfirmasi unit hilang" }).click();
     await expect(manager.getByText("Status laporan: CONFIRMED_LOST")).toBeVisible();
+    await manager.getByRole("link",{name:"Lihat jejak aktivitas staf"}).click();
+    await expect(manager.getByText("Manager mengonfirmasi kehilangan setelah pemeriksaan"))
+      .toBeVisible();
+    await expect(manager.getByText("Staf: e2e-manager")).toBeVisible();
+    await expect(manager.getByText("Staf melaporkan unit belum ditemukan")).toBeVisible();
+    await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
+    await expect(manager.getByText("Staf: e2e-manager")).toBeVisible();
+    await manager.getByRole("link",{name:"Kembali ke daftar laporan"}).click();
     await managerHome.bringToFront();
     await expect(managerHome.getByText(
       "Tidak ada laporan kehilangan yang menunggu pemeriksaan.",

@@ -33,6 +33,11 @@ public class GameLossIncidentService {
     public record IncidentView(UUID id, UUID loanId, String gameName,
             String copyCode, String tableCode, String status, String reason,
             String reviewReason, Instant reportedAt) {}
+    public record IncidentActivity(UUID id, String operation, String actorLogin,
+                                   Instant occurredAt, String correlationId) {}
+    public record IncidentEvidence(IncidentView incident, String reporterLogin,
+                                   String reviewerLogin, Instant reviewedAt,
+                                   List<IncidentActivity> activity) {}
     public record IncidentPage(List<IncidentView> items, int page,
                                boolean hasNext, long openCount) {}
     /** Minimal operational notification. Never return complaint notes,
@@ -83,6 +88,52 @@ public class GameLossIncidentService {
             ORDER BY (i.status='OPEN') DESC,i.reported_at DESC,i.id DESC LIMIT 100
             """,(rs,n)->map(rs));
     }
+
+    /** Manager-only evidence: authoritative incident facts and the existing
+     * attributable audit trail. Historical actions remain read-only; no guest,
+     * contact, receipt, order or payment records are joined or returned.
+     */
+    @Transactional(readOnly=true)
+    public IncidentEvidence incidentEvidence(UUID id) {
+        IncidentEvidenceHeader detail=jdbc.query("""
+            SELECT i.id,i.loan_id,g.name,c.copy_code,t.table_code,i.status,
+                   i.reason,i.review_reason,i.reported_at,
+                   reporter.login AS reporter_login, reviewer.login AS reviewer_login,
+                   i.reviewed_at
+            FROM physical_game_loss_incidents i
+            JOIN physical_game_loans l ON l.id=i.loan_id
+            JOIN physical_game_copies c ON c.id=l.copy_id
+            JOIN physical_games g ON g.id=l.game_id
+            JOIN table_visits v ON v.id=l.visit_id
+            JOIN cafe_tables t ON t.id=v.table_id
+            JOIN staff_users reporter ON reporter.id=i.reported_by
+            LEFT JOIN staff_users reviewer ON reviewer.id=i.reviewed_by
+            WHERE i.id=?
+            """,rs->rs.next()?new IncidentEvidenceHeader(
+                map(rs),rs.getString("reporter_login"),
+                rs.getString("reviewer_login"),
+                rs.getTimestamp("reviewed_at")==null?null:
+                    rs.getTimestamp("reviewed_at").toInstant()):null,id);
+        if (detail==null) throw missing();
+        List<IncidentActivity> trail=jdbc.query("""
+            SELECT a.id,a.operation,s.login AS actor_login,a.occurred_at,
+                   a.correlation_id
+            FROM audit_logs a
+            JOIN staff_users s ON s.id=a.actor_id
+            WHERE a.resource_type='GAME_LOSS_INCIDENT' AND a.resource_id=?
+              AND a.actor_type='STAFF'
+              AND a.operation IN ('GAME_LOSS_REPORTED',
+                                  'GAME_LOSS_DISMISSED','GAME_LOSS_CONFIRMED')
+            ORDER BY a.occurred_at ASC,a.id ASC LIMIT 25
+            """,(rs,n)->new IncidentActivity(rs.getObject("id",UUID.class),
+                rs.getString("operation"),rs.getString("actor_login"),
+                rs.getTimestamp("occurred_at").toInstant(),
+                rs.getString("correlation_id")),id);
+        return new IncidentEvidence(detail.incident(),detail.reporterLogin(),
+            detail.reviewerLogin(),detail.reviewedAt(),trail);
+    }
+    private record IncidentEvidenceHeader(IncidentView incident,
+            String reporterLogin, String reviewerLogin, Instant reviewedAt) {}
 
     /** Compact manager alert only: a total and at most three recent open
      * serialized units, sourced from PostgreSQL rather than stale UI state.
