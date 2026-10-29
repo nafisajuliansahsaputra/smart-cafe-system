@@ -178,9 +178,10 @@ export async function getOrder(id: string): Promise<Result<OrderDetail>> {
   if (!UUID_PATTERN.test(id)) return { ok: false, status: 404 };
   const token = await guestToken();
   return token ? getData(`/api/v1/me/orders/${id}`, (data): data is OrderDetail => {
-    if (!isGuestOrder(data) || !isRecord(data)) return false;
-    return typeof data.createdAt === "string" &&
-      Array.isArray(data.lines) && data.lines.every(isOrderLine);
+    if (!isGuestOrder(data)) return false;
+    const detail: Record<string, unknown> = data as unknown as Record<string, unknown>;
+    return typeof detail.createdAt === "string" &&
+      Array.isArray(detail.lines) && detail.lines.every(isOrderLine);
   }, token)
     : { ok: false, status: 401 };
 }
