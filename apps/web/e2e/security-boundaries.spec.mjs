@@ -26,23 +26,30 @@ test("forged Origin cannot invoke authenticated staff logout", async ({ browser 
     expect(await page.evaluate(() => document.cookie.includes("scs_staff_session"))).toBe(false);
     expect(await page.content()).not.toContain(cookie.value);
 
-    const form = page.locator("form").filter({
-      has: page.getByRole("button", { name: "Keluar" }),
+    // Intercept the actual React Server Action POST from the authenticated
+    // browser, rather than relying on hidden form fields after hydration.
+    await page.route("**/staff", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      return route.continue({
+        headers: {
+          ...route.request().headers(),
+          origin: "https://untrusted-origin.example",
+        },
+      });
     });
-    const field = await actionField(form);
-    expect(field).toMatch(/^\$ACTION_ID_/);
-    const forged = await context.request.post("/staff", {
-      multipart: { [field]: "" },
-      headers: { Origin: "https://untrusted-origin.example", Accept: "text/html" },
-      maxRedirects: 0,
-    });
+    const [forged] = await Promise.all([
+      page.waitForResponse((response) =>
+        new URL(response.url()).pathname === "/staff"
+        && response.request().method() === "POST"),
+      page.getByRole("button", { name: "Keluar" }).click(),
+    ]);
     expect(forged.status()).toBeGreaterThanOrEqual(400);
     expect(forged.status()).toBeLessThan(600);
     expect(forged.headers()["set-cookie"] ?? "").not.toContain("scs_staff_session");
+    await page.unroute("**/staff");
 
-    // Critical assertion: a failed cross-origin action did not revoke the
-    // session, and an honest same-origin browser can still use the staff page.
-    await page.reload();
+    // A rejected cross-origin logout must not revoke the genuine staff token.
+    await page.goto("/staff");
     await expect(page.getByRole("heading", { name: "Ruang operasional" })).toBeVisible();
     expect((await context.cookies()).find((c) => c.name === "scs_staff_session")?.value)
       .toBe(cookie.value);
