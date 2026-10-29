@@ -144,3 +144,11 @@ Synthetic PostgreSQL Testcontainers coverage includes: creating independent Size
 A new TableVisitIntegrationTest case sends 24 malformed-proof-but-well-formed JSON join attempts with deliberately spoofed `X-Forwarded-For` headers and a constant actual remote address. The 25th is denied with 429/RATE_LIMITED/Retry-After/no-store and no session created, confirming counters remain committed even when proof authentication fails. A different socket peer may legitimately join the same active visit, and the blocked peer may join another active table (within remaining global peer quota).
 
 Test environments provide a synthetic `SCS_JOIN_THROTTLE_SECRET`; Compose CI provides a separate CI-only value and runs Flyway V10. The limit applies to valid JSON that passes controller validation: malformed requests must also be guarded at a trusted ingress layer. Verify all Java/DB/Next.js/Compose jobs on the final PR SHA before approving.
+
+## Browser E2E acceptance on draft PR #8
+
+A dedicated GitHub Actions Chromium job starts an ephemeral Docker Compose web+API+PostgreSQL installation, waits for health, runs Flyway, injects `infra/fixtures/e2e-browser.sql` and uses a transient Playwright test dependency. **Never apply that SQL fixture to a real or persistent database.** Fixture roles and passwords are intentionally synthetic and not production credentials.
+
+The suite verifies navigation and real server actions with separate waiter, cashier and kitchen accounts plus two guest browser contexts. It checks role route denial, transient table join proof, required+optional modifiers and authoritative IDR subtotal, order AWAITING_CASH before tender, staff OCC approve, kitchen prepare/ready, waiter handover and cash/change, own paid receipt, cross-guest 404, and closing the visit revoking guest access. Browser token safety checks require HttpOnly, SameSite-Strict, path-scoped cookie with no token rendered in HTML.
+
+CI retains screenshots and Playwright trace on failures for three days and destroys its database volume afterward. Exact-head green status, not merely existence of a test, is required for any completion claims. No real cafe, phone number, funds or external messages involved.
