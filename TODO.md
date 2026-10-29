@@ -113,3 +113,7 @@ Keep the OCC and M2 full-flow checkboxes unchecked until the stacked PR passes f
 A new backend waiter tasks projection restricts regular waiters to their own table visits; supervisor roles can read all. The first operational `/staff/kitchen` and `/staff/waiter` screens now submit authenticated, server-authoritative start/ready/served/cash-tender commands via Next.js Server Actions, with explicit physical-handover and physical-cash confirmations. Cash amounts and recorded change are returned from database projections rather than frontend estimates.
 
 The M2 KDS/waiter/full cash-E2E checkboxes remain open until authenticated browser E2E, accessibility, deployed-origin security checks, table management UX and closed-visit cases pass. This PR adds no provider connection or production money handling. See [docs/M2-FULFILLMENT-UI.md](docs/M2-FULFILLMENT-UI.md).
+
+### M2 customer browser follow-up (stacked PR #5)
+
+Customer UI now includes active-table join proof, visit-scoped HttpOnly session, menu and modifier selection, server-priced versioned cart, cash checkout and status tracking, backend guest logout, and paid-only own receipt reads by order ID. Integration tests cover receipt visibility and session revocation. **Keep the full guest journey and M2 acceptance checkboxes open** until authenticated browser end-to-end, join abuse rate limiting and real-origin cookie/CSRF checks are complete. See [docs/M2-GUEST-ORDERING.md](docs/M2-GUEST-ORDERING.md).
