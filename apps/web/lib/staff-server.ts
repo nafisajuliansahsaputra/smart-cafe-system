@@ -45,6 +45,7 @@ export async function staffApi(
   method: "GET" | "POST",
   token?: string,
   body?: Record<string, unknown>,
+  idempotencyKey?: string,
 ): Promise<ApiResponse> {
   const base = process.env.API_INTERNAL_URL ?? "http://localhost:8080";
   try {
@@ -54,6 +55,7 @@ export async function staffApi(
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
@@ -184,4 +186,96 @@ export function localTime(value: string): string {
         timeStyle: "short",
         timeZone: "Asia/Jakarta",
       }).format(time);
+}
+
+export function canUseKitchen(roles: string[]): boolean {
+  return roles.some((role) => ["KITCHEN", "MANAGER", "ADMIN"].includes(role));
+}
+
+export function canUseWaiter(roles: string[]): boolean {
+  return roles.some((role) => ["WAITER", "CASHIER", "MANAGER", "ADMIN"].includes(role));
+}
+
+export type KitchenTicket = {
+  id: string;
+  orderId: string;
+  tableCode: string;
+  status: string;
+  lines: { name: string; quantity: number; notes: string | null; variantLabel: string | null }[];
+};
+
+function isTicket(value: unknown): value is KitchenTicket {
+  return (
+    record(value) &&
+    typeof value.id === "string" &&
+    typeof value.orderId === "string" &&
+    typeof value.tableCode === "string" &&
+    ["ACCEPTED", "PREPARING", "READY"].includes(String(value.status)) &&
+    Array.isArray(value.lines) &&
+    value.lines.every(
+      (line: unknown) =>
+        record(line) &&
+        typeof line.name === "string" &&
+        Number.isInteger(line.quantity) &&
+        (line.notes === null || typeof line.notes === "string") &&
+        (line.variantLabel === null || typeof line.variantLabel === "string"),
+    )
+  );
+}
+
+export async function kitchenTickets(): Promise<LoadResult<KitchenTicket[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const response = await staffApi("/api/v1/kitchen/tickets", "GET", token);
+  if (response.status !== 200) return { ok: false, status: response.status };
+  const data = dataFromEnvelope(response.payload);
+  if (!Array.isArray(data) || !data.every(isTicket)) {
+    return { ok: false, status: 502 };
+  }
+  return { ok: true, data };
+}
+
+export type WaiterTask = {
+  orderId: string;
+  paymentIntentId: string;
+  tableCode: string;
+  orderStatus: string;
+  paymentStatus: string;
+  totalIdr: number;
+  createdAt: string;
+  lines: { name: string; quantity: number; variantLabel: string | null; notes: string | null }[];
+};
+
+function isWaiterTask(value: unknown): value is WaiterTask {
+  return (
+    record(value) &&
+    typeof value.orderId === "string" &&
+    typeof value.paymentIntentId === "string" &&
+    typeof value.tableCode === "string" &&
+    ["READY", "SERVED"].includes(String(value.orderStatus)) &&
+    ["AWAITING_CASH", "PAID"].includes(String(value.paymentStatus)) &&
+    Number.isSafeInteger(value.totalIdr) &&
+    typeof value.createdAt === "string" &&
+    Array.isArray(value.lines) &&
+    value.lines.every(
+      (line: unknown) =>
+        record(line) &&
+        typeof line.name === "string" &&
+        Number.isInteger(line.quantity) &&
+        (line.variantLabel === null || typeof line.variantLabel === "string") &&
+        (line.notes === null || typeof line.notes === "string"),
+    )
+  );
+}
+
+export async function waiterTasks(): Promise<LoadResult<WaiterTask[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const response = await staffApi("/api/v1/waiter/orders/tasks", "GET", token);
+  if (response.status !== 200) return { ok: false, status: response.status };
+  const data = dataFromEnvelope(response.payload);
+  if (!Array.isArray(data) || !data.every(isWaiterTask)) {
+    return { ok: false, status: 502 };
+  }
+  return { ok: true, data };
 }
