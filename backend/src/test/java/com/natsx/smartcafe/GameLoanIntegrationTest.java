@@ -40,6 +40,7 @@ class GameLoanIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PasswordEncoder password;
+    @Autowired com.natsx.smartcafe.common.events.OutboxLiveRelay relay;
 
     private String field(String json,String name) {
         var m=Pattern.compile("\"" + name + "\":\"([^\"]+)\"").matcher(json);
@@ -219,5 +220,64 @@ class GameLoanIntegrationTest {
             waiter.token()).getStatus());
         assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
             waiter.token()).getStatus());
+    }
+
+    private long liveCursor(String path,String token) throws Exception {
+        var r=getAs(path,token);
+        assertEquals(200,r.getStatus(),r.getContentAsString());
+        var m=Pattern.compile("\\\"cursor\\\":([0-9]+)").matcher(r.getContentAsString());
+        assertTrue(m.find(),"Missing durable live cursor: "+r.getContentAsString());
+        return Long.parseLong(m.group(1));
+    }
+
+    @Test void liveGameCursorIsDurableAndScopedToGuestAndResponsibleWaiter() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             foreignWaiter=staff("WAITER"),kitchen=staff("KITCHEN");
+        Visit visit=open(waiter),foreignVisit=open(foreignWaiter);
+        User guest=join(visit),otherGuestSameVisit=join(visit),foreignGuest=join(foreignVisit);
+        UUID game=createGame(manager,1);
+        relay.dispatchBatch(); // Publish prior table opens before taking baseline.
+        String guestPath="/api/v1/me/live-cursor?topic=games";
+        String staffPath="/api/v1/waiter/live-cursor?topic=games";
+        assertEquals(403,getAs(staffPath,kitchen.token()).getStatus());
+        // Guest Bearer is not a staff authentication credential: fail closed (401).
+        assertEquals(401,getAs(staffPath,guest.token()).getStatus());
+        assertEquals(400,getAs(guestPath+"&orderId="+UUID.randomUUID(),guest.token()).getStatus());
+        long beforeGuest=liveCursor(guestPath,guest.token());
+        long beforeWaiter=liveCursor(staffPath,waiter.token());
+        long beforeForeignWaiter=liveCursor(staffPath,foreignWaiter.token());
+        long beforeSameVisit=liveCursor(guestPath,otherGuestSameVisit.token());
+        long beforeForeignGuest=liveCursor(guestPath,foreignGuest.token());
+
+        UUID loan=requestLoan(guest,game);
+        assertTrue(relay.dispatchBatch()>0);
+        long first=liveCursor(guestPath,guest.token());
+        assertTrue(first>beforeGuest);
+        assertTrue(liveCursor(staffPath,waiter.token())>beforeWaiter);
+        assertEquals(beforeForeignWaiter,liveCursor(staffPath,foreignWaiter.token()));
+        assertEquals(beforeSameVisit,liveCursor(guestPath,otherGuestSameVisit.token()));
+        assertEquals(beforeForeignGuest,liveCursor(guestPath,foreignGuest.token()));
+        assertEquals(first,liveCursor(guestPath,guest.token())); // cursor is restart-safe
+
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String code=field(assigned.getContentAsString(),"copyCode");
+        assertTrue(relay.dispatchBatch()>0);
+        long afterAssign=liveCursor(guestPath,guest.token());
+        assertTrue(afterAssign>first);
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertTrue(relay.dispatchBatch()>0);
+        assertTrue(liveCursor(guestPath,guest.token())>afterAssign);
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertTrue(relay.dispatchBatch()>0);
+        assertEquals(4,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_type='GAME_LOAN' AND aggregate_id=?
+              AND live_published_at IS NOT NULL AND processed_at IS NULL
+            """,Integer.class,loan));
+        assertEquals(beforeForeignWaiter,liveCursor(staffPath,foreignWaiter.token()));
+        assertEquals(beforeSameVisit,liveCursor(guestPath,otherGuestSameVisit.token()));
     }
 }

@@ -48,3 +48,32 @@ No anonymous game catalog API is authorized. Session cookies are sent to the sam
 PostgreSQL/Testcontainers integration asserts scope isolation, role denial, duplicate requests, unavailable copy, wrong unit code, all transitions, closure conflict, guest revocation after close, and concurrent last-copy assignment. Full Chromium cash cycle additionally requests a synthetic UNO deck, verifies handover, demonstrates **cash PAID is still insufficient to close when a physical unit is out**, confirms return and only then closes the table.
 
 **Not yet implemented:** game event publication / realtime SSE (these two pages have a manual refresh), inventory damage/loss/quarantine/replacement, per-unit maintenance, richer admin editing/deletion, guest return request, stock and courier assignments, reservations/refunds, charges/deposits, true event-driven staff task notifications, physical QR/NFC copy scans. Treat game requests as explicitly provisional pending staff verification. This is the first vertical slice of M4, not full release.
+
+## Game event-driven refresh (stacked draft PR #20)
+
+Every successful loan transition writes a safe, empty-payload GAME_LOAN outbox
+event in the **same transaction** as the state mutation. Flyway V14 creates
+`live_game_signals` with a unique outbox reference and durable sequence.
+The existing PostgreSQL relay/advisory lock and NOTIFY wakeup publish these
+without consuming business outbox state. Game event types:
+GAME_LOAN_REQUESTED, GAME_LOAN_ASSIGNED, GAME_LOAN_HANDED_OVER,
+GAME_LOAN_RETURNED, GAME_LOAN_CANCELLED.
+
+- Signed-in guests can subscribe only to their own game loans in their active
+  visit, even when other guests use the same table.
+- The responsible waiter sees only loans for visits they opened; cashier,
+  manager and admin may subscribe to the whole game task queue. Kitchen and
+  anonymous users are denied. No copy serial, game payload, credentials or
+  guest identifiers travel in the browser SSE message.
+- Both game pages now receive change-only signals and re-fetch authoritative
+  scoped data. Existing bounded reconnect/offline recovery applies. This does
+  not introduce optimistic handover or offline completion.
+- Manager catalog additions and new serial-copy registration are **not**
+  separately published as game-loan events; manual refresh still exists for
+  catalog-only changes. Full inventory live coverage and real-device QA remain
+  future work.
+
+Acceptance: isolated PostgreSQL game event and role/ownership test, existing
+HTTP and HTTPS Chromium cash+physical-loan lifecycle extended with live
+waiter request and guest handover checks. Not production-ready; retain draft
+and review exact-head CI before marking any rollout gate complete.

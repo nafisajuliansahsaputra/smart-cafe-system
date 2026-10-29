@@ -24,6 +24,8 @@ export async function GET(request: Request): Promise<Response> {
       path = "/api/v1/waiter/live-cursor?topic=waiter"; break;
     case "tables":
       path = "/api/v1/waiter/live-cursor?topic=tables"; break;
+    case "games":
+      path = "/api/v1/waiter/live-cursor?topic=games"; break;
     default: return new Response(null, { status: 400 });
   }
   if (topic !== "order" && id !== null) return new Response(null, { status: 400 });

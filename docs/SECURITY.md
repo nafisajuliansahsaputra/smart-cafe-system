@@ -182,3 +182,19 @@ Authenticated Spring MVC after-cursor endpoints now return a DeferredResult with
 ## 24. Physical game copy assignment and guest isolation (draft PR #19)
 
 Guest Bearer sessions can request a game only in their current ACTIVE visit and list **only their own** loans. A visitor cannot read another guest's loan, assign physical copies, or close tables. Waiter queries and mutations are limited to visits opened by that staff account; supervisors can manage all; kitchen is forbidden. Manager/admin alone can insert game types/serialized copies, all staff changes audited. One copy may have at most one ASSIGNED or IN_USE loan (partial unique constraint plus SELECT FOR UPDATE SKIP LOCKED). Guest request and table closure serialize on a visit row lock. A missing/mismatched physical copy code prevents handover/return. Pending and unreturned loans block visit closure, independent of payment state. No credential, join proof, phone or payment data is emitted in loan responses or newly added events. There is no fee/deposit or lost/damaged charge. Disabled/closed visit credentials cannot submit new requests. See ADR-0007.
+
+
+## 25. Physical game live notifications (draft PR #20)
+
+V14 signals are keyed to a relational GAME_LOAN id and event name only; the
+outbox safe payload remains empty. Signed-in guests can see only their
+own guest+visit cursor; an unrelated guest at the *same table* does not
+observe an owned loan. Waiters can see only visits opened by their staff
+account, while authorized supervisors see a full event cursor. Kitchen and
+anonymous watchers cannot subscribe. The BFF keeps session Bearer credentials
+server-side and emits neither raw cursor nor loan/copy metadata in SSE.
+Subscriptions remain subject to reauthentication, per-principal/global
+admission limits, bounded waits and reconnect backoff. A cursor is only a
+signal to fetch authoritative state; it cannot approve a handover or return.
+Poison-event policy, retention, device acceptance and production ingress
+security remain unapproved release gates.

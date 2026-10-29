@@ -1,6 +1,7 @@
 package com.natsx.smartcafe.games;
 
 import com.natsx.smartcafe.audit.AuditTrail;
+import com.natsx.smartcafe.common.events.OutboxEvents;
 import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.identity.GuestPrincipal;
 import com.natsx.smartcafe.identity.StaffPrincipal;
@@ -21,10 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class GameLoanService {
     private final JdbcTemplate jdbc;
     private final AuditTrail audit;
+    private final OutboxEvents events;
 
-    public GameLoanService(JdbcTemplate jdbc, AuditTrail audit) {
+    public GameLoanService(JdbcTemplate jdbc, AuditTrail audit, OutboxEvents events) {
         this.jdbc = jdbc;
         this.audit = audit;
+        this.events = events;
     }
 
     public record GameView(UUID id, String name, String description, int availableCopies) {}
@@ -89,6 +92,7 @@ public class GameLoanService {
             INSERT INTO physical_game_loans(id,visit_id,guest_id,game_id)
             VALUES (?,?,?,?)
             """,id,guest.visitId(),guest.guestId(),gameId);
+        events.gameLoan(id,"GAME_LOAN_REQUESTED");
         return one(id);
     }
 
@@ -124,6 +128,7 @@ public class GameLoanService {
             UPDATE physical_game_loans SET copy_id=?,status='ASSIGNED',
                 assigned_at=now(),assigned_by=? WHERE id=?
             """,copy,staff.staffId(),loanId);
+        events.gameLoan(loanId,"GAME_LOAN_ASSIGNED");
         audit.staff(staff.staffId(),"GAME_COPY_ASSIGNED","GAME_LOAN",loanId,requestId);
         return one(loanId);
     }
@@ -140,6 +145,7 @@ public class GameLoanService {
             UPDATE physical_game_loans SET status='IN_USE',
                 handed_over_at=now(),handed_over_by=? WHERE id=?
             """,staff.staffId(),loanId);
+        events.gameLoan(loanId,"GAME_LOAN_HANDED_OVER");
         audit.staff(staff.staffId(),"GAME_COPY_HANDED_OVER","GAME_LOAN",loanId,requestId);
         return one(loanId);
     }
@@ -155,6 +161,7 @@ public class GameLoanService {
             UPDATE physical_game_loans SET status='RETURNED',
                 returned_at=now(),returned_by=? WHERE id=?
             """,staff.staffId(),loanId);
+        events.gameLoan(loanId,"GAME_LOAN_RETURNED");
         audit.staff(staff.staffId(),"GAME_COPY_RETURNED_INSPECTED","GAME_LOAN",loanId,requestId);
         return one(loanId);
     }
@@ -164,6 +171,7 @@ public class GameLoanService {
         Loan loan=lockLoanByVisit(loanId,staff);
         if (!loan.status().equals("REQUESTED")) throw conflict("Only unassigned requests may be cancelled");
         jdbc.update("UPDATE physical_game_loans SET status='CANCELLED' WHERE id=?",loanId);
+        events.gameLoan(loanId,"GAME_LOAN_CANCELLED");
         audit.staff(staff.staffId(),"GAME_REQUEST_CANCELLED","GAME_LOAN",loanId,requestId);
         return one(loanId);
     }

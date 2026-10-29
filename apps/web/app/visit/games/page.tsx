@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { guestIdentity } from "@/lib/guest-server";
 import { guestGames, myGameLoans } from "@/lib/game-server";
 import { requestPhysicalGame } from "./actions";
@@ -49,6 +50,7 @@ export default async function GuestGamesPage({ searchParams }: {
         <h1>Pinjam permainan fisik.</h1>
         <p className="guest-subtitle">Pilih UNO atau board game, lalu tunggu waiter menyiapkan dan menyerahkan unit fisiknya. Tidak ada biaya peminjaman pada versi ini.</p>
       </div>
+      <LiveRefresh url="/visit/live?topic=games" />
       {notice && Object.hasOwn(messages, notice) &&
         <p className="guest-alert" role="status">{messages[notice]}</p>}
       <section className="guest-panel">
@@ -61,7 +63,7 @@ export default async function GuestGamesPage({ searchParams }: {
           </li>)}</ul>}
         <form method="GET"><button className="guest-secondary" type="submit">Segarkan pinjaman</button></form>
       </section>
-      <section className="guest-category" data-catalog-status={catalog.ok ? "ok" : String(catalog.status)}>
+      <section className="guest-category">
         <h2>Koleksi permainan</h2>
         {!catalog.ok && <p role="alert">Katalog permainan belum dapat dimuat.</p>}
         {catalog.ok && catalog.data.length===0 && <p>Belum ada permainan tersedia di katalog.</p>}

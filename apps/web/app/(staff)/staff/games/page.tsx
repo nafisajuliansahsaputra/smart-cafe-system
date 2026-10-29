@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, staffIdentity } from "@/lib/staff-server";
 import { staffGames, staffGameLoans } from "@/lib/game-server";
@@ -32,6 +33,7 @@ export default async function StaffGamesPage({searchParams}:{
       <p className="staff-muted">Serahkan unit yang benar-benar ada, verifikasi kode pada unit saat menyerahkan dan menerima kembali.</p>
     </div></header>
     <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Permainan</strong></nav>
+    <LiveRefresh url="/staff/live?topic=games" />
     <form method="GET"><button className="staff-secondary" type="submit">Segarkan pinjaman</button></form>
     {notice && Object.hasOwn(messages,notice) &&
       <p className="staff-notice" role="status">{messages[notice]}</p>}
@@ -39,7 +41,7 @@ export default async function StaffGamesPage({searchParams}:{
       <h2>Daftar pinjaman tidak tersedia</h2><p>Jangan menyerahkan unit tanpa konfirmasi status server.</p>
     </section>}
     {loans.ok && loans.data.length===0 && <section className="staff-panel">
-      <h2>Belum ada pinjaman aktif</h2><p>Permintaan pelanggan akan tampil di sini setelah halaman disegarkan.</p>
+      <h2>Belum ada pinjaman aktif</h2><p>Permintaan baru akan tampil otomatis jika koneksi live tersedia.</p>
     </section>}
     {loans.ok && <div className="staff-task-grid">{loans.data.map(l=>(
       <article className="staff-panel staff-task-card" key={l.id}>

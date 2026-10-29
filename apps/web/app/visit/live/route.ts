@@ -12,6 +12,8 @@ export async function GET(request: Request): Promise<Response> {
   let path: string;
   if (topic === "orders" && id === null && url.searchParams.size === 1) {
     path = "/api/v1/me/live-cursor?topic=orders";
+  } else if (topic === "games" && id === null && url.searchParams.size === 1) {
+    path = "/api/v1/me/live-cursor?topic=games";
   } else if (topic === "order" && id && UUID_PATTERN.test(id) &&
              url.searchParams.size === 2) {
     path = `/api/v1/me/live-cursor?topic=order&orderId=${id}`;

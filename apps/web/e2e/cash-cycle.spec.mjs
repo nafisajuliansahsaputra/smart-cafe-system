@@ -115,13 +115,16 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(gameBackendData.data.some((game) => game.name === "UNO Demo")).toBe(true);
     // Browser must actually render the API-backed entry; no fake status attribute.
     await expect(guest.getByRole("heading", { name: "UNO Demo" })).toBeVisible();
+    // Live request must arrive on an already open waiter screen.
+    await waiter.goto("/staff/games");
+    await expect(waiter.getByText("Belum ada pinjaman aktif")).toBeVisible();
+    await expect(waiter.getByText("Live · otomatis")).toBeVisible({ timeout: 25000 });
     await guest.getByRole("checkbox", {
       name: /Saya akan menjaga dan mengembalikan permainan/,
     }).check();
     await guest.getByRole("button", { name: "Ajukan pinjam" }).click();
     await expect(guest.getByText("Menunggu waiter")).toBeVisible();
-    await waiter.goto("/staff/games");
-    await expect(waiter.getByText("REQUESTED", { exact: true })).toBeVisible();
+    await expect(waiter.getByText("REQUESTED", { exact: true })).toBeVisible({ timeout: 25000 });
     await waiter.getByRole("checkbox", {
       name: /Sudah memeriksa ketersediaan unit fisik/,
     }).check();
@@ -134,8 +137,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     }).check();
     await waiter.getByRole("button", { name: "Konfirmasi serah-terima" }).click();
     await expect(waiter.getByText("IN_USE", { exact: true })).toBeVisible();
-    await guest.goto("/visit/games");
-    await expect(guest.getByText("Sedang dipinjam")).toBeVisible();
+    await expect(guest.getByText("Sedang dipinjam")).toBeVisible({ timeout: 25000 });
 
     // Required + optional modifier groups must contribute to SERVER-priced cart.
     await guest.goto(`/visit/menu/${ITEM}`);
