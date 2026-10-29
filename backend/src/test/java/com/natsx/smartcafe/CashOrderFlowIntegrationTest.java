@@ -249,8 +249,8 @@ class CashOrderFlowIntegrationTest {
         var settledTasks=mvc.perform(get("/api/v1/waiter/orders/tasks")
             .header("Authorization","Bearer " + waiter)).andReturn().getResponse();
         assertEquals(200,settledTasks.getStatus());
-        assertTrue(settledTasks.getContentAsString().contains("\\\"receivedIdr\\\":60000"));
-        assertTrue(settledTasks.getContentAsString().contains("\\\"changeGivenIdr\\\":4000"));
+        assertTrue(settledTasks.getContentAsString().contains("\"receivedIdr\":60000"));
+        assertTrue(settledTasks.getContentAsString().contains("\"changeGivenIdr\":4000"));
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM cash_tenders WHERE payment_intent_id=?",
             Integer.class,intent));
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM receipts WHERE order_id=?",
