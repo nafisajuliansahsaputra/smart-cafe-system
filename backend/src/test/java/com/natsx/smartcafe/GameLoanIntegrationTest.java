@@ -265,11 +265,11 @@ class GameLoanIntegrationTest {
         long afterAssign=liveCursor(guestPath,guest.token());
         assertTrue(afterAssign>first);
         assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
-            waiter.token(),"{\\"copyCode\\":\\""+code+"\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
         assertTrue(relay.dispatchBatch()>0);
         assertTrue(liveCursor(guestPath,guest.token())>afterAssign);
         assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
-            waiter.token(),"{\\"copyCode\\":\\""+code+"\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
         assertTrue(relay.dispatchBatch()>0);
         assertEquals(4,jdbc.queryForObject("""
             SELECT count(*) FROM outbox_events
