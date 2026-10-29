@@ -224,6 +224,13 @@ class CashOrderFlowIntegrationTest {
         assertEquals("AWAITING_CASH",jdbc.queryForObject(
             "SELECT aggregate_status FROM payment_intents WHERE id=?",String.class,intent));
 
+        assertEquals(404,mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt")
+            .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
+        assertEquals(404,mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt")
+            .header("Authorization","Bearer " + b.token())).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt"))
+            .andReturn().getResponse().getStatus());
+
         String tenderKey="tender-" + UUID.randomUUID();
         assertEquals(403,mvc.perform(post("/api/v1/ops/payments/" + intent + "/cash-tenders")
             .header("Authorization","Bearer " + unassignedWaiter)
@@ -261,6 +268,19 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
         assertEquals(404,mvc.perform(get("/api/v1/me/receipts/" + receipt)
             .header("Authorization","Bearer " + b.token())).andReturn().getResponse().getStatus());
+        var ownReceiptByOrder=mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt")
+            .header("Authorization","Bearer " + a.token())).andReturn().getResponse();
+        assertEquals(200,ownReceiptByOrder.getStatus());
+        assertTrue(ownReceiptByOrder.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(ownReceiptByOrder.getContentAsString().contains(receipt.toString()));
+        assertEquals(404,mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt")
+            .header("Authorization","Bearer " + b.token())).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post("/api/v1/me/logout")
+            .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/me/visit")
+            .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/me/orders/" + orderId + "/receipt")
+            .header("Authorization","Bearer " + a.token())).andReturn().getResponse().getStatus());
         assertThrows(DataAccessException.class,()->jdbc.update(
             "UPDATE receipts SET total_idr=1 WHERE id=?",receipt));
         assertEquals(200,mvc.perform(post("/api/v1/waiter/table-visits/" + visit.id() + "/close")
