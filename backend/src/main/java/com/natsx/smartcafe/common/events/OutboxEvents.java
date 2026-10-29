@@ -4,7 +4,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/** Same-transaction durable event recording. Dispatch worker is a later milestone. */
+/** Same-transaction durable event recording. The separate live relay does not consume business outbox processing state. */
 @Service
 public class OutboxEvents {
     private final JdbcTemplate jdbc;

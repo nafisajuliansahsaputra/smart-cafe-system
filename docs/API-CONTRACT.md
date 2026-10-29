@@ -224,3 +224,7 @@ Throttling uses the backend socket peer and table alias, not an untrusted client
 ## BFF-only SSE (draft PR #11)
 
 GET `/staff/live?topic=orders|kitchen|waiter|tables` or `?topic=order&id=<uuid>` uses staff cookie. GET `/visit/live?topic=orders` or `?topic=order&id=<uuid>` uses guest cookie. Unknown topics/extraneous fields/invalid UUID → 400; no session → 401; backend forbidden/foreign order → 403/404. On 200, `text/event-stream` contains only empty `ready`, `changed`, `unavailable`, `auth-expired`, and heartbeat frames, with no-store, no-transform and no buffering. Each poll is re-authorized and the connection is bounded to 55 seconds.
+
+## Live outbox transport (draft PR #12)
+
+Backend internal database schema V11 adds `outbox_events.live_published_at` and `live_order_signals(sequence_id,outbox_id,order_id,event_type,published_at)`. A scheduled internal worker publishes via transactional `pg_notify('scs_order_live', order_uuid)` only after inserting a unique durable event row. **No new public HTTP endpoint or user-facing event contract is introduced in this PR.** Existing `/visit/live` and `/staff/live` preserve their PR #11 authenticated snapshot SSE contract until a scoped cursor subscriber is built and tested.
