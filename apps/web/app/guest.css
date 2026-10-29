@@ -25,7 +25,7 @@
 .guest-shell button:disabled { opacity: .48; cursor: not-allowed; }
 .guest-footnote { font-size: .85rem; color: #5d6d6d; }
 .guest-alert { padding: 13px 15px; border: 1px solid #dbbb79; background: #fff8e8; color: #5a461d; border-radius: 10px; }
-.guest-category { margin-top: 27px; }
+.guest-category { margin-top: 27px; padding: 0; border: 0; background: transparent; border-radius: 0; }
 .guest-menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; }
 .guest-menu-card { margin: 0; display: flex; flex-direction: column; justify-content: space-between; min-height: 175px; gap: 20px; }
 .guest-price { font-size: 1.18rem; font-weight: 800; color: #204b4b; }
