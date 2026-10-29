@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { randomUUID } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { logoutStaff } from "../actions";
@@ -40,6 +41,7 @@ export default async function WaiterPage({
         <form action={logoutStaff}><button className="staff-secondary">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Waiter</strong></nav>
+      <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=waiter`} /></div>
       <form method="GET"><button className="staff-secondary" type="submit">Segarkan tugas</button></form>
       {message && <p className="staff-notice" role="status">{message}</p>}
       {!result.ok && <section className="staff-panel"><h2>Daftar tugas tidak tersedia</h2>

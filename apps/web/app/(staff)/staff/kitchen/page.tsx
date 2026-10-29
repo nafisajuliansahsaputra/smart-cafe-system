@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { logoutStaff } from "../actions";
 import { markKitchenReady, startKitchenTicket } from "../fulfillment-actions";
@@ -39,6 +40,7 @@ export default async function KitchenPage({
         <form action={logoutStaff}><button className="staff-secondary">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Dapur</strong></nav>
+      <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=kitchen`} /></div>
       <form method="GET"><button className="staff-secondary" type="submit">Segarkan antrean</button></form>
       {message && <p className="staff-notice" role="status">{message}</p>}
       {!tickets.ok && <section className="staff-panel"><h2>Tiket tidak dapat dimuat</h2>
@@ -77,7 +79,7 @@ export default async function KitchenPage({
           ))}
         </div>
       )}
-      <p className="staff-footnote">Pembaruan masih manual, belum SSE. Tidak tersedia akses pembayaran atau nomor telepon pelanggan.</p>
+      <p className="staff-footnote">Perubahan tiket dipantau otomatis; tombol Segarkan tetap tersedia. Tidak tersedia akses pembayaran atau nomor telepon pelanggan.</p>
     </main>
   );
 }

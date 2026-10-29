@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { logoutStaff } from "../actions";
 import { canUseWaiter, staffIdentity, staffTables } from "@/lib/staff-server";
@@ -32,6 +33,7 @@ export default async function StaffTablesPage() {
       <nav className="staff-breadcrumb">
         <Link href="/staff">Ruang staf</Link><span>/</span><strong>Meja</strong>
       </nav>
+      <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=tables`} /></div>
       <form method="GET"><button className="staff-secondary" type="submit">Segarkan status meja</button></form>
       {!result.ok ? (
         <section className="staff-panel" role="alert">
