@@ -321,6 +321,12 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
     await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang"))
       .toBeVisible();
+    // Report a missing copy during another synthetic game loan only through
+    // the existing staff-confirmed workflow. The in-place manager section
+    // remains read-only until a report exists; no auto loss or fee is created.
+    await expect(manager.getByRole("heading", { name: "Laporan unit belum ditemukan" }))
+      .toBeVisible();
+    await expect(manager.getByText("Tidak ada laporan unit hilang.")).toBeVisible();
     // Manager search is a DB-backed GET, not client-filtered first 250 copies.
     await manager.getByLabel("Cari unit atau permainan").fill("NO-SUCH-E2E-UNIT");
     await manager.getByRole("button", { name: "Cari unit" }).click();
@@ -332,6 +338,48 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await manager.getByRole("button", { name: "Cari unit" }).click();
     await expect(manager.getByText("Tidak ada unit yang sesuai.")).toBeVisible();
     await manager.getByRole("link", { name: "Reset pencarian" }).click();
+
+    // Manager-reviewed missing unit: borrowing again is permitted after the
+    // previous verified return, but the replacement cannot be called returned
+    // without manager investigation. This is deliberately non-financial.
+    await guest.getByRole("checkbox", {
+      name: /Saya akan menjaga dan mengembalikan permainan/,
+    }).check();
+    await guest.getByRole("button", { name: "Ajukan pinjam" }).click();
+    await expect(guest.getByText("Menunggu waiter")).toBeVisible();
+    await waiter.goto("/staff/games");
+    await expect(waiter.getByText("REQUESTED", { exact: true })).toBeVisible();
+    await waiter.getByRole("checkbox", {
+      name: /Sudah memeriksa ketersediaan unit fisik/,
+    }).check();
+    await waiter.getByRole("button", { name: "Alokasikan unit" }).click();
+    await expect(waiter.getByText("ASSIGNED", { exact: true })).toBeVisible();
+    await waiter.getByLabel("Laporan unit belum ditemukan")
+      .fill("UNO deck missing during staff delivery check");
+    await waiter.getByRole("checkbox", {
+      name: /Ini hanya laporan. Unit belum dikembalikan/,
+    }).check();
+    await waiter.getByRole("button", { name: "Laporkan unit hilang" }).click();
+    await expect(manager.getByText(
+      "Laporan staf: UNO deck missing during staff delivery check",
+    )).toBeVisible({ timeout: 25000 });
+    await manager.getByLabel("Verifikasi kode unit yang hilang").fill("UNO-E2E-001");
+    await manager.getByLabel("Alasan konfirmasi kehilangan")
+      .fill("Counted all game units and verified this serial is missing");
+    await manager.getByRole("checkbox", {
+      name: /Sudah verifikasi unit fisik, saya setuju menandai copy LOST/,
+    }).check();
+    await manager.getByRole("button", { name: "Konfirmasi unit hilang" }).click();
+    await expect(manager.getByText("Status laporan: CONFIRMED_LOST")).toBeVisible();
+    await expect(manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    })).toContainText("LOST");
+    await expect(guest.getByText("Dilaporkan hilang dan dikonfirmasi oleh pengelola"))
+      .toBeVisible({ timeout: 25000 });
+    await expect(guest.getByText("0 unit tersedia saat terakhir diperiksa"))
+      .toBeVisible({ timeout: 25000 });
+    await expect(waiter.getByText("Belum ada pinjaman aktif"))
+      .toBeVisible({ timeout: 25000 });
 
     // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");

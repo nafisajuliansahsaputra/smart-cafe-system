@@ -2,8 +2,8 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
-import { searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
-import { createPhysicalGame, registerGameCopy, updateGameCopyCondition, updateGameLoan } from "./actions";
+import { adminGameLossIncidents, searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { createPhysicalGame, registerGameCopy, reportMissingGame, reviewMissingGame, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string,string> = {
@@ -49,11 +49,12 @@ export default async function StaffGamesPage({searchParams}:{
       q:copyQ,condition:copyCondition,page:String(copyPage),
       hq:historyQ,hchange:historyTo,hpage:String(auditPage),
     })}`;
-  const [loans,catalog,copies,history]=await Promise.all([
+  const [loans,catalog,copies,history,incidents]=await Promise.all([
     staffGameLoans(),staffGames(),
     isManager ? searchAdminGameCopies(query,condition,pageIndex) : Promise.resolve(null),
     isManager ? searchAdminGameConditionHistory(historyQuery,historyChange,historyPage)
       : Promise.resolve(null),
+    isManager ? adminGameLossIncidents() : Promise.resolve(null),
   ]);
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
@@ -108,6 +109,18 @@ export default async function StaffGamesPage({searchParams}:{
             {l.status==="ASSIGNED"?"Konfirmasi serah-terima":"Tandai dikembalikan"}
           </button>
         </form>}
+        {(l.status==="ASSIGNED"||l.status==="IN_USE"||l.status==="RETURN_PENDING") &&
+          <form action={reportMissingGame} className="staff-form">
+            <input type="hidden" name="loanId" value={l.id}/>
+            <label htmlFor={`loss-reason-${l.id}`}>Laporan unit belum ditemukan</label>
+            <input id={`loss-reason-${l.id}`} name="reason" required
+              minLength={5} maxLength={300} placeholder="Jelaskan pemeriksaan fisik"/>
+            <label className="staff-check"><input type="checkbox" name="confirm"
+              value="yes" required/>
+              Ini hanya laporan. Unit belum dikembalikan dan masih menjadi tugas aktif
+            </label>
+            <button className="staff-secondary">Laporkan unit hilang</button>
+          </form>}
         {(l.status==="IN_USE"||l.status==="RETURN_PENDING") && (
           <form action={updateGameLoan} className="staff-form">
             <input type="hidden" name="loanId" value={l.id}/>
@@ -141,6 +154,59 @@ export default async function StaffGamesPage({searchParams}:{
           </form>}
         </li>)}</ul>}
     </section>
+    {isManager && <section className="staff-panel">
+      <h2>Laporan unit belum ditemukan</h2>
+      <p className="staff-muted">Verifikasi fisik dan kondisi unit sebelum memutuskan.
+        Konfirmasi kehilangan tidak menagih pelanggan. Unit berstatus LOST tidak
+        boleh dipinjamkan kembali.</p>
+      {incidents && !incidents.ok && <p role="alert">
+        Laporan kehilangan belum bisa dimuat. Periksa koneksi.</p>}
+      {incidents?.ok && incidents.data.length===0 &&
+        <p>Tidak ada laporan unit hilang.</p>}
+      {incidents?.ok && <div className="staff-task-grid">
+        {incidents.data.map(incident=><article className="staff-panel staff-task-card"
+          key={incident.id}>
+          <h3>Meja {incident.tableCode} · {incident.gameName}</h3>
+          <p>Unit: <strong>{incident.copyCode}</strong></p>
+          <p>Status laporan: <strong>{incident.status}</strong></p>
+          <p>Laporan staf: {incident.reason}</p>
+          {incident.reviewReason && <p>Hasil pemeriksaan: {incident.reviewReason}</p>}
+          {incident.status==="OPEN" && <>
+            <form action={reviewMissingGame} className="staff-form">
+              <input type="hidden" name="incidentId" value={incident.id}/>
+              <input type="hidden" name="decision" value="DISMISS"/>
+              <label htmlFor={`dismiss-loss-${incident.id}`}>Alasan menolak laporan</label>
+              <input id={`dismiss-loss-${incident.id}`} name="reason"
+                required minLength={5} maxLength={300}/>
+              <label className="staff-check">
+                <input type="checkbox" name="confirm" value="yes" required/>
+                Hasil pemeriksaan memastikan laporan ini perlu ditolak
+              </label>
+              <button className="staff-secondary">Tolak laporan kehilangan</button>
+            </form>
+            <form action={reviewMissingGame} className="staff-form">
+              <input type="hidden" name="incidentId" value={incident.id}/>
+              <input type="hidden" name="decision" value="CONFIRM_LOST"/>
+              <label htmlFor={`confirm-loss-code-${incident.id}`}>
+                Verifikasi kode unit yang hilang
+              </label>
+              <input id={`confirm-loss-code-${incident.id}`} name="copyCode"
+                required maxLength={80} autoComplete="off"/>
+              <label htmlFor={`confirm-loss-note-${incident.id}`}>
+                Alasan konfirmasi kehilangan
+              </label>
+              <input id={`confirm-loss-note-${incident.id}`} name="reason"
+                required minLength={5} maxLength={300}/>
+              <label className="staff-check">
+                <input type="checkbox" name="confirm" value="yes" required/>
+                Sudah verifikasi unit fisik, saya setuju menandai copy LOST tanpa denda
+              </label>
+              <button className="staff-danger">Konfirmasi unit hilang</button>
+            </form>
+          </>}
+        </article>)}
+      </div>}
+    </section>}
     {isManager && <section className="staff-panel">
       <h2>Kondisi unit fisik</h2>
       <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.

@@ -18,9 +18,14 @@ export type GameConditionHistoryView = {
 export type GameConditionHistoryPage = {
   items: GameConditionHistoryView[]; page: number; hasNext: boolean;
 };
+export type GameLossIncidentView = {
+  id: string; loanId: string; gameName: string; copyCode: string;
+  tableCode: string; status: "OPEN" | "DISMISSED" | "CONFIRMED_LOST";
+  reason: string; reviewReason: string | null; reportedAt: string;
+};
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
-  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
+  status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED" | "LOST";
   tableCode: string; copyCode: string | null; requestedAt: string;
 };
 type Result<T> = { ok: true; data: T } | { ok: false; status: number };
@@ -39,7 +44,7 @@ function loan(value: unknown): value is GameLoanView {
   return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
     typeof value.gameId === "string" && uuid.test(value.gameId) &&
     typeof value.gameName === "string" &&
-    ["REQUESTED","ASSIGNED","IN_USE","RETURN_PENDING","RETURNED","CANCELLED"].includes(String(value.status)) &&
+    ["REQUESTED","ASSIGNED","IN_USE","RETURN_PENDING","RETURNED","CANCELLED","LOST"].includes(String(value.status)) &&
     typeof value.tableCode === "string" &&
     (value.copyCode === null || typeof value.copyCode === "string") &&
     typeof value.requestedAt === "string";
@@ -80,6 +85,18 @@ function historyPage(value: unknown): value is GameConditionHistoryPage {
     Number.isSafeInteger(value.page) && (value.page as number)>=0 &&
     (value.page as number)<=2000 && typeof value.hasNext==="boolean";
 }
+function gameLossIncident(value: unknown): value is GameLossIncidentView {
+  return record(value) && typeof value.id==="string" && uuid.test(value.id) &&
+    typeof value.loanId==="string" && uuid.test(value.loanId) &&
+    typeof value.gameName==="string" && typeof value.copyCode==="string" &&
+    typeof value.tableCode==="string" &&
+    ["OPEN","DISMISSED","CONFIRMED_LOST"].includes(String(value.status)) &&
+    typeof value.reason==="string" &&
+    (value.reviewReason===null || typeof value.reviewReason==="string") &&
+    typeof value.reportedAt==="string";
+}
+const gameLossIncidents=(value:unknown): value is GameLossIncidentView[] =>
+  Array.isArray(value) && value.length<=100 && value.every(gameLossIncident);
 const games = (value: unknown): value is GameView[] =>
   Array.isArray(value) && value.every(game);
 const loans = (value: unknown): value is GameLoanView[] =>
@@ -148,4 +165,12 @@ export async function searchAdminGameConditionHistory(
   const r=await staffApi(`/api/v1/admin/games/condition-history/search?${params}`,"GET",token);
   const parsed=result(r.status,dataFromEnvelope(r.payload),historyPage);
   return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
+}
+
+/** Loss incident evidence is restricted to manager/admin server sessions. */
+export async function adminGameLossIncidents(): Promise<Result<GameLossIncidentView[]>> {
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const r=await staffApi("/api/v1/admin/games/loss-incidents","GET",token);
+  return result(r.status,dataFromEnvelope(r.payload),gameLossIncidents);
 }

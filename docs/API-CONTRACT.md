@@ -351,3 +351,28 @@ records. Sort is descending timestamp, then event UUID. No guest,
 payment, receipt or join token is returned. This is read-only.
 The original `GET /admin/games/condition-history` latest-100 endpoint
 remains available during migration.
+
+## M4 missing physical game report and manager review (draft PR #27)
+
+`POST /api/v1/waiter/game-loans/{id}/report-loss` with
+`{"reason":"Game not found after physical check"}` accepts only an
+active ASSIGNED/IN_USE/RETURN_PENDING loan, with opening-waiter or
+supervisor authorization. Returns 200 with incident summary, but
+does **not** release inventory or change the loan status.
+Duplicate OPEN report or wrong state → 409; wrong waiter → 403.
+
+`GET /api/v1/admin/games/loss-incidents` (no-store) returns up to
+100 OPEN-first incident summaries containing incident ID, loan ID,
+game, unit code, table code, operational note, review note, status and
+timestamp. Only manager/admin (401/403 denial), never guest identity,
+phone or payment details.
+
+`POST /api/v1/admin/games/loss-incidents/{id}/review` with
+`{"decision":"DISMISS","reason":"Unit physically found"}` or
+`{"decision":"CONFIRM_LOST","copyCode":"UNO-001",
+"reason":"Serial inventory checked, missing"}`, manager/admin only.
+Review is single-use; incorrect serial or stale loan → 409.
+A confirmed loss sets both loan and copy LOST transactionally and creates
+safe realtime markers; a dismissed claim leaves the active physical loan
+unchanged so staff can complete regular inspected return. Incidents are
+historical evidence; no fee, liability or automated billing outcome.

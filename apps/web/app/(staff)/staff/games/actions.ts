@@ -44,6 +44,28 @@ export async function updateGameLoan(form: FormData) {
   }
   await send(`/api/v1/waiter/game-loans/${id}/${op}`);
 }
+/** A report is not a physical return and never releases any copy. */
+export async function reportMissingGame(form: FormData) {
+  const id=form.get("loanId"),reason=form.get("reason");
+  if (typeof id!=="string" || !UUID.test(id) ||
+      typeof reason!=="string" || reason.trim().length<5 ||
+      reason.trim().length>300 || /[\x00-\x1f\x7f]/.test(reason) ||
+      form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
+  await send(`/api/v1/waiter/game-loans/${id}/report-loss`,{reason:reason.trim()});
+}
+/** Review resolution needs a manager session and matching unit code for loss. */
+export async function reviewMissingGame(form: FormData) {
+  const id=form.get("incidentId"),decision=form.get("decision");
+  const code=form.get("copyCode"),reason=form.get("reason");
+  if (typeof id!=="string" || !UUID.test(id) ||
+      (decision!=="DISMISS"&&decision!=="CONFIRM_LOST") ||
+      typeof reason!=="string" || reason.trim().length<5 ||
+      reason.trim().length>300 || /[\x00-\x1f\x7f]/.test(reason) ||
+      (decision==="CONFIRM_LOST" && (typeof code!=="string" || !CODE.test(code))) ||
+      form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
+  await send(`/api/v1/admin/games/loss-incidents/${id}/review`,
+    {decision,reason:reason.trim(),copyCode:decision==="CONFIRM_LOST"?code:null});
+}
 export async function createPhysicalGame(form: FormData) {
   const name=form.get("name"), desc=form.get("description");
   if (typeof name!=="string" || !name.trim() || name.trim().length>120 ||

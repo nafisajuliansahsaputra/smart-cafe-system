@@ -19,6 +19,7 @@ const statuses: Record<string,string> = {
   RETURN_PENDING: "Menunggu pengambilan waiter",
   RETURNED: "Sudah dikembalikan",
   CANCELLED: "Dibatalkan",
+  LOST: "Dilaporkan hilang dan dikonfirmasi oleh pengelola",
 };
 
 export default async function GuestGamesPage({ searchParams }: {

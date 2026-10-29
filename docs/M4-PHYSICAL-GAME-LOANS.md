@@ -206,3 +206,33 @@ Chromium HTTP/HTTPS exercises manager history search, filters and reset
 while retaining the guest cash-and-game scenario. Page-based navigation
 may shift when new events are recorded during browsing; keyset paging
 is future work for larger-scale operational history.
+
+## Physical game missing-copy incident workflow (stacked draft PR #27)
+
+A waiter responsible for the visit (or cashier/manager/admin) can report a
+currently allocated ASSIGNED, IN_USE or RETURN_PENDING copy as **not found**
+with an explicit factual note. This records an OPEN incident, audit and
+scoped GAME_LOSS_REPORTED change-only event; the loan and copy retain their
+existing states and physical stock stays unavailable. Repeated OPEN reports
+are rejected. An open incident blocks routine handover and inspected return
+until reviewed, to prevent stale missing-unit allegations after reuse.
+Unreturned loans continue to block visit closure.
+
+Only MANAGER/ADMIN can read the incident review queue (newest 100, OPEN
+first) and either DISMISS the report with an inspection note (loan stays
+active; a subsequently found copy may be physically returned), or
+CONFIRM_LOST after typing the exact serialized unit code and a separate
+inspection finding. Confirmation atomically sets loan LOST and copy LOST,
+stores signed manager/timestamp review, audit, and durable loan/inventory
+signals. The unit never returns to availability, and the resolved lost
+loan no longer blocks closure after the existing payment/order checks.
+Neither outcome charges the guest, assigns liability, forgives an order,
+transfers ownership, or automatically refunds anything. The report is
+operational evidence, **not proof of customer fault**.
+
+Flyway V20 keeps historical loan state constraints, establishes append-only
+incident rows and unique OPEN report per loan, and expands existing
+private-loan SSE event allowlists without payload details. Manager visibility
+does not include borrower identities, contact numbers or payment fields.
+Lost/retired copy recovery, physical incident appeals, evidence retention,
+and liability/financial policy remain unapproved future scope.

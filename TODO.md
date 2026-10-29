@@ -253,3 +253,16 @@ browser tests cover old records, access denial and query validation.
 Still open: operational policy for truly LOST/RETIRED copies, incident
 ownership, high-volume keyset pagination, manager field trials and
 production security gates.
+
+### M4 missing game incident report and manager verification (draft PR #27)
+
+Added staff missing-copy report with reviewable OPEN incident, manager-only
+dismiss/confirm actions, exact-unit verification, durable incident/audit
+records and scoped change-only signals. OPEN reports do not free
+stock, permit table closure, or silently imply theft. Confirmed LOST
+atomically retires the active loan and removes the copy from inventory
+without fees or guest liability. Dismissal resumes normal physical
+handover/return workflow. PostgreSQL security/transition and browser
+acceptance added. Still requires approved LOST copy recovery/claims
+policy, manager incident paging, staff/mobile acceptance, retention
+rules and operational incident review before a public pilot.
