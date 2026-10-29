@@ -75,7 +75,8 @@ export default async function LossEvidencePage({params}:{
         <p>Referensi audit: <code>{event.correlationId}</code></p>
       </li>)}</ol>}
     </section>
-    <Link className="staff-link-button" href="/staff/games?istatus=OPEN">
+    <Link className="staff-link-button"
+      href={`/staff/games?istatus=${incident.status}`}>
       Kembali ke daftar laporan
     </Link>
   </main>;
