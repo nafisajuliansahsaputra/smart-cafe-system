@@ -39,6 +39,22 @@ public class GuestReceiptService {
         return receiptId;
     }
 
+    /** Lookup by order without exposing receipt UUIDs across guests or before payment. */
+    @Transactional(readOnly=true)
+    public Receipt ownReceiptForOrder(UUID orderId,GuestPrincipal guest) {
+        var receiptIds=jdbc.query("""
+            SELECT r.id FROM receipts r
+            JOIN orders o ON o.id=r.order_id
+            JOIN payment_intents p ON p.order_id=o.id
+            WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
+              AND p.aggregate_status='PAID'
+            """,(rs,n)->rs.getObject("id",UUID.class),
+            orderId,guest.guestId(),guest.visitId());
+        if(receiptIds.isEmpty())throw new ApiFailureException(
+            HttpStatus.NOT_FOUND,"NOT_FOUND","Receipt not found");
+        return ownReceipt(receiptIds.getFirst(),guest);
+    }
+
     @Transactional(readOnly=true)
     public Receipt ownReceipt(UUID receiptId,GuestPrincipal guest) {
         var found=jdbc.query("""

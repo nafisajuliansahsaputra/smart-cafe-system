@@ -92,6 +92,16 @@ jobs:
           done
           waiter_code=$(curl --silent --output /tmp/scs-waiter.json --write-out '%{http_code}' http://127.0.0.1:8080/api/v1/waiter/orders/tasks)
           test "$waiter_code" = "401" -o "$waiter_code" = "403"
+          curl --fail --silent http://127.0.0.1:3000/visit > /tmp/scs-guest.html
+          grep -q 'Belum bergabung ke meja' /tmp/scs-guest.html
+          for path in /visit/cart /visit/orders; do
+            code=$(curl --silent --output /tmp/scs-guest-protected.html --write-out '%{http_code}' "http://127.0.0.1:3000$path")
+            test "$code" = "307"
+          done
+          curl --fail --silent http://127.0.0.1:3000/t/unknown-demo-table > /tmp/scs-unknown-table.html
+          grep -q 'Meja tidak ditemukan' /tmp/scs-unknown-table.html
+          receipt_code=$(curl --silent --output /tmp/scs-denied-receipt.json --write-out '%{http_code}' http://127.0.0.1:8080/api/v1/me/orders/00000000-0000-0000-0000-000000000000/receipt)
+          test "$receipt_code" = "401" -o "$receipt_code" = "403"
       - name: Diagnose services if smoke test fails
         if: failure()
         run: docker compose logs --no-color --tail=150
