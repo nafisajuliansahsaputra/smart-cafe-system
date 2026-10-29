@@ -380,6 +380,45 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       .toBeVisible({ timeout: 25000 });
     await expect(waiter.getByText("Belum ada pinjaman aktif"))
       .toBeVisible({ timeout: 25000 });
+    // Recovered LOST units never bypass quarantine. The confirmed incident
+    // and historical guest LOST loan stay recorded even after restocking.
+    const lostCard=manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    });
+    await lostCard.getByLabel("Kode fisik unit yang ditemukan kembali")
+      .fill("UNO-E2E-001");
+    await lostCard.getByLabel("Catatan lokasi dan kondisi penemuan")
+      .fill("Located beneath rear cabinet; requires inspection");
+    await lostCard.getByRole("checkbox", {
+      name: /Unit benar-benar ditemukan dan akan masuk karantina DAMAGED/,
+    }).check();
+    await lostCard.getByRole("button", { name: "Temukan & karantina unit" }).click();
+    await expect(manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    })).toContainText("DAMAGED");
+    await expect(guest.getByText("0 unit tersedia saat terakhir diperiksa"))
+      .toBeVisible({ timeout: 25000 });
+    await expect(guest.getByText("Dilaporkan hilang dan dikonfirmasi oleh pengelola"))
+      .toBeVisible();
+    const foundCard=manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    });
+    await foundCard.getByLabel("Catatan pemeriksaan ulang")
+      .fill("Verified serial and all UNO cards have been counted");
+    await foundCard.getByRole("checkbox", {
+      name: /Saya sudah memeriksa langsung dan unit layak dipinjam lagi/,
+    }).check();
+    await foundCard.getByRole("button", { name: "Aktifkan kembali" }).click();
+    await expect(manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    })).toContainText("AVAILABLE");
+    await expect(guest.getByText("1 unit tersedia saat terakhir diperiksa"))
+      .toBeVisible({ timeout: 25000 });
+    await expect(manager.getByText("Catatan: Located beneath rear cabinet; requires inspection"))
+      .toBeVisible();
+    await expect(manager.getByText("Catatan: Verified serial and all UNO cards have been counted"))
+      .toBeVisible();
+    await expect(manager.getByText("Status laporan: CONFIRMED_LOST")).toBeVisible();
 
     // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");

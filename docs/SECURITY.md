@@ -263,3 +263,18 @@ manager decision rows plus audit persist separate from customer payment
 records. Public and waiter loan SSE stays identity-scoped; incident
 notes and identity never enter outbox JSON or SSE. No blame or charge is
 inferred from loss; policy and retention reviews remain release blockers.
+
+
+## M4 found physical game copy recovery boundary (draft PR #28)
+
+LOST copies must never be returned through the direct inventory
+condition mutation, guest loan, or waiter return routes. The new
+manager/admin-only recovery route locks the serialized physical unit,
+requires code identity match, a verified historical confirmed-loss
+incident and a current LOST classification, and fails closed for
+conflicting active assignments. It writes a permanent actor-attributed
+LOST → DAMAGED condition event linked to the old loan, not a customer
+payment/receipt action. Only a second independently confirmed
+DAMAGED → AVAILABLE action can restock. Original LOST loans and
+confirmed incident evidence are immutable; a recovered unit is not
+proof of fault, theft, restitution or any compensation entitlement.

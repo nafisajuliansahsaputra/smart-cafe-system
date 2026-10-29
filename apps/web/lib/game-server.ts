@@ -11,7 +11,7 @@ export type GameCopyView = {
 export type GameCopyPage = { items: GameCopyView[]; page: number; hasNext: boolean };
 export type GameConditionHistoryView = {
   id: string; copyId: string; gameName: string; copyCode: string;
-  beforeCondition: "AVAILABLE" | "DAMAGED";
+  beforeCondition: "AVAILABLE" | "DAMAGED" | "LOST";
   afterCondition: "AVAILABLE" | "DAMAGED";
   reason: string; actorLogin: string; recordedAt: string;
 };
@@ -74,7 +74,7 @@ function historyItem(value: unknown): value is GameConditionHistoryView {
     typeof value.copyCode === "string" && typeof value.reason === "string" &&
     typeof value.actorLogin === "string" &&
     typeof value.recordedAt === "string" && !Number.isNaN(Date.parse(value.recordedAt)) &&
-    ["AVAILABLE","DAMAGED"].includes(String(value.beforeCondition)) &&
+    ["AVAILABLE","DAMAGED","LOST"].includes(String(value.beforeCondition)) &&
     ["AVAILABLE","DAMAGED"].includes(String(value.afterCondition));
 }
 const history = (value: unknown): value is GameConditionHistoryView[] =>

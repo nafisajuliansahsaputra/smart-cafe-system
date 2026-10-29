@@ -236,3 +236,29 @@ private-loan SSE event allowlists without payload details. Manager visibility
 does not include borrower identities, contact numbers or payment fields.
 Lost/retired copy recovery, physical incident appeals, evidence retention,
 and liability/financial policy remain unapproved future scope.
+
+
+## Verified physical recovery of previously LOST copies (stacked draft PR #28)
+
+Physical unit discovery after a manager-confirmed loss is not an
+automatic reversal of a loss decision or customer-liability claim.
+`POST /api/v1/admin/games/copies/{id}/recover` requires a manager/admin
+session, exact verified serialized copy code and a mandatory 5–300
+printable-character note describing the physical discovery. It accepts
+only a copy in LOST state with a historical LOST loan and confirmed loss
+incident. The operation locks the copy, rejects outstanding active
+assignments and atomically transitions **LOST → DAMAGED**, with no path
+to AVAILABLE in the same operation. It appends a linked before/after
+physical condition event, actor and time, audit entry and safe inventory
+outbox wake-up. The original LOAN LOST, manager-confirmed incident and
+financial records are preserved unmodified.
+
+To release the recovered unit, a manager separately performs the
+existing `DAMAGED → AVAILABLE` inspected restoration with a new
+physical-condition reason and confirmation. This creates a second audit
+history event. Found copies never become available solely because they
+were located; no previously closed visit is reopened or retroactively
+changed. V21 expands only the *before* condition history check to LOST,
+and enforces that LOST sources go solely to DAMAGED with a non-null
+historical loan. No app-facing guest endpoint, auto charge, or loss
+liability determination is added.
