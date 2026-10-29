@@ -265,7 +265,7 @@ function isWaiterTask(value: unknown): value is WaiterTask {
       (line: unknown) =>
         record(line) &&
         typeof line.name === "string" &&
-        Number.isInteger(line.quantity) &&
+        typeof line.quantity === "number" && Number.isInteger(line.quantity) &&
         (line.variantLabel === null || typeof line.variantLabel === "string") &&
         (line.notes === null || typeof line.notes === "string"),
     )
