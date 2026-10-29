@@ -162,3 +162,7 @@ A new **local-only** TLS reverse-proxy Compose overlay and an independent CI Chr
 ## M2 live updates (draft PR #11)
 
 Authenticated OCC, KDS, waiter, table and guest order pages now subscribe to same-origin SSE signals using their existing HttpOnly cookies. Next.js observes backend-authorized snapshots every five seconds and sends only change signals, not order data or tokens. See [M2 live updates](docs/M2-LIVE-UPDATES.md); this is SSE via polling, not an outbox dispatcher.
+
+## M2 transactional outbox live relay (draft PR #12)
+
+The backend now contains a restart-safe, PostgreSQL-backed relay that converts existing committed ORDER outbox entries into durable, uniquely identified live notification signals and commit-only PG NOTIFY wake-ups. It does **not** mark unrelated business outbox deliveries processed. Docker Compose opts in; unrelated tests do not start the scheduled worker. Existing SSE/browser pages still use 5-second snapshots pending a secure cursor subscriber. See [docs/M2-DURABLE-LIVE-RELAY.md](docs/M2-DURABLE-LIVE-RELAY.md).

@@ -167,3 +167,7 @@ Separate CI job `edge-https-e2e` uses a throwaway 1-day self-signed localhost ce
 ## Live SSE browser acceptance (draft PR #11)
 
 Chromium retains the OCC view before guest checkout, KDS before cashier approval, waiter dashboard before kitchen READY, and guest detail through PAID, checking the receiving page changes without navigation. Foreign-owned guest order streams return 404 and malformed UUIDs return 400. Both HTTP and local HTTPS proxy suites run the cash lifecycle. These tests do not certify production capacity.
+
+## Durable live outbox relay integration (draft PR #12)
+
+V11 introduces distinct live publication state. New PostgreSQL Testcontainers integration checks batch publication, two monotonically increasing live event IDs, exactly one durable signal per original outbox ID, safe retry after reset without duplicate, and no mutation of business-outbox `processed_at`. An invalid synthetic event fails transactionally and remains pending with no corresponding live signal. Scheduled worker disabled by default in tests; Docker Compose enables it. The existing full browser HTTP/HTTPS cash flow must continue to pass. This is **not** a browser test of NOTIFY delivery or replay yet.

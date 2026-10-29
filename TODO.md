@@ -142,3 +142,7 @@ Added an isolated nginx:1.27-alpine HTTPS edge, strict localhost Host handling, 
 ### M2 live update slice (draft PR #11)
 
 Implemented BFF-authorized, bounded, change-only SSE and server-render refresh across OCC/KDS/waiter/tables/guest orders. Browser tests verify cross-role updates without reload and foreign guest stream denial. Still open: event-driven outbox dispatcher, connection budgeting and load tests, production proxy and accessibility acceptance. See docs/M2-LIVE-UPDATES.md.
+
+### M2 durable live relay (draft PR #12)
+
+Added V11 live signals, transaction-locked multi-instance-safe outbox relay and commit-only PG NOTIFY hints with idempotent replay/rollback tests. **Still needed before real push:** authenticated event cursor/LISTEN consumer, waiter/guest per-object scoping, late-subscriber replay, bounded connection pool and production load testing; plus poison-event quarantine and retention/monitoring policy. SSE from PR #11 remains snapshot-based until those are complete. See docs/M2-DURABLE-LIVE-RELAY.md.
