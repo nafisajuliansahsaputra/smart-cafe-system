@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
-import { adminGameConditionHistory, adminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { adminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
 import { createPhysicalGame, registerGameCopy, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ const messages: Record<string,string> = {
 };
 
 export default async function StaffGamesPage({searchParams}:{
-  searchParams: Promise<{notice?:string}>;
+  searchParams: Promise<{notice?:string;q?:string;condition?:string;page?:string}>;
 }) {
   const identity=await staffIdentity();
   if(identity.kind==="signed-out") redirect("/staff/login?status=expired");
@@ -24,10 +24,18 @@ export default async function StaffGamesPage({searchParams}:{
     <Link href="/staff">Kembali</Link></main>;
   if(!canUseWaiter(identity.staff.roles)) notFound();
   const isManager=identity.staff.roles.some(r=>r==="MANAGER"||r==="ADMIN");
-  const {notice}=await searchParams;
+  const {notice,q:rawQuery,condition:rawCondition,page:rawPage}=await searchParams;
+  const query=typeof rawQuery==="string"?rawQuery.trim().slice(0,80):"";
+  const condition=typeof rawCondition==="string" &&
+    ["AVAILABLE","DAMAGED","LOST","RETIRED"].includes(rawCondition)?rawCondition:"";
+  const pageIndex=typeof rawPage==="string" && /^(0|[1-9][0-9]{0,3})$/.test(rawPage)
+    ? Math.min(2000,Number(rawPage)):0;
+  const pageLink=(index:number)=>`/staff/games?${new URLSearchParams({
+    q:query,condition,page:String(index),
+  })}`;
   const [loans,catalog,copies,history]=await Promise.all([
     staffGameLoans(),staffGames(),
-    isManager ? adminGameCopies() : Promise.resolve(null),
+    isManager ? searchAdminGameCopies(query,condition,pageIndex) : Promise.resolve(null),
     isManager ? adminGameConditionHistory() : Promise.resolve(null),
   ]);
   return <main className="staff-shell staff-wide">
@@ -120,11 +128,30 @@ export default async function StaffGamesPage({searchParams}:{
       <h2>Kondisi unit fisik</h2>
       <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.
         Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Tidak ada denda otomatis.</p>
+      <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <label htmlFor="game-copy-search">Cari unit atau permainan</label>
+        <input id="game-copy-search" name="q" defaultValue={query} maxLength={80}
+          placeholder="Kode unit atau nama permainan"/>
+        <label htmlFor="game-copy-condition">Filter kondisi unit</label>
+        <select id="game-copy-condition" name="condition" defaultValue={condition}>
+          <option value="">Semua kondisi</option>
+          <option value="AVAILABLE">AVAILABLE</option>
+          <option value="DAMAGED">DAMAGED</option>
+          <option value="LOST">LOST</option>
+          <option value="RETIRED">RETIRED</option>
+        </select>
+        <button className="staff-secondary" type="submit">Cari unit</button>
+        <Link href="/staff/games">Reset pencarian</Link>
+      </form>
       {copies && !copies.ok && <p role="alert">Inventaris unit tidak tersedia.
         Tidak ada tindakan yang dapat dikonfirmasi.</p>}
-      {copies?.ok && copies.data.length===0 && <p>Belum ada unit tercatat.</p>}
+      {copies?.ok && copies.data.items.length===0 && <p>Tidak ada unit yang sesuai.
+        Coba kata kunci atau kondisi lain.</p>}
+      {copies?.ok && <p className="staff-muted">
+        Halaman {copies.data.page+1} · Maksimal 25 unit per halaman
+      </p>}
       {copies?.ok && <div className="staff-task-grid">
-        {copies.data.map(copy=><article className="staff-panel staff-task-card" key={copy.id}>
+        {copies.data.items.map(copy=><article className="staff-panel staff-task-card" key={copy.id}>
           <h3>{copy.gameName} · {copy.copyCode}</h3>
           <strong className="staff-status">{copy.condition}</strong>
           {(copy.condition==="AVAILABLE" || copy.condition==="DAMAGED") &&
@@ -151,6 +178,15 @@ export default async function StaffGamesPage({searchParams}:{
             <p>Unit tidak dapat diaktifkan melalui alur karantina.</p>}
         </article>)}
       </div>}
+      {copies?.ok && <nav aria-label="Navigasi halaman inventaris"
+        className="staff-breadcrumb">
+        {copies.data.page>0 && <Link href={pageLink(copies.data.page-1)}>
+          Halaman sebelumnya
+        </Link>}
+        {copies.data.hasNext && <Link href={pageLink(copies.data.page+1)}>
+          Halaman berikutnya
+        </Link>}
+      </nav>}
     </section>}
     {isManager && <section className="staff-panel">
       <h2>Riwayat pemeriksaan unit</h2>
