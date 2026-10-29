@@ -48,3 +48,16 @@
 
 .staff-check { display: flex; align-items: start; gap: 10px; line-height: 1.35; }
 .staff-shell .staff-check input { width: 20px; height: 20px; min-height: 20px; margin: 0; flex: 0 0 20px; }
+
+.staff-task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px; margin: 20px 0; }
+.staff-task-grid .staff-panel { margin: 0; }
+.staff-task-card { display: flex; flex-direction: column; min-width: 0; }
+.staff-task-card .staff-form { margin-top: auto; }
+.staff-task-head { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.staff-task-head h2 { margin-bottom: 0; }
+.staff-item-list { list-style: none; padding: 0; margin: 22px 0; }
+.staff-item-list li { display: grid; gap: 4px; padding: 11px 0; border-bottom: 1px solid #e6ebed; }
+.staff-item-list li:last-child { border-bottom: 0; }
+.staff-item-list small { display: block; }
+.staff-task-total { display: flex; justify-content: space-between; gap: 14px; margin-top: auto; padding-top: 16px; border-top: 1px solid #dce2e6; }
+.staff-change { display: block; font-weight: 500; margin-top: 8px; }

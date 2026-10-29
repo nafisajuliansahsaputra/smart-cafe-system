@@ -120,3 +120,10 @@ For a menu with Size (required), Milk (required), and Extra (optional), clients 
 A protected Next.js staff browser layer now exists on the separate stacked [PR #3](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/3): staff login at `/staff/login`, role-aware `/staff`, and cashier/manager/admin `/staff/orders` plus order details. The web server alone stores and forwards backend bearer tokens through an HttpOnly, SameSite=Strict, path-scoped cookie; the token is never returned to browser JavaScript. Backend authorization and financial state still own all decisions. OCC filters, approve/reject cash commands and manual snapshot refresh are available. This is **not** SSE, kitchen/waiter web UI, public staging access, or a claim that cash was paid.
 
 See [staff browser verification and security notes](docs/M2-STAFF-BROWSER.md). PR #3 remains draft, unmerged, and not deployed.
+
+
+## M2 Kitchen + Waiter operational browser (stacked PR #4)
+
+Draft [PR #4](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/4) adds real API-backed `/staff/kitchen` and `/staff/waiter` views atop the staff login/Order Control Center in PR #3. Kitchen can start preparation and mark ready; waiter can acknowledge physical handover and record cash received after service. The backend calculates and persists exact change; the waiter view reads recorded amount/change from the database. A new `GET /api/v1/waiter/orders/tasks` API strictly scopes ordinary waiters to visits they opened, while cashier/manager/admin may supervise all. All mutations require a fresh active staff bearer session and backend authorization.
+
+This is an **unmerged development-only slice**, not a pilot or payments certification. No live money, actual customer data or provider integrations. Manual snapshot refresh remains until SSE. See [fulfillment implementation notes](docs/M2-FULFILLMENT-UI.md).
