@@ -49,6 +49,11 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     const cashierKitchen = await cashier.goto("/staff/kitchen");
     expect(cashierKitchen?.status()).toBe(404);
 
+    // OCC subscribes BEFORE the guest submits; the order must arrive via
+    // SSE and router.refresh, with no manual navigation or refresh.
+    await cashier.goto("/staff/orders");
+    await expect(cashier.getByText("Live · otomatis")).toBeVisible();
+
     // Waiter must physically verify the table before opening the visit.
     await waiter.goto("/staff/tables");
     const tableCard = waiter.locator("article").filter({
@@ -99,6 +104,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(orderId).toMatch(/^[0-9a-f-]{36}$/);
     await expect(guest.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toHaveCount(0);
+    await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible({
+      timeout: 25000,
+    });
 
     // A second guest using a valid visit proof cannot read this guest's order.
     const strangerContext = await makeContext();
@@ -110,6 +118,14 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(stranger).toHaveURL(/\/visit$/);
     const denied = await stranger.goto(`/visit/orders/${orderId}`);
     expect(denied?.status()).toBe(404);
+    const foreignStream = await strangerContext.request.get(
+      `/visit/live?topic=order&id=${orderId}`,
+    );
+    expect(foreignStream.status()).toBe(404);
+    const guestOrderStream = await guestContext.request.get(
+      "/visit/live?topic=order&id=not-a-uuid",
+    );
+    expect(guestOrderStream.status()).toBe(400);
 
     // Unsettled cash must block visit close even if waiter confirms in UI.
     await waiter.goto("/staff/tables");
@@ -123,26 +139,38 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(waiter.getByText(/masih ada pesanan\/pembayaran belum selesai/)).toBeVisible();
     await expect(unsettledCard).toContainText("TERISI");
 
-    // Cashier approves but money remains UNPAID until physical handover.
+    // Kitchen connects before cashier approval; the new ticket must appear
+    // without a manual Kitchen page reload.
+    await kitchen.goto("/staff/kitchen");
+    await expect(kitchen.getByText("Live · otomatis")).toBeVisible();
     await cashier.goto(`/staff/orders/${orderId}`);
     await expect(cashier.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
     await cashier.getByRole("checkbox", { name: /Saya telah memeriksa pesanan dan meja tamu/ }).check();
     await cashier.getByRole("button", { name: "Setujui untuk dapur" }).click();
     await expect(cashier.getByText("ACCEPTED", { exact: true })).toBeVisible();
-    await guest.goto(`/visit/orders/${orderId}`);
+    // Guest and kitchen should update when cashier acts, without reload.
+    await expect(guest.getByText("ACCEPTED", { exact: true })).toBeVisible({
+      timeout: 25000,
+    });
     await expect(guest.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
+    await expect(kitchen.getByText("ACCEPTED", { exact: true })).toBeVisible({
+      timeout: 25000,
+    });
 
     // Kitchen cooks, then marks READY using actual ticket state.
-    await kitchen.goto("/staff/kitchen");
     await kitchen.getByRole("checkbox", { name: /Mulai menyiapkan pesanan ini/ }).check();
     await kitchen.getByRole("button", { name: "Mulai masak" }).click();
     await expect(kitchen.getByText("PREPARING", { exact: true })).toBeVisible();
+    // Waiter subscribes while kitchen is preparing; READY should flow
+    // independently over SSE to the waiter task board.
+    await waiter.goto("/staff/waiter");
+    await expect(waiter.getByText("Live · otomatis")).toBeVisible();
     await kitchen.getByRole("checkbox", { name: /Semua item sudah disiapkan/ }).check();
     await kitchen.getByRole("button", { name: "Siap diantar" }).click();
     await expect(kitchen.getByText("READY", { exact: true })).toBeVisible();
 
     // Opening waiter confirms handover and physical cash including backend change.
-    await waiter.goto("/staff/waiter");
+    // No navigation: the waiter must receive the READY state via SSE.
     await expect(waiter.getByText("READY", { exact: true })).toBeVisible();
     await waiter.getByRole("checkbox", { name: /Pesanan sudah diserahkan langsung ke meja/ }).check();
     await waiter.getByRole("button", { name: "Tandai sudah diantar" }).click();
@@ -153,8 +181,11 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(waiter.getByText("LUNAS", { exact: true })).toBeVisible();
     await expect(waiter.locator(".staff-change")).toContainText("15.000");
 
-    await guest.goto(`/visit/orders/${orderId}`);
-    await expect(guest.getByText("PAID", { exact: true })).toBeVisible();
+    // The guest page stays mounted while waiter collects cash. A live
+    // status notification causes the server to fetch and render its receipt.
+    await expect(guest.getByText("PAID", { exact: true })).toBeVisible({
+      timeout: 25000,
+    });
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toBeVisible();
     await expect(guest.getByText(/Struk #/)).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
