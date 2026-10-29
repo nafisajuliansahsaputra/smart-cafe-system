@@ -484,25 +484,25 @@ class GameLoanIntegrationTest {
         long afterAssignment=liveCursor(g,otherGuest.token());
         assertTrue(afterAssignment>otherAfterCreate,"Stock depletion must wake another table");
         assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
-            .contains("\\"availableCopies\\":0"));
+            .contains("\"availableCopies\":0"));
         assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
-            waiter.token(),"{\\"copyCode\\":\\""+code+"\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
         assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return-damaged",
-            waiter.token(),"{\\"copyCode\\":\\""+code+"\\",\\"reason\\":\\"Missing game cards\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+code+"\",\"reason\":\"Missing game cards\"}").getStatus());
         assertTrue(relay.dispatchBatch()>0);
         long afterDamaged=liveCursor(g,otherGuest.token());
         assertTrue(afterDamaged>afterAssignment);
         assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
-            .contains("\\"availableCopies\\":0"));
+            .contains("\"availableCopies\":0"));
 
         UUID copy=jdbc.queryForObject("SELECT id FROM physical_game_copies WHERE game_id=?",
             UUID.class,game);
         assertEquals(200,postJson("/api/v1/admin/games/copies/"+copy+"/condition",
-            manager.token(),"{\\"condition\\":\\"AVAILABLE\\",\\"reason\\":\\"Replaced missing cards\\"}").getStatus());
+            manager.token(),"{\"condition\":\"AVAILABLE\",\"reason\":\"Replaced missing cards\"}").getStatus());
         assertTrue(relay.dispatchBatch()>0);
         assertTrue(liveCursor(g,otherGuest.token())>afterDamaged);
         assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
-            .contains("\\"availableCopies\\":1"));
+            .contains("\"availableCopies\":1"));
         assertEquals(0,jdbc.queryForObject("""
             SELECT count(*) FROM outbox_events
             WHERE aggregate_type='GAME_INVENTORY'
