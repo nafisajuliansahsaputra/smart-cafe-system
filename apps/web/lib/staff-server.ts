@@ -216,7 +216,7 @@ function isTicket(value: unknown): value is KitchenTicket {
       (line: unknown) =>
         record(line) &&
         typeof line.name === "string" &&
-        Number.isInteger(line.quantity) &&
+        typeof line.quantity === "number" && Number.isInteger(line.quantity) &&
         (line.notes === null || typeof line.notes === "string") &&
         (line.variantLabel === null || typeof line.variantLabel === "string"),
     )
@@ -256,9 +256,9 @@ function isWaiterTask(value: unknown): value is WaiterTask {
     typeof value.tableCode === "string" &&
     ["READY", "SERVED"].includes(String(value.orderStatus)) &&
     ["AWAITING_CASH", "PAID"].includes(String(value.paymentStatus)) &&
-    Number.isSafeInteger(value.totalIdr) &&
-    (value.receivedIdr === null || Number.isSafeInteger(value.receivedIdr)) &&
-    (value.changeGivenIdr === null || Number.isSafeInteger(value.changeGivenIdr)) &&
+    typeof value.totalIdr === "number" && Number.isSafeInteger(value.totalIdr) &&
+    (value.receivedIdr === null || (typeof value.receivedIdr === "number" && Number.isSafeInteger(value.receivedIdr))) &&
+    (value.changeGivenIdr === null || (typeof value.changeGivenIdr === "number" && Number.isSafeInteger(value.changeGivenIdr))) &&
     typeof value.createdAt === "string" &&
     Array.isArray(value.lines) &&
     value.lines.every(
