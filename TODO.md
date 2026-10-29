@@ -216,3 +216,15 @@ Historical reasons cannot be altered from the UI; no guest or financial
 data is included. Next still needed: paginated operational history,
 owner-approved LOST/RETIRED incident policy, inventory realtime updates,
 staff field trials, security review before a public pilot.
+
+### M4 automatic catalogue/stock refresh (stacked draft PR #24)
+
+V17 adds game-inventory change markers to existing scoped `games` SSE
+without another connection. Catalogue creation, unit addition,
+allocation, inspected return, and manager quarantine/restoration now
+publish safe same-transaction events for all authenticated viewers.
+Private loan events stay identity-scoped; copy serial, audit notes and
+customer/financial data never enter live messages. PostgreSQL and
+HTTP/HTTPS browser tests cover cross-table stock updates. Production
+release still needs physical-device testing, operational inventory
+paging/notifications, additional damaged/lost policy and security review.

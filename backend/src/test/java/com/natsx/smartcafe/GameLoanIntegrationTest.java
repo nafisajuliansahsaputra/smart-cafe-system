@@ -277,8 +277,10 @@ class GameLoanIntegrationTest {
             WHERE aggregate_type='GAME_LOAN' AND aggregate_id=?
               AND live_published_at IS NOT NULL AND processed_at IS NULL
             """,Integer.class,loan));
-        assertEquals(beforeForeignWaiter,liveCursor(staffPath,foreignWaiter.token()));
-        assertEquals(beforeSameVisit,liveCursor(guestPath,otherGuestSameVisit.token()));
+        // Inventory allocation/return is shared catalogue information:
+        // another waiter/guest sees the change marker, not the loan details.
+        assertTrue(liveCursor(staffPath,foreignWaiter.token())>beforeForeignWaiter);
+        assertTrue(liveCursor(guestPath,otherGuestSameVisit.token())>beforeSameVisit);
     }
 
     @Test void guestPickupRequestNeverFreesPhysicalCopyAndIsOwnerOnly() throws Exception {
@@ -443,4 +445,78 @@ class GameLoanIntegrationTest {
               AND operation IN ('GAME_COPY_QUARANTINED','GAME_COPY_RESTORED_INSPECTED')
             """,Integer.class,copy));
     }
+
+    @Test void inventoryChangesWakeAllAuthenticatedGameViewersWithoutLeakingLoans() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             foreignWaiter=staff("WAITER"),kitchen=staff("KITCHEN");
+        Visit visit=open(waiter),differentVisit=open(foreignWaiter);
+        User guest=join(visit),otherGuest=join(differentVisit);
+        String g="/api/v1/me/live-cursor?topic=games";
+        String w="/api/v1/waiter/live-cursor?topic=games";
+        relay.dispatchBatch();
+        long guestBefore=liveCursor(g,guest.token());
+        long otherBefore=liveCursor(g,otherGuest.token());
+        long waiterBefore=liveCursor(w,waiter.token());
+        long foreignWaiterBefore=liveCursor(w,foreignWaiter.token());
+        assertEquals(403,getAs(w,kitchen.token()).getStatus());
+        assertEquals(401,getAs(g,null).getStatus());
+
+        UUID game=createGame(manager,1);
+        assertTrue(relay.dispatchBatch()>0);
+        long afterCreate=liveCursor(g,guest.token());
+        assertTrue(afterCreate>guestBefore,"New catalogued copy is a global game refresh");
+        assertTrue(liveCursor(g,otherGuest.token())>otherBefore);
+        assertTrue(liveCursor(w,waiter.token())>waiterBefore);
+        assertTrue(liveCursor(w,foreignWaiter.token())>foreignWaiterBefore);
+        long otherAfterCreate=liveCursor(g,otherGuest.token());
+
+        UUID loan=requestLoan(guest,game);
+        assertTrue(relay.dispatchBatch()>0);
+        assertEquals(otherAfterCreate,liveCursor(g,otherGuest.token()),
+            "A private loan request is never visible to another guest");
+        assertFalse(getAs("/api/v1/me/game-loans",otherGuest.token())
+            .getContentAsString().contains(loan.toString()));
+
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String code=field(assigned.getContentAsString(),"copyCode");
+        assertTrue(relay.dispatchBatch()>0);
+        long afterAssignment=liveCursor(g,otherGuest.token());
+        assertTrue(afterAssignment>otherAfterCreate,"Stock depletion must wake another table");
+        assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
+            .contains("\"availableCopies\":0"));
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return-damaged",
+            waiter.token(),"{\"copyCode\":\""+code+"\",\"reason\":\"Missing game cards\"}").getStatus());
+        assertTrue(relay.dispatchBatch()>0);
+        long afterDamaged=liveCursor(g,otherGuest.token());
+        assertTrue(afterDamaged>afterAssignment);
+        assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
+            .contains("\"availableCopies\":0"));
+
+        UUID copy=jdbc.queryForObject("SELECT id FROM physical_game_copies WHERE game_id=?",
+            UUID.class,game);
+        assertEquals(200,postJson("/api/v1/admin/games/copies/"+copy+"/condition",
+            manager.token(),"{\"condition\":\"AVAILABLE\",\"reason\":\"Replaced missing cards\"}").getStatus());
+        assertTrue(relay.dispatchBatch()>0);
+        assertTrue(liveCursor(g,otherGuest.token())>afterDamaged);
+        assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
+            .contains("\"availableCopies\":1"));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_type='GAME_INVENTORY'
+              AND (payload_safe <> '{}'::jsonb OR live_published_at IS NULL)
+            """,Integer.class));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM live_game_signals
+            WHERE game_id IS NOT NULL AND
+              (loan_id IS NOT NULL OR event_type<>'GAME_INVENTORY_CHANGED')
+            """,Integer.class));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM live_game_signals
+            WHERE loan_id IS NOT NULL AND game_id IS NOT NULL
+            """,Integer.class));
+    }
+
 }
