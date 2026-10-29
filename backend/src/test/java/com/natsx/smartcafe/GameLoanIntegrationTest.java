@@ -42,7 +42,7 @@ class GameLoanIntegrationTest {
     @Autowired PasswordEncoder password;
 
     private String field(String json,String name) {
-        var m=Pattern.compile("\\"" + name + "\\":\\"([^\\"]+)\\"").matcher(json);
+        var m=Pattern.compile("\"" + name + "\":\"([^\"]+)\"").matcher(json);
         assertTrue(m.find(),"Missing JSON "+name+": "+json);
         return m.group(1);
     }
@@ -54,7 +54,7 @@ class GameLoanIntegrationTest {
             id,login,password.encode("synthetic-only-password"));
         jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",id,role);
         var r=postJson("/api/v1/staff/auth/login",null,
-            "{\\"login\\":\\""+login+"\\",\\"password\\":\\"synthetic-only-password\\"}");
+            "{\"login\":\""+login+"\",\"password\":\"synthetic-only-password\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
         return new User(field(r.getContentAsString(),"accessToken"),id);
     }
@@ -65,15 +65,15 @@ class GameLoanIntegrationTest {
         jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,4)",
             table,alias,alias);
         var r=postJson("/api/v1/waiter/table-visits",waiter.token(),
-            "{\\"tableId\\":\\""+table+"\\"}");
+            "{\"tableId\":\""+table+"\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
         return new Visit(UUID.fromString(field(r.getContentAsString(),"id")),alias,
             field(r.getContentAsString(),"joinProof"));
     }
     private User join(Visit visit) throws Exception {
         var r=postJson("/api/v1/table-visits/join",null,
-            "{\\"tableAlias\\":\\""+visit.tableAlias()+"\\",\\"joinProof\\":\\""+
-            visit.proof()+"\\",\\"displayName\\":\\"Synthetic game borrower\\"}");
+            "{\"tableAlias\":\""+visit.tableAlias()+"\",\"joinProof\":\""+
+            visit.proof()+"\",\"displayName\":\"Synthetic game borrower\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
         return new User(field(r.getContentAsString(),"accessToken"),
             UUID.fromString(field(r.getContentAsString(),"guestId")));
@@ -98,19 +98,19 @@ class GameLoanIntegrationTest {
     private UUID createGame(User manager,int numberOfCopies) throws Exception {
         String name="UNO Test "+UUID.randomUUID();
         var r=postJson("/api/v1/admin/games",manager.token(),
-            "{\\"name\\":\\""+name+"\\",\\"description\\":\\"Physical deck\\"}");
+            "{\"name\":\""+name+"\",\"description\":\"Physical deck\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
         UUID id=UUID.fromString(field(r.getContentAsString(),"id"));
         for (int i=0; i<numberOfCopies; i++) {
             var copy=postJson("/api/v1/admin/games/"+id+"/copies",manager.token(),
-                "{\\"copyCode\\":\\"UNO-"+UUID.randomUUID()+"\\"}");
+                "{\"copyCode\":\"UNO-"+UUID.randomUUID()+"\"}");
             assertEquals(200,copy.getStatus(),copy.getContentAsString());
         }
         return id;
     }
     private UUID requestLoan(User guest,UUID gameId) throws Exception {
         var r=postJson("/api/v1/me/game-loans",guest.token(),
-            "{\\"gameId\\":\\""+gameId+"\\"}");
+            "{\"gameId\":\""+gameId+"\"}");
         assertEquals(200,r.getStatus(),r.getContentAsString());
         return UUID.fromString(field(r.getContentAsString(),"id"));
     }
@@ -126,14 +126,14 @@ class GameLoanIntegrationTest {
         assertEquals(403,getAs("/api/v1/me/games",waiter.token()).getStatus());
         assertEquals(403,getAs("/api/v1/waiter/game-loans",kitchen.token()).getStatus());
         assertEquals(403,postJson("/api/v1/admin/games",waiter.token(),
-            "{\\"name\\":\\"Unauthorized catalog\\"}").getStatus());
+            "{\"name\":\"Unauthorized catalog\"}").getStatus());
         assertEquals(200,getAs("/api/v1/me/games",guest.token()).getStatus());
         assertTrue(getAs("/api/v1/me/games",guest.token()).getContentAsString()
-            .contains("\\"availableCopies\\":1"));
+            .contains("\"availableCopies\":1"));
 
         UUID loan=requestLoan(guest,game);
         assertEquals(409,postJson("/api/v1/me/game-loans",otherGuest.token(),
-            "{\\"gameId\\":\\""+game+"\\"}").getStatus());
+            "{\"gameId\":\""+game+"\"}").getStatus());
         var foreign=getAs("/api/v1/me/game-loans",otherGuest.token());
         assertEquals(200,foreign.getStatus());
         assertFalse(foreign.getContentAsString().contains(loan.toString()));
@@ -150,22 +150,22 @@ class GameLoanIntegrationTest {
         assertEquals(409,postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",
             waiter.token()).getStatus());
         assertEquals(409,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
-            waiter.token(),"{\\"copyCode\\":\\"WRONG-UNIT\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\"WRONG-UNIT\"}").getStatus());
         assertEquals(409,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
             waiter.token()).getStatus());
 
         var handed=postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
-            waiter.token(),"{\\"copyCode\\":\\""+copyCode+"\\"}");
+            waiter.token(),"{\"copyCode\":\""+copyCode+"\"}");
         assertEquals(200,handed.getStatus(),handed.getContentAsString());
         assertTrue(handed.getContentAsString().contains("IN_USE"));
         assertEquals(409,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
             waiter.token()).getStatus());
         assertEquals(409,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
-            waiter.token(),"{\\"copyCode\\":\\"WRONG-UNIT\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\"WRONG-UNIT\"}").getStatus());
         assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
-            waiter.token(),"{\\"copyCode\\":\\""+copyCode+"\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+copyCode+"\"}").getStatus());
         assertEquals(409,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
-            waiter.token(),"{\\"copyCode\\":\\""+copyCode+"\\"}").getStatus());
+            waiter.token(),"{\"copyCode\":\""+copyCode+"\"}").getStatus());
         assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
             waiter.token()).getStatus());
         assertEquals(401,getAs("/api/v1/me/game-loans",guest.token()).getStatus());
