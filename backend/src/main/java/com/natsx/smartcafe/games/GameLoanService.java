@@ -65,8 +65,9 @@ public class GameLoanService {
 
     @Transactional
     public LoanView request(GuestPrincipal guest, UUID gameId) {
-        // Prevent concurrent table closure while a request is inserted.
-        requireActiveVisit(guest.visitId());
+        // Serialize requests for this visit and exclude concurrent table close
+        // and duplicate game requests before checking for active loans.
+        requireActiveVisitExclusive(guest.visitId());
         Boolean member=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM visit_guests
                           WHERE id=? AND visit_id=?)
@@ -116,7 +117,7 @@ public class GameLoanService {
             WHERE c.game_id=? AND c.condition='AVAILABLE'
               AND NOT EXISTS(SELECT 1 FROM physical_game_loans l
                   WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE'))
-            ORDER BY c.copy_code FOR UPDATE OF c SKIP LOCKED LIMIT 1
+            ORDER BY c.copy_code LIMIT 1 FOR UPDATE OF c SKIP LOCKED
             """,rs->rs.next()?rs.getObject("id",UUID.class):null,loan.gameId());
         if (copy==null) throw conflict("No available physical copy for this game");
         jdbc.update("""
@@ -188,6 +189,13 @@ public class GameLoanService {
             """,id,gameId,code.strip());
         audit.staff(staff.staffId(),"GAME_COPY_REGISTERED","PHYSICAL_GAME_COPY",id,requestId);
         return id;
+    }
+
+    private void requireActiveVisitExclusive(UUID visitId) {
+        String state=jdbc.query("""
+            SELECT status FROM table_visits WHERE id=? FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,visitId);
+        if (!"ACTIVE".equals(state)) throw conflict("Table visit is no longer active");
     }
 
     private void requireActiveVisit(UUID visitId) {

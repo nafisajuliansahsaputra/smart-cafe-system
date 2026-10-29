@@ -148,7 +148,16 @@ public class TableVisitService {
             )
             """, Integer.class, visitId);
         if (unresolved != null && unresolved > 0) throw conflict("Visit has unresolved orders or payments");
-        // M4 game-loan constraint must be added before enabling loans.
+        // Under the visit row lock, no guest can create another request and
+        // no waiter can progress a loan. All pending or unreturned physical
+        // games block closure independently from order/cash settlement.
+        Boolean borrowed=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM physical_game_loans
+                WHERE visit_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE'))
+            """,Boolean.class,visitId);
+        if (Boolean.TRUE.equals(borrowed)) {
+            throw conflict("Visit has an outstanding physical game loan");
+        }
         jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", visitId);
         jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", visitId);
         audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
