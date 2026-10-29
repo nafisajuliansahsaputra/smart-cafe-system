@@ -61,3 +61,18 @@
 .staff-item-list small { display: block; }
 .staff-task-total { display: flex; justify-content: space-between; gap: 14px; margin-top: auto; padding-top: 16px; border-top: 1px solid #dce2e6; }
 .staff-change { display: block; font-weight: 500; margin-top: 8px; }
+
+.staff-table-feedback { border-color: #b5c6c8; }
+.staff-secret-disclosure { display: grid; gap: 10px; margin-top: 16px; }
+.staff-secret-disclosure label { font-weight: 700; }
+.staff-shell .staff-secret-disclosure input {
+  width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: .045em; overflow-wrap: anywhere; font-size: .92rem;
+}
+.staff-secret-disclosure small { overflow-wrap: anywhere; }
+.staff-table-actions { display: grid; gap: 12px; }
+.staff-table-actions .staff-form { margin: 0; }
+.staff-table-feedback h2 { margin: 0; }
+@media (max-width: 640px) {
+  .staff-shell .staff-secret-disclosure input { font-size: .77rem; }
+}

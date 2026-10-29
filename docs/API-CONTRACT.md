@@ -208,3 +208,9 @@ Implemented new guest-authenticated endpoints:
 - `GET /api/v1/me/orders/{id}/receipt` returns finalized immutable receipt only for the current owning guest/visit and confirmed PAID payment. Other guests and unpaid orders receive safe 404; response is no-store.
 
 Browser routes: `/t/[tableAlias]` for public table metadata plus short-lived staff join proof, `/visit` catalog, `/visit/menu/[itemId]` modifiers, `/visit/cart` versioned cart, `/visit/orders` history and `/visit/orders/[id]` tracking/paid receipt. Authentication uses a path-scoped HttpOnly SameSite Strict cookie sent only to the Next.js web server. Backend still requires explicit bearer header, enforces ownership and finalizes cash payments.
+
+## M2 table management endpoint (stacked draft PR #6)
+
+`GET /api/v1/waiter/tables` is authorized for WAITER, CASHIER, MANAGER, ADMIN only. Returns up to 250 table records: `tableId`, `tableCode`, `publicAlias`, `capacity`, `tableStatus`, `activeVisit`, nullable `manageableVisitId`, nullable `proofExpiresAt`. For a regular waiter, the latter two fields are present only for a visit they opened; supervisors can see them for all active visits. There is **no join proof in GET responses**. An occupied table remains visible without its sensitive visit identifier to unrelated waiters. The response uses `Cache-Control: no-store`.
+
+The existing POST operations `/api/v1/waiter/table-visits`, `/{id}/join-proof`, and `/{id}/close` are called from protected Next.js Server Actions at `/staff/tables`. Their backend role, ownership, conflict, settlement and guest-token-revocation checks are unchanged. The freshly issued proof is displayed only in the authenticated staff action result, never in a URL/QR or database-readable list.

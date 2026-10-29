@@ -133,3 +133,9 @@ This is an **unmerged development-only slice**, not a pilot or payments certific
 [PR #5](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/5) adds QR/NFC table entry and temporary join proof, scoped guest browser session, available menu, required/optional modifier groups, persistent/versioned cart, cash checkout, own order tracking, and paid-only in-session receipt. Tokens never enter client JavaScript; new backend guest logout revokes the bearer, and paid receipts are fetched by owning order ID.
 
 **Still draft, not deployed or commercial-ready.** Public join abuse throttling, authenticated browser E2E, TLS/CSRF review, staff QR proof UX, optional phone receipt provider and QRIS/VA are still required. See [M2 guest ordering verification](docs/M2-GUEST-ORDERING.md).
+
+## M2 table management browser (draft PR #6)
+
+[PR #6](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/6) adds an authenticated `/staff/tables` operator screen. Authorized waiters and cashier/manager/admin may open visits, rotate join credentials and close settled visits. A new role-protected `GET /api/v1/waiter/tables` exposes table availability; another waiter's active visit ID and join proof expiry are withheld. **Join proofs appear only in the staff-only response to opening/rotating a visit**, never in the table list, QR URL or browser storage. Closing a visit invokes backend settlement checks and revokes linked guest sessions.
+
+This is still an unmerged development-only slice; see [table management acceptance notes](docs/M2-TABLE-MANAGEMENT.md).

@@ -117,3 +117,7 @@ The M2 KDS/waiter/full cash-E2E checkboxes remain open until authenticated brows
 ### M2 customer browser follow-up (stacked PR #5)
 
 Customer UI now includes active-table join proof, visit-scoped HttpOnly session, menu and modifier selection, server-priced versioned cart, cash checkout and status tracking, backend guest logout, and paid-only own receipt reads by order ID. Integration tests cover receipt visibility and session revocation. **Keep the full guest journey and M2 acceptance checkboxes open** until authenticated browser end-to-end, join abuse rate limiting and real-origin cookie/CSRF checks are complete. See [docs/M2-GUEST-ORDERING.md](docs/M2-GUEST-ORDERING.md).
+
+### M2 staff table-management UI (draft PR #6)
+
+Added first role-protected table inventory and browser actions to open visits, rotate short-lived proof, and close visits after paid/served checks. Ordinary waiters only see manageable visit IDs for visits they opened; supervisors can manage all. Proofs are shown only once in the result of a privileged POST, not through GET or QR/NFC links. M2 acceptance remains **OPEN** pending authenticated staff/guest E2E, real browser and network checks, rate-limiting of guest joins, and actual operational trial. See [docs/M2-TABLE-MANAGEMENT.md](docs/M2-TABLE-MANAGEMENT.md).
