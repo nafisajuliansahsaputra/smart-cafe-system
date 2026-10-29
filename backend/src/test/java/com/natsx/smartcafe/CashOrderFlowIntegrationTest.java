@@ -434,7 +434,15 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer "+token);
         if(order!=null) request.param("orderId",order.toString());
         if(after!=null) request.param("after",String.valueOf(after));
-        return mvc.perform(request).andReturn().getResponse();
+        var initial = mvc.perform(request).andReturn();
+        if (after != null && initial.getRequest().isAsyncStarted()) {
+            // After-cursor requests now use Servlet asynchronous dispatch.
+            assertTrue(initial.getRequest().isAsyncStarted());
+            return mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .asyncDispatch(initial)).andReturn().getResponse();
+        }
+        return initial.getResponse();
     }
 
     @Test void durableLiveCursorIsScopedAndReconnectCanCatchUp() throws Exception {
@@ -503,6 +511,39 @@ class CashOrderFlowIntegrationTest {
         assertTrue(waiterAfter>waiterBefore);
         assertEquals(otherWaiterBefore,liveCursor(live("/api/v1/waiter/live-cursor",
             unassigned,"waiter",null,null).getContentAsString()));
+    }
+
+
+    @Test void longPollReleasesServletThreadAndReturnsAuthorizedCursor() throws Exception {
+        String cashier=staff("CASHIER");
+        var start=mvc.perform(get("/api/v1/ops/live-cursor")
+            .param("topic","orders").header("Authorization","Bearer "+cashier))
+            .andReturn().getResponse();
+        long after=liveCursor(start.getContentAsString());
+
+        // The request thread should release immediately even if no new event
+        // is published. The waiting happens on the virtual-thread executor.
+        long began=System.nanoTime();
+        var pending=mvc.perform(get("/api/v1/ops/live-cursor")
+            .param("topic","orders").param("after",Long.toString(after))
+            .header("Authorization","Bearer "+cashier)).andReturn();
+        assertTrue(pending.getRequest().isAsyncStarted(),
+            "After-cursor must use asynchronous MVC return handling");
+        assertTrue((System.nanoTime()-began)/1_000_000 < 5000,
+            "Servlet dispatch must not block for the 14-second cursor wait");
+
+        var sampled=mvc.perform(get("/api/v1/ops/live-cursor")
+            .param("topic","orders").header("Authorization","Bearer "+cashier))
+            .andReturn().getResponse();
+        assertEquals(200,sampled.getStatus(),sampled.getContentAsString());
+
+        // The outstanding request eventually completes with the current
+        // position. Do not require a notification to finish this test.
+        var resolved=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .asyncDispatch(pending)).andReturn().getResponse();
+        assertEquals(200,resolved.getStatus(),resolved.getContentAsString());
+        assertEquals(after,liveCursor(resolved.getContentAsString()));
     }
 
 }
