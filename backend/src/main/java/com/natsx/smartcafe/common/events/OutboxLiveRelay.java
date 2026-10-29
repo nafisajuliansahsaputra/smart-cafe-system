@@ -45,7 +45,7 @@ public class OutboxLiveRelay {
                 rs.getString("event_type")), BATCH_SIZE);
 
         for (Pending event : pending) {
-            jdbc.update("""
+            int inserted = jdbc.update("""
                 INSERT INTO live_order_signals(outbox_id, order_id, event_type)
                 VALUES (?,?,?)
                 ON CONFLICT (outbox_id) DO NOTHING
@@ -60,8 +60,10 @@ public class OutboxLiveRelay {
             // PostgreSQL NOTIFY is transactional: listeners only wake after
             // the durable signal/marker commit, never before a rollback.
             // The payload is only a UUID, never any personal or payment data.
-            jdbc.query("SELECT pg_notify('scs_order_live', ?)",
-                (RowCallbackHandler) rs -> { }, event.orderId().toString());
+            if (inserted == 1) {
+                jdbc.query("SELECT pg_notify('scs_order_live', ?)",
+                    (RowCallbackHandler) rs -> { }, event.orderId().toString());
+            }
         }
         return pending.size();
     }
