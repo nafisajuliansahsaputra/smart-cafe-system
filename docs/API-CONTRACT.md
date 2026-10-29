@@ -200,3 +200,11 @@ The singular public legacy route `/menu/{id}/variants` remains for one-group ite
 `/staff/kitchen` consumes existing `GET /kitchen/tickets`, `POST /kitchen/tickets/{id}/start` and `POST /kitchen/tickets/{id}/ready`. `/staff/waiter` consumes `GET /waiter/orders/tasks`, `POST /waiter/orders/{id}/served`, `POST /ops/payments/{intentId}/cash-tenders` with a fresh idempotency key. All browser commands are server-side, scoped to the current backend-authenticated staff session and require confirmation. The backend, not the browser, remains responsible for financial and fulfillment state.
 
 M2 limits remain: delivery allocation still binds the table-opening waiter (no reassignment workflow); cash-at-handover is a provisional demo rule; task refresh is manual, not SSE. Do not enable actual cash or customer data in a publicly deployed environment.
+
+## M2 guest customer browser follow-up (draft PR #5)
+
+Implemented new guest-authenticated endpoints:
+- `POST /api/v1/me/logout` revokes current token by hash, guest ID and visit ID.
+- `GET /api/v1/me/orders/{id}/receipt` returns finalized immutable receipt only for the current owning guest/visit and confirmed PAID payment. Other guests and unpaid orders receive safe 404; response is no-store.
+
+Browser routes: `/t/[tableAlias]` for public table metadata plus short-lived staff join proof, `/visit` catalog, `/visit/menu/[itemId]` modifiers, `/visit/cart` versioned cart, `/visit/orders` history and `/visit/orders/[id]` tracking/paid receipt. Authentication uses a path-scoped HttpOnly SameSite Strict cookie sent only to the Next.js web server. Backend still requires explicit bearer header, enforces ownership and finalizes cash payments.
