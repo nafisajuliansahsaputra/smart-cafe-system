@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { LiveRefresh } from "@/components/live-refresh";
+import { managerGameLossAlerts } from "@/lib/game-server";
 import { logoutStaff } from "./actions";
 import { canUseOcc, canUseKitchen, canUseWaiter, staffIdentity } from "@/lib/staff-server";
 
@@ -17,6 +19,8 @@ export default async function StaffPage() {
       </main>
     );
   }
+  const isManager=current.staff.roles.some(r=>r==="MANAGER"||r==="ADMIN");
+  const lossAlerts=isManager ? await managerGameLossAlerts() : null;
   return (
     <main className="staff-shell">
       <header className="staff-header">
@@ -27,6 +31,37 @@ export default async function StaffPage() {
         </div>
         <form action={logoutStaff}><button type="submit" className="staff-secondary">Keluar</button></form>
       </header>
+      {isManager && <section className="staff-panel" aria-labelledby="manager-loss-alert-title">
+        <h2 id="manager-loss-alert-title">Pemeriksaan laporan kehilangan</h2>
+        <p className="staff-muted">
+          Antrean insiden permainan fisik yang menunggu keputusan manager.
+          Informasi disinkronkan melalui event internal, tanpa data pribadi pelanggan.
+        </p>
+        <LiveRefresh url="/staff/live?topic=games"/>
+        {!lossAlerts?.ok && <p role="alert">
+          Status laporan kehilangan belum dapat diverifikasi. Buka daftar laporan
+          untuk memeriksa sebelum mengambil keputusan.
+        </p>}
+        {lossAlerts?.ok && lossAlerts.data.openCount===0 &&
+          <p role="status">Tidak ada laporan kehilangan yang menunggu pemeriksaan.</p>}
+        {lossAlerts?.ok && lossAlerts.data.openCount>0 && <>
+          <p role="status" className="staff-notice">
+            {lossAlerts.data.openCount} laporan kehilangan memerlukan pemeriksaan manager.
+          </p>
+          <ul>{lossAlerts.data.recent.map((item,i)=><li key={`${item.copyCode}-${item.reportedAt}-${i}`}>
+            <strong>Meja {item.tableCode} · {item.gameName}</strong>
+            {" · Unit "}{item.copyCode}
+            {" · Dilaporkan "}{new Intl.DateTimeFormat("id-ID",{
+              dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Jakarta",
+            }).format(new Date(item.reportedAt))}
+          </li>)}</ul>
+          {lossAlerts.data.openCount>lossAlerts.data.recent.length &&
+            <p className="staff-muted">Masih ada laporan lain dalam antrean.</p>}
+        </>}
+        <Link className="staff-link-button" href="/staff/games?istatus=OPEN">
+          Buka laporan menunggu pemeriksaan
+        </Link>
+      </section>}
       {canUseOcc(current.staff.roles) ? (
         <section className="staff-panel">
           <h2>Order Control Center</h2>

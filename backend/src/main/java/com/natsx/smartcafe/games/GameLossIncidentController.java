@@ -38,6 +38,14 @@ public class GameLossIncidentController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(service.reviewQueue(),RequestIdFilter.get(request)));
     }
+    /** Minimal OPEN summary for manager dashboard and existing game live feed. */
+    @GetMapping("/admin/games/loss-incidents/summary")
+    public ResponseEntity<ApiEnvelope<GameLossIncidentService.OpenIncidentSummary>> summary(
+        @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(service.openIncidentSummary(),RequestIdFilter.get(request)));
+    }
+
     /** Search the full incident register without the legacy first-100 cap. */
     @GetMapping("/admin/games/loss-incidents/search")
     public ResponseEntity<ApiEnvelope<GameLossIncidentService.IncidentPage>> search(
