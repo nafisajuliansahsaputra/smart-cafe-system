@@ -158,3 +158,25 @@ but **does** observe catalogue stock depletion/restock; the synthetic
 Chromium guest page sees a manager restore a quarantined UNO copy without
 manual page navigation. This is UI freshness, not stock reservation or
 proof of in-person release readiness.
+
+## Manager inventory search and database pagination (stacked draft PR #25)
+
+A separate, manager/admin-only `GET /api/v1/admin/games/copies/search`
+supports a bounded case-insensitive substring query against **game name
+or physical unit code**, optional condition filter, and a stable
+25-copy page ordered by copy code and ID. The server fetches one extra
+row to return `hasNext` without computing full total counts; page numbers
+are zero-based, capped at 2000 to bound OFFSET work, and invalid values
+fail with 400. SQL uses prepared parameters and literal-substring
+`POSITION` instead of SQL LIKE wildcards. V18 adds a condition/code
+index; old `GET /admin/games/copies` remains unchanged for compatibility.
+
+The manager inventory UI uses the new paged endpoint and GET search
+form, with previous/next navigation preserving query and status.
+Guest, waiter, cashier and kitchen accounts cannot access individual
+copy search or unit serials. Return/quarantine/restore commands
+retain server-side physical-loan locks, audit and explicit reasons;
+query parameters never grant any mutation authority. Inventory
+realtime change signals still refresh the currently displayed page.
+The V16 100-event condition-history panel is deliberately separate.
+This is not unbounded export or full incident disposition.

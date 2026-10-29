@@ -247,3 +247,15 @@ Chromium HTTP/HTTPS keeps a guest games page open while the manager
 restores the only damaged UNO and asserts the count updates without
 navigating or manually refreshing. Existing two-replica and async
 subscriber CI jobs still run.
+
+## M4 manager unit search and pagination (draft PR #25)
+
+Testcontainers seeds 53 distinct synthetic serialized copies and
+asserts 25/25/3/0 pages, stable copy ordering and `hasNext`, filtered
+DAMAGED/AVAILABLE results, denied anonymous/waiter/kitchen roles,
+invalid condition/search/page errors, and literal wildcard/injection
+queries that return no extra records. Chromium manager acceptance
+searches for a missing unit and filters DAMAGED after restoring UNO,
+then resets to see the registered unit; ordinary cash/game cycle
+continues without public data or payment changes. Exact-head seven
+CI jobs remain required before review.

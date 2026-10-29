@@ -319,3 +319,18 @@ payment information are emitted in SSE. `GAME_INVENTORY` outbox records
 contain the game UUID and empty JSON; backend checks the referenced
 catalogue game before relay publication. This adds no anonymous public
 game SSE, no change to financial authority, and no second EventSource.
+
+## M4 paginated manager game-copy inventory (stacked draft PR #25)
+
+`GET /api/v1/admin/games/copies/search?q=<string>&condition=<state>&page=<int>`
+is authorized for MANAGER/ADMIN only; 401 anonymous, 403 other roles.
+`q` defaults to empty, trimmed at the backend, max 80 characters,
+and matches case-insensitive literal substrings of game name or copy
+code (SQL %/_ treated literally). `condition` may be blank, AVAILABLE,
+DAMAGED, LOST or RETIRED; `page` defaults 0 and must be an integer
+between 0 and 2000 inclusive. Invalid parameters → 400; no PII
+and no write side effects. Success 200/no-store with
+`ApiEnvelope.data = {items:[CopyView],page:int,hasNext:boolean}`
+(25 per page, 26 fetched). Order is stable by copy code then ID.
+This extends, rather than breaks, the legacy bounded 250-copy list
+endpoint while its consumers migrate.
