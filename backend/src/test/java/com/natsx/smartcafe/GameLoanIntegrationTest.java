@@ -779,4 +779,135 @@ class GameLoanIntegrationTest {
             WHERE id=? AND status='DISMISSED' AND reviewed_by=?
             """,Integer.class,incident,manager.id()));
     }
+
+    @Test void foundLostCopyRequiresVerifiedManagerQuarantineThenSeparateInspection()
+        throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter);
+        User guest=join(visit);
+        UUID loan=requestLoan(guest,game);
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String code=field(assigned.getContentAsString(),"copyCode");
+        UUID copy=jdbc.queryForObject("""
+            SELECT id FROM physical_game_copies WHERE copy_code=?
+            """,UUID.class,code);
+        String recover="/api/v1/admin/games/copies/"+copy+"/recover";
+        String inventory="/api/v1/admin/games/copies/"+copy+"/condition";
+        String recoveryNote="Unit was found in rear cabinet; inspect before use";
+        String recoveryBody="{\"copyCode\":\""+code+"\",\"reason\":\""+recoveryNote+"\"}";
+        assertEquals(401,postJson(recover,null,recoveryBody).getStatus());
+        assertEquals(403,postJson(recover,waiter.token(),recoveryBody).getStatus());
+        assertEquals(403,postJson(recover,cashier.token(),recoveryBody).getStatus());
+        assertEquals(403,postJson(recover,kitchen.token(),recoveryBody).getStatus());
+        assertEquals(409,postJson(recover,manager.token(),recoveryBody).getStatus(),
+            "Active ASSIGNED copy cannot be recovered as LOST");
+        assertEquals(400,postJson(recover,manager.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"bad\"}").getStatus());
+
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/report-loss",
+            waiter.token(),"{\"reason\":\"Assigned unit could not be located\"}").getStatus());
+        var incidents=getAs("/api/v1/admin/games/loss-incidents",manager.token());
+        assertEquals(200,incidents.getStatus());
+        // Find the report by loan UUID through the typed manager evidence endpoint.
+        var match=Pattern.compile("\"id\":\"([0-9a-f-]{36})\",\"loanId\":\""+
+            loan+"\"").matcher(incidents.getContentAsString());
+        assertTrue(match.find(),incidents.getContentAsString());
+        String incident=match.group(1);
+        assertEquals(200,postJson("/api/v1/admin/games/loss-incidents/"+incident+
+            "/review",manager.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\""+code+
+            "\",\"reason\":\"Unit not located after full physical check\"}").getStatus());
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT status FROM physical_game_loans WHERE id=?
+            """,String.class,loan));
+        assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+
+        assertEquals(409,postJson(recover,manager.token(),
+            "{\"copyCode\":\"WRONG-UNIT\",\"reason\":\"Located but serial mismatch\"}").getStatus());
+        assertEquals(400,postJson(recover,manager.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"x\"}").getStatus());
+        assertEquals(409,postJson(inventory,manager.token(),
+            "{\"condition\":\"AVAILABLE\",\"reason\":\"Unsafe direct release\"}").getStatus());
+        assertEquals(200,postJson(recover,manager.token(),recoveryBody).getStatus());
+        assertEquals(409,postJson(recover,manager.token(),recoveryBody).getStatus(),
+            "Found unit recovery cannot be replayed");
+        assertEquals("DAMAGED",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE id=?
+            """,String.class,copy));
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT status FROM physical_game_loans WHERE id=?
+            """,String.class,loan));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events
+            WHERE copy_id=? AND loan_id=? AND actor_id=?
+              AND before_condition='LOST' AND after_condition='DAMAGED'
+              AND reason=?
+            """,Integer.class,copy,loan,manager.id(),recoveryNote));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_type='PHYSICAL_GAME_COPY' AND resource_id=?
+              AND operation='GAME_COPY_FOUND_QUARANTINED'
+            """,Integer.class,copy));
+        assertEquals(200,getAs("/api/v1/admin/games/condition-history/search?change=DAMAGED",
+            manager.token()).getStatus());
+        assertTrue(getAs("/api/v1/admin/games/condition-history/search?change=DAMAGED",
+            manager.token()).getContentAsString().contains(recoveryNote));
+        assertTrue(getAs("/api/v1/me/games",guest.token()).getStatus()!=200,
+            "The old guest session is revoked when the visit was closed");
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copies
+            WHERE id=? AND condition='AVAILABLE'
+            """,Integer.class,copy));
+        assertEquals(200,postJson(inventory,manager.token(),
+            "{\"condition\":\"AVAILABLE\",\"reason\":\"Counted all pieces and verified play-ready\"}").getStatus());
+        assertEquals("AVAILABLE",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE id=?
+            """,String.class,copy));
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events
+            WHERE copy_id=? AND actor_id=?
+              AND (before_condition='LOST' AND after_condition='DAMAGED'
+                  OR before_condition='DAMAGED' AND after_condition='AVAILABLE')
+            """,Integer.class,copy,manager.id()));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents
+            WHERE id=? AND status='CONFIRMED_LOST'
+            """,Integer.class,UUID.fromString(incident)));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loans
+            WHERE id=? AND status='LOST'
+            """,Integer.class,loan));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_type='GAME_INVENTORY' AND aggregate_id=?
+              AND payload_safe<>'{}'::jsonb
+            """,Integer.class,game));
+        Visit anotherVisit=open(waiter);
+        User anotherGuest=join(anotherVisit);
+        assertTrue(getAs("/api/v1/me/games",anotherGuest.token())
+            .getContentAsString().contains("\"availableCopies\":1"));
+        UUID nextLoan=requestLoan(anotherGuest,game);
+        var second=postEmpty("/api/v1/waiter/game-loans/"+nextLoan+"/assign",waiter.token());
+        assertEquals(200,second.getStatus(),second.getContentAsString());
+        assertEquals(code,field(second.getContentAsString(),"copyCode"));
+    }
+
+    @Test void managerCannotRecoverUnverifiedArbitraryLostCondition() throws Exception {
+        User manager=staff("MANAGER");
+        UUID game=createGame(manager,1);
+        UUID copy=jdbc.queryForObject(
+            "SELECT id FROM physical_game_copies WHERE game_id=?",UUID.class,game);
+        String code=jdbc.queryForObject(
+            "SELECT copy_code FROM physical_game_copies WHERE id=?",String.class,copy);
+        jdbc.update("UPDATE physical_game_copies SET condition='LOST' WHERE id=?",copy);
+        assertEquals(409,postJson("/api/v1/admin/games/copies/"+copy+"/recover",
+            manager.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"Unverified imported loss flag\"}").getStatus());
+        assertEquals("LOST",jdbc.queryForObject(
+            "SELECT condition FROM physical_game_copies WHERE id=?",String.class,copy));
+    }
 }

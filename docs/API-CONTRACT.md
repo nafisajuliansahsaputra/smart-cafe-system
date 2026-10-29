@@ -376,3 +376,20 @@ A confirmed loss sets both loan and copy LOST transactionally and creates
 safe realtime markers; a dismissed claim leaves the active physical loan
 unchanged so staff can complete regular inspected return. Incidents are
 historical evidence; no fee, liability or automated billing outcome.
+
+
+## M4 found LOST unit quarantine endpoint (stacked draft PR #28)
+
+`POST /api/v1/admin/games/copies/{id}/recover`
+(manager/admin bearer only) expects JSON
+`{"copyCode":"UNO-001","reason":"Found unit in backroom; physical inspection needed"}`.
+A matching physical serial, verified existing LOST loan and manager-
+confirmed loss incident are required; only LOST → DAMAGED quarantine
+is possible. Inactive/stale/wrong copy, missing incident or repeated
+recovery → 409; invalid note → 400; unauthorized requester → 401/403.
+Returns 200/no-store `ApiEnvelope.data = CopyView` with condition
+DAMAGED. Explicitly separate `POST /api/v1/admin/games/copies/{id}/condition`
+(DAMAGED → AVAILABLE, mandatory new inspection reason) is needed for
+restocking. Past LOAN LOST and incident CONFIRMED_LOST remain unchanged.
+A safe `GAME_INVENTORY_CHANGED` marker (empty outbox payload) prompts
+authorized live catalogue refresh; no guest/financial data is emitted.

@@ -266,3 +266,16 @@ handover/return workflow. PostgreSQL security/transition and browser
 acceptance added. Still requires approved LOST copy recovery/claims
 policy, manager incident paging, staff/mobile acceptance, retention
 rules and operational incident review before a public pilot.
+
+
+### M4 recovered LOST copies, verified quarantine and restock (draft PR #28)
+
+A manager can now record a found LOST serialized copy with an exact
+physical code and discovery reason; server requires a prior confirmed
+LOST incident and quarantines as DAMAGED without changing the old loan
+or incident. A second inspected restoration is needed before stock
+becomes AVAILABLE. Both steps have permanent per-copy condition
+history/audit and scoped inventory live marker. PostgreSQL and
+HTTP/HTTPS browser checks cover full workflow. Still open: formal
+claims/retention policy, paging for loss incidents, physical field
+testing, manager incident notification and commercial rollout gates.
