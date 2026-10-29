@@ -25,7 +25,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers
 @AutoConfigureMockMvc
-@SpringBootTest
+@SpringBootTest(properties = "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments")
 class TableVisitIntegrationTest {
     @Container
     static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
@@ -197,6 +197,62 @@ class TableVisitIntegrationTest {
             .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
         assertEquals(200, closed.getStatus());
         assertFalse(closed.getContentAsString().contains(visitId));
+    }
+
+
+    @Test void publicJoinLimiterCommitsFailedAttemptsAndIgnoresSpoofedForwardedIp()
+        throws Exception {
+        var table=table();
+        var waiter=staff("WAITER");
+        var opened=open(waiter,table);
+        var proof=extract(opened,"joinProof");
+        String invalid="{\"tableAlias\":\"" + table.alias()
+            + "\",\"joinProof\":\"" + "x".repeat(43)
+            + "\",\"displayName\":\"Synthetic Rate Test\"}";
+        String valid="{\"tableAlias\":\"" + table.alias()
+            + "\",\"joinProof\":\"" + proof
+            + "\",\"displayName\":\"Synthetic Rate Test\"}";
+
+        for (int i=0; i<24; i++) {
+            var response=mvc.perform(post("/api/v1/table-visits/join")
+                .with(req -> { req.setRemoteAddr("203.0.113.81"); return req; })
+                .header("X-Forwarded-For", "198.51.100." + (i%100))
+                .contentType(MediaType.APPLICATION_JSON).content(invalid))
+                .andReturn().getResponse();
+            assertEquals(404,response.getStatus(),response.getContentAsString());
+        }
+        var blocked=mvc.perform(post("/api/v1/table-visits/join")
+            .with(req -> { req.setRemoteAddr("203.0.113.81"); return req; })
+            .header("X-Forwarded-For","192.0.2.1")
+            .contentType(MediaType.APPLICATION_JSON).content(valid))
+            .andReturn().getResponse();
+        assertEquals(429,blocked.getStatus(),blocked.getContentAsString());
+        assertEquals("600",blocked.getHeader("Retry-After"));
+        assertTrue(blocked.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(blocked.getContentAsString().contains("RATE_LIMITED"));
+        assertFalse(blocked.getContentAsString().contains(proof));
+        assertFalse(blocked.getContentAsString().contains("accessToken"));
+
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT count(*) FROM visit_guests WHERE visit_id=?",Integer.class,
+            UUID.fromString(extract(opened,"id"))));
+        assertTrue(jdbc.queryForObject(
+            "SELECT count(*) FROM guest_join_throttles WHERE attempts>=25",
+            Integer.class)>0);
+        assertEquals(200,mvc.perform(post("/api/v1/table-visits/join")
+            .with(req -> { req.setRemoteAddr("203.0.113.82"); return req; })
+            .contentType(MediaType.APPLICATION_JSON).content(valid))
+            .andReturn().getResponse().getStatus());
+
+        var nextTable=table();
+        var nextOpen=open(waiter,nextTable);
+        var otherValid=mvc.perform(post("/api/v1/table-visits/join")
+            .with(req -> { req.setRemoteAddr("203.0.113.81"); return req; })
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"tableAlias\":\"" + nextTable.alias() + "\",\"joinProof\":\""
+                + extract(nextOpen,"joinProof") + "\",\"displayName\":\"Synthetic Other\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,otherValid.getStatus(),otherValid.getContentAsString());
     }
 
 }

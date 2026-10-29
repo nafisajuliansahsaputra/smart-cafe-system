@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers
 @AutoConfigureMockMvc
-@SpringBootTest
+@SpringBootTest(properties = "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments")
 class StaffAuthIntegrationTest {
     @Container
     static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")

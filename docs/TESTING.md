@@ -138,3 +138,9 @@ Verify from the current [PR #2 CI checks](https://github.com/nafisajuliansahsapu
 ## 12. V9 modifier regression scenarios
 
 Synthetic PostgreSQL Testcontainers coverage includes: creating independent Size/Milk/Extras groups; missing a required group; selecting two options from one group; multi-group cart pricing, stock allocation and immutable order snapshot array; idempotent replay with reversed modifier input order; publication of all groups; rejection by the legacy singular lookup when more than one active group exists; and archived options returning a safe unorderable cart preview and a rejected checkout without spending stock. **Inspect the latest PR-head CI** before treating these added cases as passing.
+
+## M2 guest join throttle integration (draft PR #7)
+
+A new TableVisitIntegrationTest case sends 24 malformed-proof-but-well-formed JSON join attempts with deliberately spoofed `X-Forwarded-For` headers and a constant actual remote address. The 25th is denied with 429/RATE_LIMITED/Retry-After/no-store and no session created, confirming counters remain committed even when proof authentication fails. A different socket peer may legitimately join the same active visit, and the blocked peer may join another active table (within remaining global peer quota).
+
+Test environments provide a synthetic `SCS_JOIN_THROTTLE_SECRET`; Compose CI provides a separate CI-only value and runs Flyway V10. The limit applies to valid JSON that passes controller validation: malformed requests must also be guarded at a trusted ingress layer. Verify all Java/DB/Next.js/Compose jobs on the final PR SHA before approving.
