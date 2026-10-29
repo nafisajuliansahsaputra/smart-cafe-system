@@ -214,3 +214,9 @@ Browser routes: `/t/[tableAlias]` for public table metadata plus short-lived sta
 `GET /api/v1/waiter/tables` is authorized for WAITER, CASHIER, MANAGER, ADMIN only. Returns up to 250 table records: `tableId`, `tableCode`, `publicAlias`, `capacity`, `tableStatus`, `activeVisit`, nullable `manageableVisitId`, nullable `proofExpiresAt`. For a regular waiter, the latter two fields are present only for a visit they opened; supervisors can see them for all active visits. There is **no join proof in GET responses**. An occupied table remains visible without its sensitive visit identifier to unrelated waiters. The response uses `Cache-Control: no-store`.
 
 The existing POST operations `/api/v1/waiter/table-visits`, `/{id}/join-proof`, and `/{id}/close` are called from protected Next.js Server Actions at `/staff/tables`. Their backend role, ownership, conflict, settlement and guest-token-revocation checks are unchanged. The freshly issued proof is displayed only in the authenticated staff action result, never in a URL/QR or database-readable list.
+
+## M2 public guest join throttling (stacked PR #7)
+
+`POST /api/v1/table-visits/join` may now return `429 Too Many Requests` with `error.code=RATE_LIMITED`, a safe generic message, `Retry-After: 600` (seconds), and `Cache-Control: no-store`. The browser maps that response to a generic Indonesian "try again in about 10 minutes" message. No guest credential is issued. A 10-minute fixed window is shared via PostgreSQL; counters commit before checking the join proof.
+
+Throttling uses the backend socket peer and table alias, not an untrusted client IP header. Behind a shared Next.js BFF it cannot accurately distinguish individual guests. A trusted edge rate limiter remains required for public launch.

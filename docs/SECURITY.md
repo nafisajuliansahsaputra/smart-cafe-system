@@ -123,3 +123,11 @@ Each untrusted `variantOptionIds` array is bounded (at most eight), duplicate-ch
 - `GET /api/v1/me/orders/{id}/receipt` binds receipt to owner and PAID state, returns 404 for foreign/unpaid order and no-store for successful response.
 - Backend remains authoritative for cart version conflicts, stock, modifier group validation, prices and checkout idempotency. Client total is explicitly an estimate.
 - **Release blocking:** per-IP/device guest join throttling and browser E2E, CSRF/origin/proxy verification, secure-cookie QA and real-cafe operational policy. Do not expose this demo to actual public users or accept real customer data/payments yet.
+
+## 13. M2 guest join abuse throttle (draft PR #7)
+
+New table `guest_join_throttles` stores only HMAC-SHA256 bucket fingerprints, 10-minute fixed-window counts and timestamps. A separate transaction consumes budgets **before** guest proof authentication, so incorrect proofs cannot roll back attempt counters. Backend limits: 1,200 per backend socket peer per 10 minutes, 60 per table alias and 24 per peer+table. A 429 `RATE_LIMITED` response includes `Retry-After: 600`, `Cache-Control: no-store`, and no token/proof. Counters older than two days are periodically purged. No actual IP address or join secret is saved to this table.
+
+The HMAC secret is a mandatory 32-byte-or-longer environment variable `SCS_JOIN_THROTTLE_SECRET`. API refuses startup without it. Change development placeholders before use, never commit real secrets, and use the same key across backend replicas until a planned rotation.
+
+**Important limitation:** backend reads `HttpServletRequest.getRemoteAddr()` and rejects potentially forged Forwarded/X-Forwarded-For identity claims. With guest Server Actions hosted on Next.js, many real guests may share one backend socket peer. The per-table guard works, but this is not verified individual client IP limiting. A correctly configured trusted CDN/reverse-proxy rate limiter, documented trusted peer rules and request-size/malformed-body abuse controls remain **mandatory launch blockers**. Do not treat this PR as completed public DoS protection.
