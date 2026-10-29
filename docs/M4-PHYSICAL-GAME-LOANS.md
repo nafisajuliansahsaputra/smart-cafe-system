@@ -262,3 +262,24 @@ changed. V21 expands only the *before* condition history check to LOST,
 and enforces that LOST sources go solely to DAMAGED with a non-null
 historical loan. No app-facing guest endpoint, auto charge, or loss
 liability determination is added.
+
+
+## Manager loss incident search and pagination (stacked draft PR #29)
+
+The manager loss register previously showed only 100 OPEN-first incident
+records. A new `GET /api/v1/admin/games/loss-incidents/search` searches
+**all** stored incidents with case-insensitive *literal substring* matches
+against game name, serialized unit code, table code, reporting staff login,
+original report note or manager review note. Optional explicit status
+filters are OPEN, DISMISSED and CONFIRMED_LOST. Results are 25 rows per
+page, sorted OPEN first then reported_at DESC/id DESC, with 26-row
+lookahead for `hasNext`, and validated page index 0..2000. The
+response also includes `openCount`, the total unresolved manager
+review workload, independently of the displayed filters and page.
+The manager dashboard preserves independent inventory and condition
+history search state when changing incident search/status/page and vice
+versa. The existing current game SSE refresh updates the displayed
+incident page as events land. No new notifications to third-party
+phones, personal contact fields, auto charges, silent manager actions,
+or edits to historical decisions. Legacy latest-100 incident GET is
+retained for compatibility. Index V22 supports OPEN-first sorting.

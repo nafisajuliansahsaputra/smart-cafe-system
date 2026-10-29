@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
-import { adminGameLossIncidents, searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { searchAdminGameLossIncidents, searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
 import { createPhysicalGame, recoverLostGameCopy, registerGameCopy, reportMissingGame, reviewMissingGame, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ export default async function StaffGamesPage({searchParams}:{
   searchParams: Promise<{
     notice?:string;q?:string;condition?:string;page?:string;
     hq?:string;hchange?:string;hpage?:string;
+    iq?:string;istatus?:string;ipage?:string;
   }>;
 }) {
   const identity=await staffIdentity();
@@ -30,6 +31,7 @@ export default async function StaffGamesPage({searchParams}:{
   const {
     notice,q:rawQuery,condition:rawCondition,page:rawPage,
     hq:rawHistoryQuery,hchange:rawHistoryChange,hpage:rawHistoryPage,
+    iq:rawIncidentQuery,istatus:rawIncidentStatus,ipage:rawIncidentPage,
   }=await searchParams;
   const query=typeof rawQuery==="string"?rawQuery.trim().slice(0,80):"";
   const condition=typeof rawCondition==="string" &&
@@ -43,18 +45,32 @@ export default async function StaffGamesPage({searchParams}:{
   const historyPage=typeof rawHistoryPage==="string" &&
     /^(0|[1-9][0-9]{0,3})$/.test(rawHistoryPage)?
     Math.min(2000,Number(rawHistoryPage)):0;
+  const incidentQuery=typeof rawIncidentQuery==="string"?
+    rawIncidentQuery.trim().slice(0,80):"";
+  const incidentStatus=typeof rawIncidentStatus==="string" &&
+    ["OPEN","DISMISSED","CONFIRMED_LOST"].includes(rawIncidentStatus)?
+    rawIncidentStatus:"";
+  const incidentPage=typeof rawIncidentPage==="string" &&
+    /^(0|[1-9][0-9]{0,3})$/.test(rawIncidentPage)?
+    Math.min(2000,Number(rawIncidentPage)):0;
   const urlFor=(copyPage:number,auditPage:number,copyQ=query,copyCondition=condition,
-                historyQ=historyQuery,historyTo=historyChange)=>
+                historyQ=historyQuery,historyTo=historyChange,
+                casePage=incidentPage,caseQ=incidentQuery,caseStatus=incidentStatus)=>
     `/staff/games?${new URLSearchParams({
       q:copyQ,condition:copyCondition,page:String(copyPage),
       hq:historyQ,hchange:historyTo,hpage:String(auditPage),
+      iq:caseQ,istatus:caseStatus,ipage:String(casePage),
     })}`;
+  const incidentLink=(index:number,search=incidentQuery,state=incidentStatus)=>
+    urlFor(pageIndex,historyPage,query,condition,historyQuery,historyChange,
+      index,search,state);
   const [loans,catalog,copies,history,incidents]=await Promise.all([
     staffGameLoans(),staffGames(),
     isManager ? searchAdminGameCopies(query,condition,pageIndex) : Promise.resolve(null),
     isManager ? searchAdminGameConditionHistory(historyQuery,historyChange,historyPage)
       : Promise.resolve(null),
-    isManager ? adminGameLossIncidents() : Promise.resolve(null),
+    isManager ? searchAdminGameLossIncidents(incidentQuery,incidentStatus,incidentPage)
+      : Promise.resolve(null),
   ]);
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
@@ -159,12 +175,42 @@ export default async function StaffGamesPage({searchParams}:{
       <p className="staff-muted">Verifikasi fisik dan kondisi unit sebelum memutuskan.
         Konfirmasi kehilangan tidak menagih pelanggan. Unit berstatus LOST tidak
         boleh dipinjamkan kembali.</p>
+      <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <input type="hidden" name="q" value={query}/>
+        <input type="hidden" name="condition" value={condition}/>
+        <input type="hidden" name="page" value={pageIndex}/>
+        <input type="hidden" name="hq" value={historyQuery}/>
+        <input type="hidden" name="hchange" value={historyChange}/>
+        <input type="hidden" name="hpage" value={historyPage}/>
+        <label htmlFor="game-incident-search">
+          Cari laporan berdasarkan unit, game, meja, pelapor atau catatan
+        </label>
+        <input id="game-incident-search" name="iq" defaultValue={incidentQuery}
+          maxLength={80} placeholder="Kode unit, meja, atau isi laporan"/>
+        <label htmlFor="game-incident-status">Filter status laporan</label>
+        <select id="game-incident-status" name="istatus" defaultValue={incidentStatus}>
+          <option value="">Semua status</option>
+          <option value="OPEN">Menunggu pemeriksaan</option>
+          <option value="DISMISSED">Ditolak</option>
+          <option value="CONFIRMED_LOST">Kehilangan dikonfirmasi</option>
+        </select>
+        <button className="staff-secondary" type="submit">Cari laporan</button>
+        <Link href={incidentLink(0,"","")}>Reset laporan</Link>
+      </form>
       {incidents && !incidents.ok && <p role="alert">
         Laporan kehilangan belum bisa dimuat. Periksa koneksi.</p>}
-      {incidents?.ok && incidents.data.length===0 &&
-        <p>Tidak ada laporan unit hilang.</p>}
+      {incidents?.ok && incidents.data.openCount>0 &&
+        <p role="status" className="staff-notice">
+          {incidents.data.openCount} laporan kehilangan menunggu pemeriksaan manager.
+        </p>}
+      {incidents?.ok && incidents.data.items.length===0 &&
+        <p>{incidentQuery||incidentStatus||incidentPage>0?
+          "Tidak ada laporan yang sesuai.":"Tidak ada laporan unit hilang."}</p>}
+      {incidents?.ok && <p className="staff-muted">
+        Halaman laporan {incidents.data.page+1} · Maksimal 25 insiden per halaman
+      </p>}
       {incidents?.ok && <div className="staff-task-grid">
-        {incidents.data.map(incident=><article className="staff-panel staff-task-card"
+        {incidents.data.items.map(incident=><article className="staff-panel staff-task-card"
           key={incident.id}>
           <h3>Meja {incident.tableCode} · {incident.gameName}</h3>
           <p>Unit: <strong>{incident.copyCode}</strong></p>
@@ -206,6 +252,15 @@ export default async function StaffGamesPage({searchParams}:{
           </>}
         </article>)}
       </div>}
+      {incidents?.ok && <nav aria-label="Navigasi halaman laporan kehilangan"
+        className="staff-breadcrumb">
+        {incidents.data.page>0 && <Link href={incidentLink(incidents.data.page-1)}>
+          Laporan sebelumnya
+        </Link>}
+        {incidents.data.hasNext && <Link href={incidentLink(incidents.data.page+1)}>
+          Laporan berikutnya
+        </Link>}
+      </nav>}
     </section>}
     {isManager && <section className="staff-panel">
       <h2>Kondisi unit fisik</h2>
@@ -214,6 +269,9 @@ export default async function StaffGamesPage({searchParams}:{
         wajib dikarantina sebagai DAMAGED lebih dahulu, bukan langsung tersedia.
         Tidak ada denda otomatis.</p>
       <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <input type="hidden" name="iq" value={incidentQuery}/>
+        <input type="hidden" name="istatus" value={incidentStatus}/>
+        <input type="hidden" name="ipage" value={incidentPage}/>
         <input type="hidden" name="hq" value={historyQuery}/>
         <input type="hidden" name="hchange" value={historyChange}/>
         <input type="hidden" name="hpage" value={historyPage}/>
@@ -299,6 +357,9 @@ export default async function StaffGamesPage({searchParams}:{
       <p className="staff-muted">Cari catatan perubahan kondisi lama di seluruh database.
         Catatan hanya untuk operasional, bukan penetapan tanggung jawab atau denda pelanggan.</p>
       <form method="GET" action="/staff/games" className="staff-form" role="search">
+        <input type="hidden" name="iq" value={incidentQuery}/>
+        <input type="hidden" name="istatus" value={incidentStatus}/>
+        <input type="hidden" name="ipage" value={incidentPage}/>
         <input type="hidden" name="q" value={query}/>
         <input type="hidden" name="condition" value={condition}/>
         <input type="hidden" name="page" value={pageIndex}/>

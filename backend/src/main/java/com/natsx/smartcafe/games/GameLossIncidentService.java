@@ -33,6 +33,8 @@ public class GameLossIncidentService {
     public record IncidentView(UUID id, UUID loanId, String gameName,
             String copyCode, String tableCode, String status, String reason,
             String reviewReason, Instant reportedAt) {}
+    public record IncidentPage(List<IncidentView> items, int page,
+                               boolean hasNext, long openCount) {}
     private record Loan(UUID id, UUID visitId, UUID copyId, UUID gameId,
                         String status, String code) {}
     private record Incident(UUID id, UUID loanId, String status) {}
@@ -73,6 +75,49 @@ public class GameLossIncidentService {
             JOIN cafe_tables t ON t.id=v.table_id
             ORDER BY (i.status='OPEN') DESC,i.reported_at DESC,i.id DESC LIMIT 100
             """,(rs,n)->map(rs));
+    }
+
+    /** Full database, manager-only incident search. OPEN first, then newest.
+     * Counts all unresolved manager actions independent of current filters.
+     * Query text is literal (not a SQL LIKE wildcard); no guest/contact fields.
+     */
+    @Transactional(readOnly=true)
+    public IncidentPage searchIncidents(String search, String status, int page) {
+        String q=search==null?"":search.strip();
+        String state=status==null?"":status.strip();
+        if (q.length()>80 || q.codePoints().anyMatch(Character::isISOControl)
+            || page<0 || page>2000
+            || !java.util.Set.of("","OPEN","DISMISSED","CONFIRMED_LOST").contains(state))
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Invalid loss incident search or page");
+        final int size=25;
+        List<IncidentView> rows=jdbc.query("""
+            SELECT i.id,i.loan_id,g.name,c.copy_code,t.table_code,i.status,
+                   i.reason,i.review_reason,i.reported_at
+            FROM physical_game_loss_incidents i
+            JOIN physical_game_loans l ON l.id=i.loan_id
+            JOIN physical_game_copies c ON c.id=l.copy_id
+            JOIN physical_games g ON g.id=l.game_id
+            JOIN table_visits v ON v.id=l.visit_id
+            JOIN cafe_tables t ON t.id=v.table_id
+            JOIN staff_users reporter ON reporter.id=i.reported_by
+            WHERE (?='' OR i.status=?)
+              AND (?='' OR POSITION(LOWER(?) IN LOWER(g.name))>0
+                        OR POSITION(LOWER(?) IN LOWER(c.copy_code))>0
+                        OR POSITION(LOWER(?) IN LOWER(t.table_code))>0
+                        OR POSITION(LOWER(?) IN LOWER(reporter.login))>0
+                        OR POSITION(LOWER(?) IN LOWER(i.reason))>0
+                        OR POSITION(LOWER(?) IN LOWER(COALESCE(i.review_reason,'')))>0)
+            ORDER BY (i.status='OPEN') DESC,i.reported_at DESC,i.id DESC
+            LIMIT ? OFFSET ?
+            """,(rs,n)->map(rs),
+            state,state,q,q,q,q,q,q,q,size+1,page*size);
+        Long openCount=jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents WHERE status='OPEN'
+            """,Long.class);
+        return new IncidentPage(
+            rows.size()>size?List.copyOf(rows.subList(0,size)):rows,
+            page,rows.size()>size && page<2000,openCount==null?0:openCount);
     }
 
     /** Explicit review cannot overwrite a real returned unit or race with

@@ -910,4 +910,101 @@ class GameLoanIntegrationTest {
         assertEquals("LOST",jdbc.queryForObject(
             "SELECT condition FROM physical_game_copies WHERE id=?",String.class,copy));
     }
+
+    @Test void managerLossIncidentSearchPagesAllEvidenceAndReportsOpenBacklog()
+        throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter);
+        User guest=join(visit);
+        UUID loan=requestLoan(guest,game);
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String prefix="INC-PAGE-"+UUID.randomUUID();
+        for(int i=0;i<103;i++) {
+            jdbc.update("""
+                INSERT INTO physical_game_loss_incidents
+                  (loan_id,reported_by,reason,status,reported_at,
+                   reviewed_by,reviewed_at,review_reason)
+                VALUES (?,?,?,'DISMISSED',now()-(? * interval '1 minute'),
+                        ?,now()-(? * interval '1 minute'),?)
+                """,loan,waiter.id(),prefix+"-"+String.format("%03d",i),
+                i+1,manager.id(),i+1,"Resolved after physical review");
+        }
+        jdbc.update("""
+            INSERT INTO physical_game_loss_incidents(loan_id,reported_by,reason)
+            VALUES (?,?,?)
+            """,loan,waiter.id(),prefix+"-open");
+        String endpoint="/api/v1/admin/games/loss-incidents/search";
+        assertEquals(401,getAs(endpoint,null).getStatus());
+        assertEquals(401,getAs(endpoint,guest.token()).getStatus());
+        assertEquals(403,getAs(endpoint,waiter.token()).getStatus());
+        assertEquals(403,getAs(endpoint,cashier.token()).getStatus());
+        assertEquals(403,getAs(endpoint,kitchen.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=-1",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=2001",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?page=notanumber",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?status=NOT_A_STATE",manager.token()).getStatus());
+        assertEquals(400,getAs(endpoint+"?q="+"x".repeat(81),manager.token()).getStatus());
+        String q=java.net.URLEncoder.encode(prefix,java.nio.charset.StandardCharsets.UTF_8);
+        String base=endpoint+"?q="+q+"&status=";
+        var first=getAs(base+"&page=0",manager.token());
+        var second=getAs(base+"&page=1",manager.token());
+        var third=getAs(base+"&page=2",manager.token());
+        var fourth=getAs(base+"&page=3",manager.token());
+        var last=getAs(base+"&page=4",manager.token());
+        var none=getAs(base+"&page=5",manager.token());
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertEquals("no-store",first.getHeader("Cache-Control"));
+        assertEquals(200,second.getStatus(),second.getContentAsString());
+        assertEquals(200,third.getStatus(),third.getContentAsString());
+        assertEquals(200,fourth.getStatus(),fourth.getContentAsString());
+        assertEquals(200,last.getStatus(),last.getContentAsString());
+        assertEquals(200,none.getStatus(),none.getContentAsString());
+        assertEquals(25,first.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(25,second.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(25,third.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(25,fourth.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(4,last.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(0,none.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertTrue(first.getContentAsString().contains(prefix+"-open"),
+            "OPEN incident sorts above resolved historical incidents");
+        assertTrue(first.getContentAsString().contains(prefix+"-000"));
+        assertFalse(first.getContentAsString().contains(prefix+"-024"));
+        assertTrue(second.getContentAsString().contains(prefix+"-024"));
+        assertTrue(third.getContentAsString().contains(prefix+"-049"));
+        assertTrue(fourth.getContentAsString().contains(prefix+"-074"));
+        assertTrue(last.getContentAsString().contains(prefix+"-102"));
+        assertTrue(first.getContentAsString().contains("\"hasNext\":true"));
+        assertTrue(last.getContentAsString().contains("\"hasNext\":false"));
+        long expectedOpen=jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents WHERE status='OPEN'
+            """,Long.class);
+        assertTrue(first.getContentAsString().contains("\"openCount\":"+expectedOpen));
+        assertTrue(none.getContentAsString().contains("\"openCount\":"+expectedOpen),
+            "Unfiltered OPEN workload must remain visible on an empty page");
+        var open=getAs(base+"OPEN&page=0",manager.token());
+        assertEquals(200,open.getStatus(),open.getContentAsString());
+        assertEquals(1,open.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertTrue(open.getContentAsString().contains(prefix+"-open"));
+        var dismissed=getAs(base+"DISMISSED&page=1",manager.token());
+        assertEquals(200,dismissed.getStatus(),dismissed.getContentAsString());
+        assertEquals(25,dismissed.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertTrue(dismissed.getContentAsString().contains(prefix+"-025"));
+        assertFalse(dismissed.getContentAsString().contains(prefix+"-024"));
+        var noConfirmed=getAs(base+"CONFIRMED_LOST&page=0",manager.token());
+        assertEquals(200,noConfirmed.getStatus(),noConfirmed.getContentAsString());
+        assertEquals(0,noConfirmed.getContentAsString().split("\"loanId\":",-1).length-1);
+        var literal=getAs(endpoint+"?q=%25%5F",manager.token());
+        assertEquals(200,literal.getStatus(),literal.getContentAsString());
+        assertEquals(0,literal.getContentAsString().split("\"loanId\":",-1).length-1);
+        var injection=getAs(endpoint+"?q=%27%20OR%201%3D1",manager.token());
+        assertEquals(200,injection.getStatus(),injection.getContentAsString());
+        assertEquals(0,injection.getContentAsString().split("\"loanId\":",-1).length-1);
+        assertEquals(104,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents
+            WHERE loan_id=? AND reason LIKE ?
+            """,Integer.class,loan,prefix+"%"));
+    }
 }

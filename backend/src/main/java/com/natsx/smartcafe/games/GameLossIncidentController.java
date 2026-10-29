@@ -38,6 +38,18 @@ public class GameLossIncidentController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(service.reviewQueue(),RequestIdFilter.get(request)));
     }
+    /** Search the full incident register without the legacy first-100 cap. */
+    @GetMapping("/admin/games/loss-incidents/search")
+    public ResponseEntity<ApiEnvelope<GameLossIncidentService.IncidentPage>> search(
+        @AuthenticationPrincipal StaffPrincipal staff,
+        @RequestParam(defaultValue="") String q,
+        @RequestParam(defaultValue="") String status,
+        @RequestParam(defaultValue="0") int page,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(service.searchIncidents(q,status,page),
+                RequestIdFilter.get(request)));
+    }
     @PostMapping("/admin/games/loss-incidents/{id}/review")
     public ApiEnvelope<GameLossIncidentService.IncidentView> review(
         @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
