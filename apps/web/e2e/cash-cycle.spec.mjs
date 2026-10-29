@@ -113,6 +113,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(gameBackendResponse.status()).toBe(200);
     const gameBackendData = await gameBackendResponse.json();
     expect(gameBackendData.data.some((game) => game.name === "UNO Demo")).toBe(true);
+    // Only a synthetic fixture is printed. Never dump access tokens.
+    console.log("SYNTHETIC_GAME_CATALOG_SHAPE", JSON.stringify(gameBackendData.data));
     const catalogStatus = await guest.locator(".guest-category").getAttribute("data-catalog-status");
     expect(catalogStatus).toBe("ok");
     expect(await guest.locator("main").innerText()).toContain("UNO Demo");
