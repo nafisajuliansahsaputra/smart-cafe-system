@@ -199,3 +199,18 @@ Independent GitHub Actions job `live-replica-recovery` starts two genuine API co
 ## M4 physical serialized game loans (stacked draft PR #19)
 
 New PostgreSQL Testcontainers GameLoanIntegrationTest validates role gates, owner-only loan reads, duplicate active request, waiter visit scoping, no-copy assignment, wrong physical copy code, full REQUESTED→ASSIGNED→IN_USE→RETURNED flow, refusal to close an outstanding visit and successful close only after return or cancellation, audit, and two concurrent last-copy assignments (exactly one succeeds). Existing cash/order tests remain. Chromium synthetic cash flow now also requests the one seeded UNO demo copy, hands it over through waiter UI, proves PAID + SERVED alone cannot close, returns the unit, then closes. Both HTTP and localhost HTTPS suites should pass. No real merchant database or user funds involved.
+
+
+## M4 scoped game SSE acceptance (stacked draft PR #20)
+
+Testcontainers/MockMvc verifies V14 game outbox rows survive the relay,
+increment unique durable cursors for the owning guest and responsible waiter,
+stay invisible to another guest even at the same table and to a foreign
+waiter, and deny kitchen access and malformed order-specific game cursor
+requests. The ordinary HTTP and local HTTPS Chromium cash/game tests now
+keep the waiter game page open when a guest requests UNO, assert the new
+request becomes visible without manual refresh, and assert guest loan state
+changes after physical handover. Verify the **exact PR head** against all
+seven CI jobs; no prior branch's green run proves this commit. This is
+change-only UI resynchronization, not offline borrowing, production mobile
+acceptance, or an approved financial workflow.

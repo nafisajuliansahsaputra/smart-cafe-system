@@ -240,3 +240,28 @@ Role-guarded backend GET routes `/api/v1/me/live-cursor?topic=orders|order&order
 ## M4 physical game inventory and serialized loan endpoints (draft PR #19)
 
 Guest JWT-like opaque Bearer (no login account) required for GET /api/v1/me/games, GET /api/v1/me/game-loans, POST /api/v1/me/game-loans `{gameId:uuid}`. Guest loans are scoped to the current guest+visit; REQUESTED has no unit allocation. Staff WAITER/CASHIER/MANAGER/ADMIN required for GET /api/v1/waiter/games, GET /api/v1/waiter/game-loans and POST /api/v1/waiter/game-loans/{id}/assign|handover|return|cancel; ownership of opening waiter is enforced for non-supervisors. Handover/return require `{copyCode:string}` and direct physical confirmation in staff UI. Only manager/admin may GET/POST /api/v1/admin/games, POST /api/v1/admin/games/{id}/copies. Success status 200 with ApiEnvelope.data. Invalid inputs 400; unauthorized 401; wrong role/ownership 403; missing IDs 404; invalid transition, duplicate request or exhausted physical copies 409. GET game and loan responses no-store. Table close returns 409 when any REQUESTED/ASSIGNED/IN_USE game loan remains. No fees, deposits or digital rental; current UI uses explicit refresh rather than SSE.
+
+
+## M4 physical game live-change cursor contract (draft PR #20)
+
+Game loan transitions (REQUESTED, ASSIGNED, HANDED_OVER, RETURNED, CANCELLED)
+commit a safe GAME_LOAN outbox row in the same transaction and publish into
+V14 `live_game_signals` through the existing durable asynchronous relay.
+No game copies, guest details, passwords, or payment amounts appear in SSE.
+
+`GET /api/v1/me/live-cursor?topic=games` and
+`GET /api/v1/waiter/live-cursor?topic=games` both support optional
+`after=<nonnegative long>` with the established bounded 14-second wait.
+No `orderId` is accepted for this topic. Guest event cursors cover **only**
+loans owned by that guest **in that visit**, even if others share a table.
+Non-supervisor waiter cursors cover only loans of visits they personally
+opened; cashier/manager/admin use an aggregate cursor. Kitchen and
+unauthorized roles fail closed. Existing 401/403/400/429 boundaries apply.
+
+The BFF permits exactly `/visit/live?topic=games` and
+`/staff/live?topic=games` with a same-origin session cookie and no unknown
+query parameters. The BFF's backend Bearer/cursor is not exposed. Browser
+receives empty `ready`/`changed`/heartbeat frames and retrieves the
+authoritative game list again. A declined network connection does not
+change loan state or imply handover. Game *catalogue-only* inserts do not
+yet publish this event family and can still require manual refresh.
