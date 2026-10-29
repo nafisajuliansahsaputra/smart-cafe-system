@@ -40,7 +40,8 @@ export default async function WaiterPage({
           <p className="staff-muted">Waiter hanya melihat tugas meja yang menjadi tanggung jawabnya. Admin/kasir melihat semua tugas.</p></div>
         <form action={logoutStaff}><button className="staff-secondary">Keluar</button></form>
       </header>
-      <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Waiter</strong></nav>
+      <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Waiter</strong><span>/</span>
+        <Link href="/staff/games">Pinjaman permainan</Link></nav>
       <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=waiter`} /></div>
       <form method="GET"><button className="staff-secondary" type="submit">Segarkan tugas</button></form>
       {message && <p className="staff-notice" role="status">{message}</p>}

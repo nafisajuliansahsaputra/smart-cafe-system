@@ -170,3 +170,7 @@ Added real two-container / shared-PostgreSQL integration acceptance: simultaneou
 ### M2 cancel/reconnect resilience (draft PR #18)
 
 Added explicit cancellable DeferredResult live cursor workers, idempotent interrupt, no abandoned fake success, tested release of per-user/global slots on cancellation; browser offline/visibility SSE close, capped reconnect backoff, latest-state re-sync on return. Chromium tests miss a cashier approval while kitchen is offline then recover without a reload. **Remaining:** actual half-open client/proxy disconnect test, production CDN/LB, cancellation timings under load, multi-hour soak, distributed admission, secured metrics and alerts. See docs/M2-DISCONNECT-RECOVERY.md.
+
+### M4 physical game loans initial vertical slice (stacked draft PR #19)
+
+Added V13 serialized game inventory, request/assign/handover/return/cancel status machine, active-copy and active-visit uniqueness, responsible-waiter restrictions, manager/admin catalog registration, guest/staff pages, guest session and close-visit protection, synthetic concurrency/browsers tests. **Still open for full M4:** damaged/lost/maintenance/incident policy; guest return-pending; event-driven live task notifications; production UI/accessibility and physical staff acceptance; complete catalog/admin edit/inactive management; fees/deposits only after owner approval. See docs/M4-PHYSICAL-GAME-LOANS.md and ADR-0007. Do not mark the original M4 checklist fully completed.

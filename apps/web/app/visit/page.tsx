@@ -37,6 +37,7 @@ export default async function VisitPage({ searchParams }: {
         <Link className="guest-wordmark" href="/visit">SMART CAFE</Link>
         <div className="guest-nav">
           <Link href="/visit/cart">Keranjang</Link><Link href="/visit/orders">Pesanan saya</Link>
+          <Link href="/visit/games">Pinjam permainan</Link>
           <form action={exitVisit}><button className="guest-link-button" type="submit">Keluar</button></form>
         </div>
       </header>

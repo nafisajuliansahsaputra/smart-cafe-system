@@ -55,6 +55,13 @@ export default async function StaffPage() {
           <Link className="staff-link-button" href="/staff/waiter">Buka tugas waiter</Link>
         </section>
       )}
+      {canUseWaiter(current.staff.roles) && (
+        <section className="staff-panel">
+          <h2>Peminjaman permainan fisik</h2>
+          <p>Permintaan UNO dan board game, alokasi unit berseri, serah-terima, dan pengembalian.</p>
+          <Link className="staff-link-button" href="/staff/games">Kelola permainan</Link>
+        </section>
+      )}
       {!canUseOcc(current.staff.roles) && !canUseKitchen(current.staff.roles) && !canUseWaiter(current.staff.roles) && (
         <section className="staff-panel">
           <h2>Tidak ada layar untuk peran ini</h2>

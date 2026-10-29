@@ -95,19 +95,46 @@ test("oversized Server Action body cannot create staff session", async ({ browse
 });
 
 test("closed public QR cannot issue a guest session", async ({ browser }) => {
-  const context = await browser.newContext({
-    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
-  });
+  // Use a dedicated synthetic table rather than assuming another test has
+  // completed successfully. Tests must not share mutable visit state.
+  const opts = { baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true" };
+  const staffContext = await browser.newContext(opts);
+  const guestContext = await browser.newContext(opts);
   try {
-    const page = await context.newPage();
-    await page.goto("/t/e2e-01");
-    // After cash-cycle closes, the QR remains a public locator, not
-    // authorization to join. No guest form or credential should be exposed.
-    // Closed visits omit the join form; no credential may be fetched.
-    await expect(page.locator("form")).toHaveCount(0);
-    expect((await context.cookies()).some((c) => c.name === "scs_guest_session")).toBe(false);
-    expect(await page.locator("body").innerText()).toContain("Meja belum diaktifkan");
+    const waiter = await staffContext.newPage();
+    await waiter.goto("/staff/login");
+    await waiter.getByLabel("Nama pengguna").fill("e2e-waiter");
+    await waiter.getByLabel("Kata sandi").fill(PASSWORD);
+    await waiter.getByRole("button", { name: "Masuk", exact: true }).click();
+    await expect(waiter).toHaveURL(/\/staff$/);
+    await waiter.goto("/staff/tables");
+
+    const table = waiter.locator("article").filter({
+      has: waiter.getByRole("heading", { name: "Meja E2E-QR-CLOSE" }),
+    });
+    await expect(table).toContainText("TERSEDIA");
+    await table.getByRole("checkbox", {
+      name: /Saya sudah memeriksa meja dan tamu yang datang/,
+    }).check();
+    await table.getByRole("button", { name: "Buka kunjungan" }).click();
+    await expect(waiter.getByLabel("Kode bergabung sementara")).toBeVisible();
+    await expect(table).toContainText("TERISI");
+
+    await table.getByRole("checkbox", {
+      name: /Semua pesanan dan pembayaran telah selesai/,
+    }).check();
+    await table.getByRole("button", { name: "Tutup kunjungan" }).click();
+    await expect(waiter.getByText("Kunjungan meja berhasil ditutup. Sesi tamu lama sudah dicabut oleh backend.")).toBeVisible();
+    await expect(table).toContainText("TERSEDIA");
+
+    const guest = await guestContext.newPage();
+    await guest.goto("/t/e2e-qr-close");
+    // Closed visits retain public table metadata, but never issue join proof.
+    await expect(guest.getByRole("heading", { name: "Meja belum diaktifkan" })).toBeVisible();
+    await expect(guest.locator("form")).toHaveCount(0);
+    expect((await guestContext.cookies()).some((item) => item.name === "scs_guest_session")).toBe(false);
   } finally {
-    await context.close();
+    await guestContext.close();
+    await staffContext.close();
   }
 });

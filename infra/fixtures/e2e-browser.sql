@@ -19,7 +19,8 @@ INSERT INTO staff_role_assignments (staff_user_id, role_key) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO cafe_tables (id, table_code, public_alias, capacity) VALUES
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1111','E2E-01','e2e-01',4)
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1111','E2E-01','e2e-01',4),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa2222','E2E-QR-CLOSE','e2e-qr-close',4)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO menu_categories (id, name, slug, sort_order) VALUES
@@ -51,3 +52,12 @@ ON CONFLICT (id) DO NOTHING;
 -- Quantity is supplied by V6 item insert trigger; set a finite demo inventory.
 UPDATE item_availability SET limited_quantity=100, available=true
 WHERE menu_item_id='cccccccc-cccc-4ccc-8ccc-cccccccc1111';
+
+-- Synthetic physical game copies for browser-only loan acceptance.
+INSERT INTO physical_games(id,name,description) VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff1111','UNO Demo','Permainan kartu fisik untuk tes browser')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff2222',
+   'ffffffff-ffff-4fff-8fff-ffffffff1111','UNO-E2E-001')
+ON CONFLICT (id) DO NOTHING;

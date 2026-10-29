@@ -128,3 +128,7 @@ Cash may be approved for cooking and even served while still AWAITING_CASH. In t
 - Cart is editable until checkout and holds no stock. Cart updates use a version check; checkout revalidates server price and decrements item-limited stock atomically.
 - After cash checkout, SUBMITTED + AWAITING_CASH has tracked reserved menu units; cashier may ACCEPT, or REJECT before cooking. REJECT returns still-outstanding allocations exactly once, keeps the order immutable, and moves the uncollected intent to UNPAID.
 - A REJECTED unpaid order does not block closing a visit; a served but unpaid order still blocks closure. Rejection after acceptance, preparation or payment is rejected until a separately reviewed cancellation/refund policy is implemented.
+
+### M4 executable physical game loan state machine (draft PR #19)
+
+Guest ACTIVE visit + chosen game → REQUESTED (no assigned copy). Opening waiter/supervisor physically checks inventory → ASSIGNED (specific copy locked/reserved under unique active-copy DB index). Staff physically verifies serial code → IN_USE (handed to guest). Staff inspects the undamaged copy and confirms matching serial → RETURNED; unit may be assigned again. A REQUESTED-only request may be CANCELLED by an authorized waiter; ASSIGNED and IN_USE cannot be cancelled or falsely returned. While status is REQUESTED, ASSIGNED or IN_USE, the table cannot close, even if payment is PAID. Manager override, fee, lost/damaged and deposit workflows are not available in this initial slice, rather than silently charging or clearing a liability. See ADR-0007.

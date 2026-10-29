@@ -15,7 +15,7 @@ function apiError(status: number): TableActionState {
   if (status === 401) return error("Sesi staf habis. Masuk kembali sebelum melakukan tindakan.");
   if (status === 403) return error("Akses ditolak. Hanya penanggung jawab meja atau supervisor yang boleh mengubah kunjungan.");
   if (status === 404) return error("Meja atau kunjungan tidak ditemukan. Segarkan daftar.");
-  if (status === 409) return error("Status kunjungan berubah atau masih ada pesanan/pembayaran belum selesai. Segarkan daftar.");
+  if (status === 409) return error("Status kunjungan berubah atau masih ada pesanan/pembayaran belum selesai atau permainan belum dikembalikan. Segarkan daftar.");
   if (status === 0 || status >= 500) return error("Server tidak dapat mengonfirmasi tindakan. Segarkan sebelum mencoba lagi.");
   return error("Perintah tidak dapat diproses. Periksa status meja dan coba lagi.");
 }
