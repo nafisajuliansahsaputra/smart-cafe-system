@@ -16,13 +16,29 @@ export function LiveRefresh({ url }: { url: string }) {
   useEffect(() => {
     let source: EventSource | null = null;
     let lastRefresh = 0;
+    let trailingTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const clearTrailing = () => {
+      if (trailingTimer !== null) clearTimeout(trailingTimer);
+      trailingTimer = null;
+    };
     const refresh = (force = false) => {
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
-      if (force || now - lastRefresh >= 1200) {
+      const remaining = force ? 0 : Math.max(0, 1200 - (now - lastRefresh));
+      if (remaining === 0) {
+        clearTrailing();
         lastRefresh = now;
         router.refresh();
+      } else if (trailingTimer === null) {
+        // Never discard a change that arrives just after the ready event:
+        // coalesce fast events but always perform the trailing refresh.
+        trailingTimer = setTimeout(() => {
+          trailingTimer = null;
+          if (document.visibilityState !== "visible") return;
+          lastRefresh = Date.now();
+          router.refresh();
+        }, remaining);
       }
     };
     const connect = () => {
@@ -48,6 +64,7 @@ export function LiveRefresh({ url }: { url: string }) {
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
+        clearTrailing();
         source?.close();
         source = null;
         setMode("reconnecting");
@@ -61,6 +78,7 @@ export function LiveRefresh({ url }: { url: string }) {
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
+      clearTrailing();
       source?.close();
       source = null;
     };
