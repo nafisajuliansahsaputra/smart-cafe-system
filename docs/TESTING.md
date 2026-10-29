@@ -191,3 +191,7 @@ MockMvc regression now uses `asyncDispatch` when `after` is provided, asserting 
 ## Two backend replicas / missed NOTIFY recovery (draft PR #17)
 
 Independent GitHub Actions job `live-replica-recovery` starts two genuine API containers on 127.0.0.1:8080/8081 with one isolated PostgreSQL database, seeds only fake staff/table records, and drives actual authenticated waiter/table APIs. It proves both instances observe a committed table-open event via long-poll, stops replica B while A commits a join-proof rotation, restarts B and requires its initial durable cursor read to catch up, then checks B receives a subsequent table close. Anonymous access and kitchen's waiter-table cursor access are denied. No real funds/PII or public network are used. This is not a benchmark or certified multi-AZ failover.
+
+## M2 cancelled long polls and browser offline catch-up (draft PR #18)
+
+`LiveCursorAsyncBridgeTest` verifies a waiting virtual thread is interrupted when abandoned, duplicate cancellation is harmless, cancelled-before-start tasks do not run, no false result is delivered, and one staff session can reacquire its global/per-identity permit afterward. In the real Chromium synthetic cash lifecycle, KDS is taken offline immediately before cashier accepts an order. Once KDS network returns, the page must reconnect to SSE and fetch ACCEPTED without manually navigating or refreshing. Both HTTP and localhost HTTPS CI suites run this; all existing Java/Testcontainers, isolated concurrency and two-JVM recovery jobs remain required.

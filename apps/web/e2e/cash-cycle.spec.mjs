@@ -155,6 +155,12 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     // without a manual Kitchen page reload.
     await kitchen.goto("/staff/kitchen");
     await expect(kitchen.getByText("Live · otomatis")).toBeVisible();
+
+    // The kitchen device loses connectivity while the cashier approves.
+    // The missed event must be recovered from the durable cursor on reconnect,
+    // with no manual navigation or page reload.
+    await kitchen.context().setOffline(true);
+    await expect(kitchen.getByText("Menyambungkan ulang · segarkan jika perlu")).toBeVisible();
     await cashier.goto(`/staff/orders/${orderId}`);
     await expect(cashier.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
     await cashier.getByRole("checkbox", { name: /Saya telah memeriksa pesanan dan meja tamu/ }).check();
@@ -165,6 +171,10 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       timeout: 25000,
     });
     await expect(guest.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
+    await kitchen.context().setOffline(false);
+    await expect(kitchen.getByText("Live · otomatis")).toBeVisible({
+      timeout: 25000,
+    });
     await expect(kitchen.getByText("ACCEPTED", { exact: true })).toBeVisible({
       timeout: 25000,
     });

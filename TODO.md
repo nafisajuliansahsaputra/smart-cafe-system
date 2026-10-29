@@ -166,3 +166,7 @@ Moved live-cursor waits with an `after` parameter to Spring MVC asynchronous Cal
 ### M2 two-replica live event recovery (draft PR #17)
 
 Added real two-container / shared-PostgreSQL integration acceptance: simultaneous table long-polls receive one committed open event; replica B misses a join-proof rotation while stopped, then reads the durable cursor after restart, receives a subsequent close event and retains role gates. This establishes **one bounded recovery scenario**, not production multi-node availability. Still needed: failed-over DB primary, actual network interruption and abort semantics, real CDN/proxy and distributed rate-limit decisions, multi-hour load/soak, alert delivery and approved data-retention policy. See docs/M2-MULTIREPLICA-RECOVERY.md.
+
+### M2 cancel/reconnect resilience (draft PR #18)
+
+Added explicit cancellable DeferredResult live cursor workers, idempotent interrupt, no abandoned fake success, tested release of per-user/global slots on cancellation; browser offline/visibility SSE close, capped reconnect backoff, latest-state re-sync on return. Chromium tests miss a cashier approval while kitchen is offline then recover without a reload. **Remaining:** actual half-open client/proxy disconnect test, production CDN/LB, cancellation timings under load, multi-hour soak, distributed admission, secured metrics and alerts. See docs/M2-DISCONNECT-RECOVERY.md.

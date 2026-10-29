@@ -8,7 +8,7 @@ import com.natsx.smartcafe.identity.StaffAuthService;
 import com.natsx.smartcafe.identity.StaffPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
-import java.util.concurrent.Callable;
+import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,12 +20,14 @@ public class LiveCursorController {
     private final LiveCursorService cursors;
     private final StaffAuthService staffAuth;
     private final GuestSessionService guestAuth;
+    private final LiveCursorAsyncBridge async;
 
     public LiveCursorController(LiveCursorService cursors, StaffAuthService staffAuth,
-                                GuestSessionService guestAuth) {
+                                GuestSessionService guestAuth, LiveCursorAsyncBridge async) {
         this.cursors = cursors;
         this.staffAuth = staffAuth;
         this.guestAuth = guestAuth;
+        this.async = async;
     }
 
     private String bearer(HttpServletRequest request) {
@@ -89,13 +91,13 @@ public class LiveCursorController {
     }
 
     /**
-     * Servlet request thread returns a Callable immediately. Spring MVC
-     * dispatches it to the bounded-admission virtual-thread executor. The
-     * LiveCursorService still enforces current role/session ownership and
-     * releases its semaphore permit on timeout, error and interrupt.
+     * Servlet request thread returns a DeferredResult immediately. A
+     * cancellable virtual-thread worker checks the scoped cursor, while
+     * lifecycle callbacks interrupt it on observed disconnect/timeout.
+     * LiveCursorService releases its permit on every exit.
      */
     @GetMapping(value = "/api/v1/me/live-cursor", params = "after")
-    public Callable<ApiEnvelope<LiveCursorService.Cursor>> guestWait(
+    public DeferredResult<ApiEnvelope<LiveCursorService.Cursor>> guestWait(
         @AuthenticationPrincipal GuestPrincipal guest,
         @RequestParam String topic,
         @RequestParam(required = false) UUID orderId,
@@ -103,12 +105,12 @@ public class LiveCursorController {
         HttpServletRequest request) {
         String token = bearer(request);
         String requestId = RequestIdFilter.get(request);
-        return () -> ApiEnvelope.of(cursors.guest(topic, orderId, after, guest,
-            () -> guestAuth.authenticate(token) != null), requestId);
+        return async.submit(() -> ApiEnvelope.of(cursors.guest(topic, orderId, after, guest,
+            () -> guestAuth.authenticate(token) != null), requestId));
     }
 
     @GetMapping(value = "/api/v1/ops/live-cursor", params = "after")
-    public Callable<ApiEnvelope<LiveCursorService.Cursor>> opsWait(
+    public DeferredResult<ApiEnvelope<LiveCursorService.Cursor>> opsWait(
         @AuthenticationPrincipal StaffPrincipal staff,
         @RequestParam String topic,
         @RequestParam(required = false) UUID orderId,
@@ -116,12 +118,12 @@ public class LiveCursorController {
         HttpServletRequest request) {
         String token = bearer(request);
         String requestId = RequestIdFilter.get(request);
-        return () -> ApiEnvelope.of(
-            staffCursor("ops", topic, orderId, after, staff, token), requestId);
+        return async.submit(() -> ApiEnvelope.of(
+            staffCursor("ops", topic, orderId, after, staff, token), requestId));
     }
 
     @GetMapping(value = "/api/v1/kitchen/live-cursor", params = "after")
-    public Callable<ApiEnvelope<LiveCursorService.Cursor>> kitchenWait(
+    public DeferredResult<ApiEnvelope<LiveCursorService.Cursor>> kitchenWait(
         @AuthenticationPrincipal StaffPrincipal staff,
         @RequestParam String topic,
         @RequestParam(required = false) UUID orderId,
@@ -129,12 +131,12 @@ public class LiveCursorController {
         HttpServletRequest request) {
         String token = bearer(request);
         String requestId = RequestIdFilter.get(request);
-        return () -> ApiEnvelope.of(
-            staffCursor("kitchen", topic, orderId, after, staff, token), requestId);
+        return async.submit(() -> ApiEnvelope.of(
+            staffCursor("kitchen", topic, orderId, after, staff, token), requestId));
     }
 
     @GetMapping(value = "/api/v1/waiter/live-cursor", params = "after")
-    public Callable<ApiEnvelope<LiveCursorService.Cursor>> waiterWait(
+    public DeferredResult<ApiEnvelope<LiveCursorService.Cursor>> waiterWait(
         @AuthenticationPrincipal StaffPrincipal staff,
         @RequestParam String topic,
         @RequestParam(required = false) UUID orderId,
@@ -142,8 +144,8 @@ public class LiveCursorController {
         HttpServletRequest request) {
         String token = bearer(request);
         String requestId = RequestIdFilter.get(request);
-        return () -> ApiEnvelope.of(
-            staffCursor("waiter", topic, orderId, after, staff, token), requestId);
+        return async.submit(() -> ApiEnvelope.of(
+            staffCursor("waiter", topic, orderId, after, staff, token), requestId));
     }
 
 }
