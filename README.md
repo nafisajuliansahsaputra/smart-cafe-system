@@ -182,3 +182,7 @@ Live event cursor long-polls now have both global and **per-authenticated-princi
 ## M2 asynchronous long polls and synthetic performance evidence (draft PR #16)
 
 After-cursor live requests now use Servlet async dispatch on JDK 21 virtual threads, returning the HTTP worker to the pool while waiting for a PostgreSQL event. Initial cursor reads and authorization contracts are unchanged. A dedicated disposable Docker CI benchmark checks concurrent admission/429 behavior, health responsiveness during outstanding waits, and per-staff fairness. See [M2 async live benchmark](docs/M2-ASYNC-LIVE-LOAD.md). CI observations are **not** a production throughput claim.
+
+## Two-replica live event recovery acceptance (draft PR #17)
+
+The repository now includes an isolated two-Spring-Boot-instance Compose overlay and a seventh CI job. It verifies cross-instance PostgreSQL notifications and recovery from a deliberately missed event while one backend is stopped, using the durable table cursor after restart. All actions use synthetic staff/table fixtures and loopback ports; no deployment or payment operation. See [multi-replica recovery](docs/M2-MULTIREPLICA-RECOVERY.md).

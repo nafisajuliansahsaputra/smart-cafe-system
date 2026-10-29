@@ -1,0 +1,33 @@
+# CI-only second API process; binds to loopback and shares disposable DB.
+# Intentionally duplicates approved API settings rather than using 'extends',
+# which would accidentally inherit the primary API's host port 8080.
+services:
+  api_replica:
+    build: ./backend
+    restart: "no"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      API_DOCS_ENABLED: "false"
+      SCS_JOIN_THROTTLE_SECRET: ${SCS_JOIN_THROTTLE_SECRET:?Set SCS_JOIN_THROTTLE_SECRET}
+      SCS_LIVE_DISPATCH_ENABLED: "true"
+      SCS_LIVE_DISPATCH_DELAY_MS: "500"
+      SCS_LIVE_LISTEN_ENABLED: "true"
+      SCS_LIVE_MAX_LONG_POLLS: "8"
+      SCS_LIVE_MAX_GUEST_POLLS: "2"
+      SCS_LIVE_MAX_STAFF_POLLS: "4"
+      SCS_LIVE_TELEMETRY_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8081:8080"
+  api:
+    environment:
+      SCS_LIVE_DISPATCH_ENABLED: "true"
+      SCS_LIVE_DISPATCH_DELAY_MS: "500"
+      SCS_LIVE_LISTEN_ENABLED: "true"
+      SCS_LIVE_MAX_LONG_POLLS: "8"
+      SCS_LIVE_MAX_GUEST_POLLS: "2"
+      SCS_LIVE_MAX_STAFF_POLLS: "4"
