@@ -158,7 +158,7 @@ class TableVisitIntegrationTest {
             .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
         assertEquals(200, before.getStatus());
         assertTrue(before.getContentAsString().contains(table.id().toString()));
-        assertTrue(before.getContentAsString().contains("\\\"activeVisit\\\":false"));
+        assertTrue(before.getContentAsString().contains("\"activeVisit\":false"));
 
         var opened = open(waiter, table);
         String visitId = extract(opened, "id");
@@ -168,7 +168,7 @@ class TableVisitIntegrationTest {
             .header("Authorization", "Bearer " + waiter)).andReturn().getResponse();
         assertEquals(200, mine.getStatus());
         assertTrue(mine.getHeader("Cache-Control").contains("no-store"));
-        assertTrue(mine.getContentAsString().contains("\\\"activeVisit\\\":true"));
+        assertTrue(mine.getContentAsString().contains("\"activeVisit\":true"));
         assertTrue(mine.getContentAsString().contains(visitId));
         assertFalse(mine.getContentAsString().contains(proof));
         assertFalse(mine.getContentAsString().contains("joinProof"));
@@ -176,7 +176,7 @@ class TableVisitIntegrationTest {
         var foreign = mvc.perform(get("/api/v1/waiter/tables")
             .header("Authorization", "Bearer " + otherWaiter)).andReturn().getResponse();
         assertEquals(200, foreign.getStatus());
-        assertTrue(foreign.getContentAsString().contains("\\\"activeVisit\\\":true"));
+        assertTrue(foreign.getContentAsString().contains("\"activeVisit\":true"));
         assertFalse(foreign.getContentAsString().contains(visitId));
         assertFalse(foreign.getContentAsString().contains(proof));
 
