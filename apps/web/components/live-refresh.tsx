@@ -138,8 +138,7 @@ export function LiveRefresh({ url }: { url: string }) {
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
-    if (offline) setMode("reconnecting");
-    else connect();
+    if (!offline) connect();
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
