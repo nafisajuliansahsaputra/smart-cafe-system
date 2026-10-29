@@ -114,3 +114,12 @@ Only manager/admin roles can write item prices, visibility and variant group/opt
 ## 13. Multi-group modifier constraints
 
 Each untrusted `variantOptionIds` array is bounded (at most eight), duplicate-checked and matched to active groups belonging to the requested menu item. All required groups must be represented exactly once. The backend reads catalog option prices under shared database row locks while checkout holds the parent menu item lock. Catalog writers take a parent-item write lock before creating/editing groups or options, serializing catalog changes with order-time snapshots. The canonical direct checkout idempotency fingerprint sorts UUID selections, preventing alternate selection ordering from causing duplicate orders. Manager/admin permissions remain mandatory for modifier writes. Legacy one-group lookup fails visibly when more than one group exists.
+
+## 12. M2 guest browser security additions (draft PR #5)
+
+- Static table QR/NFC alias grants no ordering permission; a guest must enter a separate waiter-issued join proof (valid 10 minutes) into a POST form, never a URL or analytics field.
+- Guest token is retained in a `/visit` HttpOnly Strict SameSite cookie (Secure in production) and forwarded by the Next.js server to fixed API paths. Browser JS and localStorage do not receive the bearer.
+- `POST /api/v1/me/logout` revokes server token and clears the cookie; when backend revocation cannot be confirmed the UI warns rather than claiming success.
+- `GET /api/v1/me/orders/{id}/receipt` binds receipt to owner and PAID state, returns 404 for foreign/unpaid order and no-store for successful response.
+- Backend remains authoritative for cart version conflicts, stock, modifier group validation, prices and checkout idempotency. Client total is explicitly an estimate.
+- **Release blocking:** per-IP/device guest join throttling and browser E2E, CSRF/origin/proxy verification, secure-cookie QA and real-cafe operational policy. Do not expose this demo to actual public users or accept real customer data/payments yet.
