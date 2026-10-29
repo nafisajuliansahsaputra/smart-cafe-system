@@ -305,3 +305,29 @@ LiveRefresh component update the server-rendered count and previews
 after a waiter reports a missing copy or a manager reviews a report,
 including on tab visibility resume. The panel shows a fail-closed
 "cannot verify" message when the API is unavailable, not a false zero.
+
+
+## Manager incident evidence and attributed staff audit (stacked draft PR #31)
+
+Manager/admin can open a dedicated, read-only, per-incident evidence
+screen from every row in the searchable missing-game register. The
+`GET /api/v1/admin/games/loss-incidents/{id}/evidence` endpoint
+returns the incident facts plus the staff **reporter login and
+reported timestamp**, the manager **reviewer login, time and decision**
+(where applicable), and the corresponding ordered audit operations.
+Audit entries are read from the existing transactional `audit_logs`
+table, with staff actor, occurrence time and request correlation ID.
+Only `GAME_LOSS_REPORTED`, `GAME_LOSS_DISMISSED` and
+`GAME_LOSS_CONFIRMED` are included; no unaudited financial actions
+or person blame is inferred. A manager may inspect OPEN and historical
+DISMISSED/CONFIRMED_LOST records without changing any decision.
+
+The screen is server-rendered and not linked from waiter/cashier/guest
+pages. Both Next.js and Spring Security independently enforce
+MANAGER/ADMIN only; a missing incident returns 404, an unavailable
+backend shows an explicit unverifiable-record state. Unlike the
+manager landing OPEN alert, this page shows original report/review
+notes, but still omits guest identity, contact, billing, receipts and
+unrestricted audit metadata. No new migration is needed: existing V1
+resource index supports lookup by type/resource ID; no audit row
+updates are implemented.

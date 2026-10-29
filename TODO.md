@@ -304,3 +304,18 @@ PostgreSQL role/data-minimization tests and Chromium HTTP/HTTPS
 0→1→0 manager notification lifecycle added. Remaining pilot work:
 operational review by staff, accessibility/mobile testing, incident
 record retention/appeals and authorized production rollout.
+
+
+### M4 manager-only audit evidence for physical game incidents (draft PR #31)
+
+A read-only per-incident manager screen now presents reporter and
+reviewer staff identities and timestamps, original notes, event audit
+operations, and request correlation IDs from existing transactional
+`audit_logs`. Both backend and UI enforce manager/admin access,
+with 404 for missing incidents and fail-closed unavailable state.
+PostgreSQL/Chromium integration validates report → explicit review
+audit attribution and no guest/payment data leakage. No migration or
+production configuration changes. Remaining: incident evidence
+retention and appeals policy, explicit incident staff shift handoff,
+mobile field usability/accessibility checks, and release security
+review before a real-world cafe pilot.

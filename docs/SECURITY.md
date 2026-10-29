@@ -309,3 +309,18 @@ staff game feed, not complaint content; refresh reads authoritative
 server state. Backend errors are surfaced as uncertain availability,
 not a "0 unresolved reports" claim. No irreversible or financial
 actions originate from the home alert.
+
+
+## Attributed incident evidence access controls (draft PR #31)
+
+Incident evidence is confidential operational staff data.
+Both `/staff/games/incidents/{id}` and the supporting
+`/api/v1/admin/games/loss-incidents/{id}/evidence` require a
+verified MANAGER/ADMIN identity. The server-side fetch uses
+authenticated staff bearer and no-store response. Backend access
+reads only incident and allowlisted audit event columns, joining
+reporter/reviewer/actor usernames, not guest, phone, payment or
+`safe_before_after_diff` records. Arbitrary incident IDs cannot
+cross this role gate. No delete/repair/update endpoints are added,
+and the timeline is evidence of staff activity, **not proof of guest
+fault**. Unavailable backend fails closed and never fabricates history.
