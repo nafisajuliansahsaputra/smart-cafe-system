@@ -9,7 +9,9 @@ const TABLE = "E2E-01";
 const ALIAS = "e2e-01";
 
 async function login(browser, role) {
-  const context = await browser.newContext({ baseURL: BASE });
+  const context = await browser.newContext({
+    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
+  });
   const page = await context.newPage();
   await page.goto("/staff/login");
   await page.getByLabel("Nama pengguna").fill(`e2e-${role}`);
@@ -22,7 +24,9 @@ async function login(browser, role) {
 test("separate staff roles and guest complete the real cash/receipt visit", async ({ browser }) => {
   const contexts = [];
   async function makeContext() {
-    const ctx = await browser.newContext({ baseURL: BASE });
+    const ctx = await browser.newContext({
+    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
+  });
     contexts.push(ctx);
     return ctx;
   }

@@ -20,3 +20,8 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local-only generated TLS keys, certs and Chromium test artifacts
+infra/edge/local-tls/
+test-results/
+playwright-report/
