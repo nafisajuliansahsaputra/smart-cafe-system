@@ -235,3 +235,16 @@ each response to 25 copies. GET filtering changes no physical
 condition and grants no ability to bypass staff audit, copy locks,
 damage reasons or guest loan ownership. Resource and query page
 caps are explicit until real operational volume/load review.
+
+## M4 audit history search restrictions (draft PR #26)
+
+A new manager/admin-only, no-store condition-history search endpoint
+does not expose staff inspection notes to waiter, cashier, kitchen,
+guest or anonymous clients. Bound SQL arguments and literal substring
+search prevent user queries from being evaluated as SQL expressions;
+backend validates page/search/change independently of frontend.
+Responses are capped at 25 records. Audit source rows remain append-only;
+the UX cannot delete, edit, rewrite or interpret findings as customer
+liability, and no automatic charge is generated. Historical notes may
+contain operational free text; access and retention policies must be
+reviewed before commercial deployment.

@@ -259,3 +259,15 @@ searches for a missing unit and filters DAMAGED after restoring UNO,
 then resets to see the registered unit; ordinary cash/game cycle
 continues without public data or payment changes. Exact-head seven
 CI jobs remain required before review.
+
+## M4 condition audit history paging (stacked draft PR #26)
+
+Testcontainers creates 53 timestamp-ordered synthetic inspection changes
+on one serialized game unit and verifies database-driven pages
+25/25/3/0, stable timestamp ordering, final status filter,
+case-insensitive literal search, invalid inputs and anonymous/staff
+role denial. No mutation or billing is involved in audit retrieval.
+Chromium HTTP/HTTPS verifies manager search by inspection note,
+filtering to a nonmatching after-condition, and restoring the full
+history list while the existing guest/loan/cash cycle completes.
+CI must be green for the exact pull request HEAD.
