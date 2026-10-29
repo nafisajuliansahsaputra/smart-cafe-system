@@ -1,0 +1,51 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { staffApi, staffToken } from "@/lib/staff-server";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CODE = /^[A-Za-z0-9_-]{1,80}$/;
+function error(status: number): string {
+  if (status === 409) return "conflict";
+  if (status === 403) return "forbidden";
+  if (status === 0 || status >= 500) return "offline";
+  return "invalid";
+}
+async function send(path: string, body?: Record<string,unknown>) {
+  const token = await staffToken();
+  if (!token) redirect("/staff/login?status=expired");
+  const r = await staffApi(path,"POST",token,body);
+  if (r.status===401) redirect("/staff/login?status=expired");
+  if (r.status!==200) redirect(`/staff/games?notice=${error(r.status)}`);
+  revalidatePath("/staff/games");
+  redirect("/staff/games?notice=updated");
+}
+export async function updateGameLoan(form: FormData) {
+  const id = form.get("loanId"), action = form.get("operation");
+  if (typeof id!=="string" || !UUID.test(id) ||
+      !["assign","handover","return","cancel"].includes(String(action)) ||
+      form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
+  const op=String(action);
+  if (op==="handover" || op==="return") {
+    const code=form.get("copyCode");
+    if (typeof code!=="string" || !CODE.test(code))
+      redirect("/staff/games?notice=invalid");
+    await send(`/api/v1/waiter/game-loans/${id}/${op}`,{copyCode:code});
+  }
+  await send(`/api/v1/waiter/game-loans/${id}/${op}`);
+}
+export async function createPhysicalGame(form: FormData) {
+  const name=form.get("name"), desc=form.get("description");
+  if (typeof name!=="string" || !name.trim() || name.trim().length>120 ||
+    typeof desc!=="string" || desc.length>500)
+    redirect("/staff/games?notice=invalid");
+  await send("/api/v1/admin/games",{name:name.trim(),description:desc.trim()});
+}
+export async function registerGameCopy(form: FormData) {
+  const id=form.get("gameId"), code=form.get("copyCode");
+  if (typeof id!=="string" || !UUID.test(id) ||
+    typeof code!=="string" || !CODE.test(code))
+    redirect("/staff/games?notice=invalid");
+  await send(`/api/v1/admin/games/${id}/copies`,{copyCode:code});
+}
