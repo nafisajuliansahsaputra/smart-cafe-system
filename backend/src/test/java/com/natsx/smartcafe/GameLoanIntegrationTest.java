@@ -647,4 +647,136 @@ class GameLoanIntegrationTest {
             WHERE copy_id=? AND reason LIKE ?
             """,Integer.class,copy,prefix+"%"));
     }
+
+    @Test void missingUnitRequiresManagerReviewAndNeverBillsOrReleasesStockEarly() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             otherWaiter=staff("WAITER"),cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter),otherVisit=open(otherWaiter);
+        User guest=join(visit),otherGuest=join(otherVisit);
+        UUID loan=requestLoan(guest,game);
+        var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+        String code=field(assigned.getContentAsString(),"copyCode");
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+
+        String report="/api/v1/waiter/game-loans/"+loan+"/report-loss";
+        String reason="{\"reason\":\"Reported missing after a table check\"}";
+        assertEquals(401,postJson(report,null,reason).getStatus());
+        assertEquals(403,postJson(report,otherWaiter.token(),reason).getStatus());
+        assertEquals(403,postJson(report,kitchen.token(),reason).getStatus());
+        assertEquals(400,postJson(report,waiter.token(),"{\"reason\":\"x\"}").getStatus());
+        var incident=postJson(report,waiter.token(),reason);
+        assertEquals(200,incident.getStatus(),incident.getContentAsString());
+        UUID incidentId=UUID.fromString(field(incident.getContentAsString(),"id"));
+        assertTrue(incident.getContentAsString().contains("\"status\":\"OPEN\""));
+        assertEquals(409,postJson(report,waiter.token(),reason).getStatus());
+        assertEquals("IN_USE",jdbc.queryForObject("""
+            SELECT status FROM physical_game_loans WHERE id=?
+            """,String.class,loan));
+        assertEquals("AVAILABLE",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE copy_code=?
+            """,String.class,code));
+        assertEquals(409,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertEquals(409,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+        assertTrue(getAs("/api/v1/me/games",otherGuest.token()).getContentAsString()
+            .contains("\"availableCopies\":0"));
+        String queue="/api/v1/admin/games/loss-incidents";
+        assertEquals(401,getAs(queue,null).getStatus());
+        assertEquals(403,getAs(queue,waiter.token()).getStatus());
+        assertEquals(403,getAs(queue,cashier.token()).getStatus());
+        var visible=getAs(queue,manager.token());
+        assertEquals(200,visible.getStatus(),visible.getContentAsString());
+        assertTrue(visible.getContentAsString().contains(incidentId.toString()));
+        assertFalse(visible.getContentAsString().contains(guest.id().toString()));
+        String review="/api/v1/admin/games/loss-incidents/"+incidentId+"/review";
+        assertEquals(403,postJson(review,cashier.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\""+code+
+            "\",\"reason\":\"Examined inventory and confirmed\"}").getStatus());
+        assertEquals(400,postJson(review,manager.token(),
+            "{\"decision\":\"AUTOMATIC_PENALTY\",\"copyCode\":\""+code+
+            "\",\"reason\":\"Not a supported decision\"}").getStatus());
+        assertEquals(409,postJson(review,manager.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\"WRONG-COPY\","+
+            "\"reason\":\"Checked the physical count\"}").getStatus());
+        assertEquals(200,postJson(review,manager.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\""+code+
+            "\",\"reason\":\"Checked unit inventory, cannot find it\"}").getStatus());
+        assertEquals(409,postJson(review,manager.token(),
+            "{\"decision\":\"CONFIRM_LOST\",\"copyCode\":\""+code+
+            "\",\"reason\":\"Replay must not work\"}").getStatus());
+
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT status FROM physical_game_loans WHERE id=?
+            """,String.class,loan));
+        assertEquals("LOST",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE copy_code=?
+            """,String.class,code));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents
+            WHERE id=? AND status='CONFIRMED_LOST' AND reviewed_by=?
+              AND reviewed_at IS NOT NULL AND review_reason IS NOT NULL
+            """,Integer.class,incidentId,manager.id()));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE operation='GAME_LOSS_CONFIRMED' AND resource_id=?
+            """,Integer.class,incidentId));
+        assertTrue(getAs("/api/v1/me/game-loans",guest.token())
+            .getContentAsString().contains("\"status\":\"LOST\""));
+        assertTrue(getAs("/api/v1/me/games",guest.token())
+            .getContentAsString().contains("\"availableCopies\":0"));
+        UUID otherLoan=requestLoan(otherGuest,game);
+        assertEquals(409,postEmpty("/api/v1/waiter/game-loans/"+otherLoan+"/assign",
+            otherWaiter.token()).getStatus());
+        // Financially settled table (no orders here) can be closed only after
+        // manager review, while the LOST copy remains unavailable forever.
+        assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+        assertTrue(relay.dispatchBatch()>0);
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM live_game_signals s WHERE s.loan_id=?
+              AND s.event_type='GAME_LOSS_CONFIRMED'
+            """,Integer.class,loan));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_type='GAME_LOAN' AND aggregate_id=?
+              AND event_type='GAME_LOSS_CONFIRMED' AND payload_safe<>'{}'::jsonb
+            """,Integer.class,loan));
+    }
+
+    @Test void managerCanDismissLossThenWaiterReturnsFoundCopy() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER");
+        UUID game=createGame(manager,1);
+        Visit visit=open(waiter);
+        User guest=join(visit);
+        UUID loan=requestLoan(guest,game);
+        var assignment=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        String code=field(assignment.getContentAsString(),"copyCode");
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        var created=postJson("/api/v1/waiter/game-loans/"+loan+"/report-loss",
+            waiter.token(),"{\"reason\":\"Unit not found after handover\"}");
+        UUID incident=UUID.fromString(field(created.getContentAsString(),"id"));
+        String review="/api/v1/admin/games/loss-incidents/"+incident+"/review";
+        assertEquals(400,postJson(review,manager.token(),
+            "{\"decision\":\"DISMISS\",\"reason\":\"x\"}").getStatus());
+        assertEquals(200,postJson(review,manager.token(),
+            "{\"decision\":\"DISMISS\",\"reason\":\"Unit located on another table\"}").getStatus());
+        assertEquals(409,postJson(review,manager.token(),
+            "{\"decision\":\"DISMISS\",\"reason\":\"Duplicate disposition\"}").getStatus());
+        assertEquals("AVAILABLE",jdbc.queryForObject("""
+            SELECT condition FROM physical_game_copies WHERE copy_code=?
+            """,String.class,code));
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/return",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_loss_incidents
+            WHERE id=? AND status='DISMISSED' AND reviewed_by=?
+            """,Integer.class,incident,manager.id()));
+    }
 }

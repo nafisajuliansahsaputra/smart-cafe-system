@@ -321,6 +321,12 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
     await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang"))
       .toBeVisible();
+    // Report a missing copy during another synthetic game loan only through
+    // the existing staff-confirmed workflow. The in-place manager section
+    // remains read-only until a report exists; no auto loss or fee is created.
+    await expect(manager.getByRole("heading", { name: "Laporan unit belum ditemukan" }))
+      .toBeVisible();
+    await expect(manager.getByText("Tidak ada laporan unit hilang.")).toBeVisible();
     // Manager search is a DB-backed GET, not client-filtered first 250 copies.
     await manager.getByLabel("Cari unit atau permainan").fill("NO-SUCH-E2E-UNIT");
     await manager.getByRole("button", { name: "Cari unit" }).click();

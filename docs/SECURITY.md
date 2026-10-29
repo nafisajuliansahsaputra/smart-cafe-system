@@ -248,3 +248,18 @@ the UX cannot delete, edit, rewrite or interpret findings as customer
 liability, and no automatic charge is generated. Historical notes may
 contain operational free text; access and retention policies must be
 reviewed before commercial deployment.
+
+## M4 unit-loss incident controls (draft PR #27)
+
+An OPEN missing-unit report does not change game stock, loan ownership or
+payment; only authorized manager/admin can confirm actual loss.
+Confirmation requires an exact server-verified copy code, a 5-300
+printable-character review note, a live allocated loan and consistent
+visit->loan->incident->copy locks. Once confirmed, the loan becomes LOST
+and copy condition LOST, so assignment cannot reuse it or silently mark
+it returned. Open reports block casual handover/return until inspected
+manager dismissal; stale/replayed decisions fail. Immutable report and
+manager decision rows plus audit persist separate from customer payment
+records. Public and waiter loan SSE stays identity-scoped; incident
+notes and identity never enter outbox JSON or SSE. No blame or charge is
+inferred from loss; policy and retention reviews remain release blockers.

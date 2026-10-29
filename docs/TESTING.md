@@ -271,3 +271,16 @@ Chromium HTTP/HTTPS verifies manager search by inspection note,
 filtering to a nonmatching after-condition, and restoring the full
 history list while the existing guest/loan/cash cycle completes.
 CI must be green for the exact pull request HEAD.
+
+## M4 game loss report and review acceptance (draft PR #27)
+
+PostgreSQL/Testcontainers validates wrong visit waiter, kitchen denied,
+required report/review reasons, duplicated OPEN report, open-report
+blocks physical return/table close, wrong manager serial and unsupported
+decision rejected, explicit manager CONFIRM_LOST terminal loan and
+unassignable LOST copy, guest sees neutral LOST state, audited decision
+with empty-payload SSE, and table closure only after review. A second
+case exercises manager DISMISS followed by a real-code verified return.
+Chromium cash/receipt demo verifies an empty manager incident section
+does not infer missing equipment or impose a charge. No merchant funds,
+real guests or field device tests used.
