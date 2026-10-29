@@ -278,7 +278,7 @@ public class GameLoanService {
                 rs.getString("copy_code"),rs.getString("condition")),
             q,q,q,filter,filter,size+1,page*size);
         boolean hasNext=rows.size()>size && page<2000; // Never link beyond validated cap.
-        return new CopyPage(hasNext?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
+        return new CopyPage(rows.size()>size?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
     /** Bounded, manager-only inventory audit. No guest identity or payment data. */
@@ -339,7 +339,7 @@ public class GameLoanService {
             q,q,q,q,q,next,next,size+1,page*size);
         boolean hasNext=rows.size()>size && page<2000;
         return new ConditionHistoryPage(
-            hasNext?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
+            rows.size()>size?List.copyOf(rows.subList(0,size)):rows,page,hasNext);
     }
 
     @Transactional
