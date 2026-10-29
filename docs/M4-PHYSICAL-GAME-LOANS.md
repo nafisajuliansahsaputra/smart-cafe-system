@@ -97,3 +97,31 @@ the existing scoped cursor. V15 also extends all partial unique indexes
 and close-visit rules to RETURN_PENDING, so a duplicate assignment or
 early closure is impossible. No fee, deposit, condition judgment, automatic
 damage charge or "automatic return" is implied.
+
+## Damaged physical game quarantine (stacked draft PR #22)
+
+Flyway V16 adds immutable per-copy condition history with actor, timestamp,
+optional originating loan, and mandatory 5-300 printable-character inspection
+reason. No guest name, phone, proof, payment amount, automatic charge or
+liability assumption is written to that history.
+
+After the waiter **physically receives** an IN_USE or RETURN_PENDING unit,
+they must use its exact copy code. Clean return remains supported. If damaged
+or incomplete, the waiter chooses **Terima & karantina unit**, supplies an
+inspection note and confirmation; the server marks both the loan RETURNED and
+the physical copy DAMAGED in one transaction. The table can then close, but
+DAMAGED stock never counts as available and cannot be reassigned.
+
+Managers/admins see serialized copy status (AVAILABLE, DAMAGED, LOST,
+RETIRED) through their authenticated inventory dashboard and may quarantine
+an idle AVAILABLE copy or restore a DAMAGED copy after inspection. Both
+transitions require the reason and audit history; other role requests fail
+closed. Changes on assigned/in-use/return-pending copies are rejected, with
+row locks protecting against concurrent waiter assignments. LOST/RETIRED
+remain read-only because incident disposition and disposal policies are not
+approved. Inventory-only state changes require manual refresh for now.
+
+No financial or rental changes, penalties, refunds, tenant expansion, or
+customer fault determination are implemented. PostgreSQL integration and
+synthetic Chromium scenarios cover incorrect code, role denial, duplicate
+mutation, quarantine, blocked assignment and inspected manager restoration.

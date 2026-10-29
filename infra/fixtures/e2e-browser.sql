@@ -9,13 +9,16 @@ INSERT INTO staff_users (id, login, password_hash) VALUES
   ('22222222-2222-4222-8222-222222222222', 'e2e-cashier',
    crypt('e2e-browser-only-secret-2026', gen_salt('bf', 10))),
   ('33333333-3333-4333-8333-333333333333', 'e2e-kitchen',
+   crypt('e2e-browser-only-secret-2026', gen_salt('bf', 10))),
+  ('44444444-4444-4444-8444-444444444444', 'e2e-manager',
    crypt('e2e-browser-only-secret-2026', gen_salt('bf', 10)))
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO staff_role_assignments (staff_user_id, role_key) VALUES
   ('11111111-1111-4111-8111-111111111111','WAITER'),
   ('22222222-2222-4222-8222-222222222222','CASHIER'),
-  ('33333333-3333-4333-8333-333333333333','KITCHEN')
+  ('33333333-3333-4333-8333-333333333333','KITCHEN'),
+  ('44444444-4444-4444-8444-444444444444','MANAGER')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO cafe_tables (id, table_code, public_alias, capacity) VALUES

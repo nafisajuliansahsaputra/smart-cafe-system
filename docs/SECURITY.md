@@ -198,3 +198,15 @@ admission limits, bounded waits and reconnect backoff. A cursor is only a
 signal to fetch authoritative state; it cannot approve a handover or return.
 Poison-event policy, retention, device acceptance and production ingress
 security remain unapproved release gates.
+
+## M4 quarantine and manager remediation (draft PR #22)
+
+A missing or damaged physical game copy cannot be automatically freed by
+marking its loan returned. Verified waiter damage returns atomically set
+DAMAGED, write a reason-bound condition history, and complete the physically
+inspected return. AVAILABLE/DAMAGED manager-only transitions use a locked copy
+row and reject any active loan. Copy history includes no customer PII and
+never creates a payment, debt or legal finding. LOST/RETIRED states remain
+read-only until an explicit policy/reconciliation process exists. E2E uses
+ephemeral synthetic-only manager credentials. This still requires final
+review of real-world equipment condition and production security gates.
