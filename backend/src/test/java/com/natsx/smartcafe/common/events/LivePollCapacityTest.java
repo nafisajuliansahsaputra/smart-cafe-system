@@ -52,7 +52,7 @@ class LivePollCapacityTest {
             var start = new CountDownLatch(1);
             var release = new CountDownLatch(1);
             var finished = new CountDownLatch(20);
-            var permits = new java.util.concurrent.ConcurrentLinkedQueue<LivePollCapacity.Permit>();
+            var attempted = new CountDownLatch(20);
             List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < 20; i++) {
                 final int index = i;
@@ -62,8 +62,8 @@ class LivePollCapacityTest {
                         var permit = capacity.acquire(index % 2 == 0
                             ? LivePollCapacity.Kind.GUEST : LivePollCapacity.Kind.STAFF,
                             index % 2 == 0 ? guest : staff);
+                        attempted.countDown();
                         if (permit != null) {
-                            permits.add(permit);
                             release.await();
                             permit.close();
                         }
@@ -75,16 +75,9 @@ class LivePollCapacityTest {
                 }));
             }
             start.countDown();
-            // Wait until all attempts have either acquired or been rejected.
-            // A capped lock-free admission must never exceed its budget.
-            for (int i = 0; i < 50; i++) {
-                if (registry.find("scs.live.poll.accepted").counter().count()
-                    + registry.find("scs.live.poll.rejected").tags("reason","global")
-                        .counter().count()
-                    + registry.find("scs.live.poll.rejected").tags("reason","per_identity")
-                        .counter().count() >= 20) break;
-                Thread.sleep(10);
-            }
+            // Every competing attempt has reached admission. Accepted
+            // permits stay held until the main test releases the barrier.
+            assertTrue(attempted.await(5, TimeUnit.SECONDS));
             assertTrue(capacity.activeCount() <= 5);
             assertTrue(capacity.activeCount() <= 2 + 3);
             assertEquals(5, capacity.activeCount());
@@ -92,8 +85,10 @@ class LivePollCapacityTest {
             assertTrue(finished.await(5, TimeUnit.SECONDS));
             for (var future : futures) future.get(5, TimeUnit.SECONDS);
             assertEquals(0, capacity.activeCount());
-            assertEquals(5, capacity.acquire(LivePollCapacity.Kind.STAFF, UUID.randomUUID()) == null
-                ? -1 : 5); // admits again after race; no leak
+            var after = capacity.acquire(LivePollCapacity.Kind.STAFF, UUID.randomUUID());
+            assertNotNull(after, "All permits must be available after concurrency");
+            after.close();
+            assertEquals(0, capacity.activeCount());
         }
     }
 
