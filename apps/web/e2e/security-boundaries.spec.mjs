@@ -12,7 +12,9 @@ function actionField(form) {
 }
 
 test("forged Origin cannot invoke authenticated staff logout", async ({ browser }) => {
-  const context = await browser.newContext({ baseURL: BASE });
+  const context = await browser.newContext({
+    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
+  });
   try {
     const page = await context.newPage();
     await page.goto("/staff/login");
@@ -59,7 +61,9 @@ test("forged Origin cannot invoke authenticated staff logout", async ({ browser 
 });
 
 test("oversized Server Action body cannot create staff session", async ({ browser }) => {
-  const context = await browser.newContext({ baseURL: BASE });
+  const context = await browser.newContext({
+    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
+  });
   try {
     const page = await context.newPage();
     await page.goto("/staff/login");
@@ -91,7 +95,9 @@ test("oversized Server Action body cannot create staff session", async ({ browse
 });
 
 test("closed public QR cannot issue a guest session", async ({ browser }) => {
-  const context = await browser.newContext({ baseURL: BASE });
+  const context = await browser.newContext({
+    baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true",
+  });
   try {
     const page = await context.newPage();
     await page.goto("/t/e2e-01");

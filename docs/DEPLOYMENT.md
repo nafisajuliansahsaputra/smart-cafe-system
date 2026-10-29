@@ -106,3 +106,7 @@ Before real guests or money:
 - no real messaging until approved provider/consent/template conditions met.
 
 Without these, market the project as an engineering demo using sandbox data, not a live cafe POS.
+
+## 9. Local-only HTTPS edge acceptance (draft PR #10)
+
+The repository now contains an **opt-in, loopback-only** HTTPS Nginx Compose overlay for CI/browser security verification: [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](M2-HTTPS-EDGE-ACCEPTANCE.md). It validates the trusted-Host, forwarded-header and POST rate-limit boundary on a disposable `https://localhost:8443` using a self-signed cert. This is **not** a production-ready reverse proxy. A public deployment would require owned DNS, trusted certificate issuance/renewal, real upstream proxy/CDN trust and rate limiting, CSP/HSTS, backups and authenticated staging sign-off. Nothing is deployed by this PR.
