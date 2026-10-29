@@ -38,6 +38,14 @@ public class GameLossIncidentController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(service.reviewQueue(),RequestIdFilter.get(request)));
     }
+    /** Read-only, attributed evidence of one manager-visible game incident. */
+    @GetMapping("/admin/games/loss-incidents/{id}/evidence")
+    public ResponseEntity<ApiEnvelope<GameLossIncidentService.IncidentEvidence>> evidence(
+        @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(service.incidentEvidence(id),RequestIdFilter.get(request)));
+    }
     /** Minimal OPEN summary for manager dashboard and existing game live feed. */
     @GetMapping("/admin/games/loss-incidents/summary")
     public ResponseEntity<ApiEnvelope<GameLossIncidentService.OpenIncidentSummary>> summary(
