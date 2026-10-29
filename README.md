@@ -186,3 +186,7 @@ After-cursor live requests now use Servlet async dispatch on JDK 21 virtual thre
 ## Two-replica live event recovery acceptance (draft PR #17)
 
 The repository now includes an isolated two-Spring-Boot-instance Compose overlay and a seventh CI job. It verifies cross-instance PostgreSQL notifications and recovery from a deliberately missed event while one backend is stopped, using the durable table cursor after restart. All actions use synthetic staff/table fixtures and loopback ports; no deployment or payment operation. See [multi-replica recovery](docs/M2-MULTIREPLICA-RECOVERY.md).
+
+## M2 offline reconnect and cancellable long-polls (draft PR #18)
+
+Authenticated backend cursor waits now use cancellation-aware Servlet DeferredResult virtual-thread workers: timeout/error/completion lifecycle callbacks interrupt abandoned waits so global/per-identity capacity is released when the container observes a disconnect. Staff and guest EventSource subscriptions close when offline or hidden, reconnect with bounded backoff and re-read latest authorized state when online. A Chromium cash-cycle regression takes kitchen offline during cashier approval and verifies automatic catch-up. See [docs/M2-DISCONNECT-RECOVERY.md](docs/M2-DISCONNECT-RECOVERY.md). Instant TCP disconnect detection is not guaranteed behind real proxies.
