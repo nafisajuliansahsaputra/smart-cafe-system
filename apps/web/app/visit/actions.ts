@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -185,7 +184,3 @@ export async function restoreVisit(form: FormData): Promise<void> {
   redirect(`/t/${alias}`);
 }
 
-// Used only as a server-generated non-secret request dedupe identifier.
-export async function checkoutKey(): Promise<string> {
-  return randomUUID();
-}
