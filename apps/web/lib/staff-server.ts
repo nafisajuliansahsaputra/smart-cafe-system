@@ -143,16 +143,16 @@ export async function orderDetail(id: string): Promise<LoadResult<OrderDetail>> 
   const response = await staffApi(`/api/v1/ops/orders/${id}`, "GET", token);
   const data = dataFromEnvelope(response.payload);
   if (response.status !== 200) return { ok: false, status: response.status };
+  if (!isQueueOrder(data)) return { ok: false, status: 502 };
+  const detail: Record<string, unknown> = data as unknown as Record<string, unknown>;
   if (
-    !isQueueOrder(data) ||
-    !record(data) ||
-    typeof data.subtotalIdr !== "number" ||
-    typeof data.taxIdr !== "number" ||
-    typeof data.serviceFeeIdr !== "number" ||
-    typeof data.paymentMethod !== "string" ||
-    !Array.isArray(data.lines) ||
-    !data.lines.every(
-      (line) =>
+    typeof detail.subtotalIdr !== "number" ||
+    typeof detail.taxIdr !== "number" ||
+    typeof detail.serviceFeeIdr !== "number" ||
+    typeof detail.paymentMethod !== "string" ||
+    !Array.isArray(detail.lines) ||
+    !detail.lines.every(
+      (line: unknown) =>
         record(line) &&
         typeof line.name === "string" &&
         typeof line.quantity === "number" &&
