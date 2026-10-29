@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { addCartItem } from "../../actions";
-import { getMenu, getVariants, guestIdentity, idr, UUID_PATTERN } from "@/lib/guest-server";
+import { getCart, getMenu, getVariants, guestIdentity, idr, UUID_PATTERN } from "@/lib/guest-server";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string, string> = {
@@ -23,7 +23,7 @@ export default async function MenuItemPage({ params, searchParams }: {
   );
   const { itemId } = await params;
   if (!UUID_PATTERN.test(itemId)) notFound();
-  const [menu, variants] = await Promise.all([getMenu(), getVariants(itemId)]);
+  const [menu, variants, cart] = await Promise.all([getMenu(), getVariants(itemId), getCart()]);
   const item = menu.ok ? menu.data.find((m) => m.id === itemId) : undefined;
   if (menu.ok && !item) notFound();
   const { notice } = await searchParams;
@@ -34,7 +34,7 @@ export default async function MenuItemPage({ params, searchParams }: {
         <Link href="/visit/cart">Keranjang</Link></header>
       <nav className="guest-breadcrumb"><Link href="/visit">Menu</Link><span>/</span><strong>Pilihan</strong></nav>
       {message && <p className="guest-alert" role="alert">{message}</p>}
-      {!menu.ok || !variants.ok ? (
+      {!menu.ok || !variants.ok || !cart.ok ? (
         <section className="guest-panel"><h1>Menu belum bisa dimuat</h1>
           <p>Periksa koneksi server atau coba lagi. Tidak ada item yang ditambahkan.</p>
           <Link href={`/visit/menu/${itemId}`}>Coba lagi</Link></section>
@@ -45,6 +45,7 @@ export default async function MenuItemPage({ params, searchParams }: {
           <p className="guest-subtitle">Tentukan pilihan sebelum masuk keranjang. Opsi tambahan dapat memengaruhi total.</p>
           <form action={addCartItem} className="guest-form">
             <input type="hidden" name="itemId" value={itemId} />
+            <input type="hidden" name="expectedVersion" value={cart.ok ? cart.data.version : ""} />
             {variants.data.map((group) => (
               <fieldset key={group.id} className="guest-options">
                 <legend>{group.name} {group.required ? <small>(wajib)</small> : <small>(opsional)</small>}</legend>
