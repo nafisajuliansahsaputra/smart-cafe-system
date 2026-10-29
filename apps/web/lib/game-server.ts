@@ -15,6 +15,9 @@ export type GameConditionHistoryView = {
   afterCondition: "AVAILABLE" | "DAMAGED";
   reason: string; actorLogin: string; recordedAt: string;
 };
+export type GameConditionHistoryPage = {
+  items: GameConditionHistoryView[]; page: number; hasNext: boolean;
+};
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
   status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
@@ -71,6 +74,12 @@ function historyItem(value: unknown): value is GameConditionHistoryView {
 }
 const history = (value: unknown): value is GameConditionHistoryView[] =>
   Array.isArray(value) && value.every(historyItem);
+function historyPage(value: unknown): value is GameConditionHistoryPage {
+  return record(value) && Array.isArray(value.items) &&
+    value.items.length<=25 && value.items.every(historyItem) &&
+    Number.isSafeInteger(value.page) && (value.page as number)>=0 &&
+    (value.page as number)<=2000 && typeof value.hasNext==="boolean";
+}
 const games = (value: unknown): value is GameView[] =>
   Array.isArray(value) && value.every(game);
 const loans = (value: unknown): value is GameLoanView[] =>
@@ -126,5 +135,17 @@ export async function searchAdminGameCopies(
   const params=new URLSearchParams({q,condition,page:String(page)});
   const r=await staffApi(`/api/v1/admin/games/copies/search?${params}`,"GET",token);
   const parsed=result(r.status,dataFromEnvelope(r.payload),copyPage);
+  return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
+}
+
+/** Search across the complete manager-only audit table, not latest-100. */
+export async function searchAdminGameConditionHistory(
+  q: string, change: string, page: number,
+): Promise<Result<GameConditionHistoryPage>> {
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const params=new URLSearchParams({q,change,page:String(page)});
+  const r=await staffApi(`/api/v1/admin/games/condition-history/search?${params}`,"GET",token);
+  const parsed=result(r.status,dataFromEnvelope(r.payload),historyPage);
   return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
 }
