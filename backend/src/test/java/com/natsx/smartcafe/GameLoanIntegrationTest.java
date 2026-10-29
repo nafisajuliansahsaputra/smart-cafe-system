@@ -1007,4 +1007,70 @@ class GameLoanIntegrationTest {
             WHERE loan_id=? AND reason LIKE ?
             """,Integer.class,loan,prefix+"%"));
     }
+
+    @Test void managerLandingSummaryIsPrivateMinimalAndTracksReportsInRealtime()
+        throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        String endpoint="/api/v1/admin/games/loss-incidents/summary";
+        assertEquals(401,getAs(endpoint,null).getStatus());
+        assertEquals(401,getAs(endpoint,"not-a-valid-token").getStatus());
+        assertEquals(403,getAs(endpoint,waiter.token()).getStatus());
+        assertEquals(403,getAs(endpoint,cashier.token()).getStatus());
+        assertEquals(403,getAs(endpoint,kitchen.token()).getStatus());
+        var before=getAs(endpoint,manager.token());
+        assertEquals(200,before.getStatus(),before.getContentAsString());
+        assertEquals("no-store",before.getHeader("Cache-Control"));
+        var countPattern=Pattern.compile("\"openCount\":([0-9]+)");
+        var match=countPattern.matcher(before.getContentAsString());
+        assertTrue(match.find(),before.getContentAsString());
+        long beforeCount=Long.parseLong(match.group(1));
+        assertTrue(before.getContentAsString().contains("\"recent\":"));
+
+        UUID game=createGame(manager,4);
+        UUID[] incidents=new UUID[4];
+        String[] codes=new String[4];
+        for (int i=0;i<4;i++) {
+            Visit visit=open(waiter);
+            User guest=join(visit);
+            UUID loan=requestLoan(guest,game);
+            var assigned=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",
+                waiter.token());
+            assertEquals(200,assigned.getStatus(),assigned.getContentAsString());
+            codes[i]=field(assigned.getContentAsString(),"copyCode");
+            var reported=postJson("/api/v1/waiter/game-loans/"+loan+"/report-loss",
+                waiter.token(),"{\"reason\":\"Private investigation note "+i+"\"}");
+            assertEquals(200,reported.getStatus(),reported.getContentAsString());
+            incidents[i]=UUID.fromString(field(reported.getContentAsString(),"id"));
+        }
+        var shown=getAs(endpoint,manager.token());
+        assertEquals(200,shown.getStatus(),shown.getContentAsString());
+        String json=shown.getContentAsString();
+        assertTrue(json.contains("\"openCount\":"+(beforeCount+4)),json);
+        assertEquals(3,json.split("\"copyCode\":",-1).length-1,json);
+        assertTrue(json.contains(codes[3]),json);
+        assertTrue(json.contains(codes[2]),json);
+        assertTrue(json.contains(codes[1]),json);
+        assertFalse(json.contains(codes[0]),"At most three latest OPEN previews");
+        assertFalse(json.contains("Private investigation note"),
+            "Report text must never appear in manager landing-page alert");
+        assertFalse(json.contains("\"guestId\""),json);
+        assertFalse(json.contains("\"phone\""),json);
+        assertFalse(json.contains("\"payment\""),json);
+        assertFalse(json.contains("\"loanId\""),json);
+        assertFalse(json.contains("\"reason\""),json);
+
+        for (UUID id:incidents) {
+            assertEquals(200,postJson("/api/v1/admin/games/loss-incidents/"+id+
+                "/review",manager.token(),
+                "{\"decision\":\"DISMISS\",\"reason\":\"Physical incident reviewed and dismissed\"}")
+                .getStatus());
+        }
+        var resolved=getAs(endpoint,manager.token());
+        assertEquals(200,resolved.getStatus(),resolved.getContentAsString());
+        assertTrue(resolved.getContentAsString().contains(
+            "\"openCount\":"+beforeCount),resolved.getContentAsString());
+        for (String code:codes) assertFalse(resolved.getContentAsString().contains(code),
+            "Our four reports must disappear from the OPEN manager preview");
+    }
 }
