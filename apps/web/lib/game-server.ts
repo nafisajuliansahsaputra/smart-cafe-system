@@ -4,6 +4,10 @@ import { guestApi, guestToken, envelopeData } from "@/lib/guest-server";
 import { staffApi, staffToken, dataFromEnvelope } from "@/lib/staff-server";
 
 export type GameView = { id: string; name: string; description: string | null; availableCopies: number };
+export type GameCopyView = {
+  id: string; gameId: string; gameName: string;
+  copyCode: string; condition: "AVAILABLE" | "DAMAGED" | "LOST" | "RETIRED";
+};
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
   status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
@@ -34,6 +38,14 @@ function result<T>(status: number, data: unknown, check: (value: unknown) => val
   if (status !== 200) return { ok: false, status };
   return check(data) ? { ok: true, data } : { ok: false, status: 502 };
 }
+function gameCopy(value: unknown): value is GameCopyView {
+  return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
+    typeof value.gameId === "string" && uuid.test(value.gameId) &&
+    typeof value.gameName === "string" && typeof value.copyCode === "string" &&
+    ["AVAILABLE","DAMAGED","LOST","RETIRED"].includes(String(value.condition));
+}
+const copies = (value: unknown): value is GameCopyView[] =>
+  Array.isArray(value) && value.every(gameCopy);
 const games = (value: unknown): value is GameView[] =>
   Array.isArray(value) && value.every(game);
 const loans = (value: unknown): value is GameLoanView[] =>
@@ -62,4 +74,12 @@ export async function staffGameLoans(): Promise<Result<GameLoanView[]>> {
   if (!token) return { ok: false, status: 401 };
   const r = await staffApi("/api/v1/waiter/game-loans", "GET", token);
   return result(r.status, dataFromEnvelope(r.payload), loans);
+}
+
+/** Manager/admin only; never fetch copy history as a guest or waiter. */
+export async function adminGameCopies(): Promise<Result<GameCopyView[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const r = await staffApi("/api/v1/admin/games/copies", "GET", token);
+  return result(r.status, dataFromEnvelope(r.payload), copies);
 }
