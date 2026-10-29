@@ -228,3 +228,7 @@ GET `/staff/live?topic=orders|kitchen|waiter|tables` or `?topic=order&id=<uuid>`
 ## Live outbox transport (draft PR #12)
 
 Backend internal database schema V11 adds `outbox_events.live_published_at` and `live_order_signals(sequence_id,outbox_id,order_id,event_type,published_at)`. A scheduled internal worker publishes via transactional `pg_notify('scs_order_live', order_uuid)` only after inserting a unique durable event row. **No new public HTTP endpoint or user-facing event contract is introduced in this PR.** Existing `/visit/live` and `/staff/live` preserve their PR #11 authenticated snapshot SSE contract until a scoped cursor subscriber is built and tested.
+
+## M2 durable live backend cursor (draft PR #13)
+
+Role-guarded backend GET routes `/api/v1/me/live-cursor?topic=orders|order&orderId=<uuid>`, `/api/v1/ops/live-cursor?topic=orders|order&orderId=<uuid>`, `/api/v1/kitchen/live-cursor?topic=kitchen` and `/api/v1/waiter/live-cursor?topic=waiter` now return `ApiEnvelope.data.cursor` (nonnegative signed-long). Optional `after=<cursor>` waits up to 14 seconds for a scoped change; immediate read without after. Role/ownership unauthorized → 401/403/404, invalid topic or negative cursor → 400, occupied long-poll capacity → 429. This endpoint is server-only and a raw global cursor is never exposed anonymously. Existing browser SSE event payload remains empty `{}` and unchanged; Next BFF does not forward cursor numbers to browser. Lost NOTIFY is recovered via durable query.

@@ -166,3 +166,7 @@ Authenticated OCC, KDS, waiter, table and guest order pages now subscribe to sam
 ## M2 transactional outbox live relay (draft PR #12)
 
 The backend now contains a restart-safe, PostgreSQL-backed relay that converts existing committed ORDER outbox entries into durable, uniquely identified live notification signals and commit-only PG NOTIFY wake-ups. It does **not** mark unrelated business outbox deliveries processed. Docker Compose opts in; unrelated tests do not start the scheduled worker. Existing SSE/browser pages still use 5-second snapshots pending a secure cursor subscriber. See [docs/M2-DURABLE-LIVE-RELAY.md](docs/M2-DURABLE-LIVE-RELAY.md).
+
+## M2 durable event subscriber (draft PR #13)
+
+Guest and staff order SSE feeds now react to PostgreSQL NOTIFY-backed **authorized durable event cursors**, rather than repeatedly fetching entire order/kitchen/waiter projections. The backend uses one shared LISTEN connection and bounded role/ownership-scoped long polls; Next.js BFF keeps session credentials in HttpOnly cookies and emits empty change signals only. The table management watcher still uses authenticated snapshots. See [M2 live event subscriber](docs/M2-LIVE-EVENT-SUBSCRIBER.md).

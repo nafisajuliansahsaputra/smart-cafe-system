@@ -171,3 +171,7 @@ Chromium retains the OCC view before guest checkout, KDS before cashier approval
 ## Durable live outbox relay integration (draft PR #12)
 
 V11 introduces distinct live publication state. New PostgreSQL Testcontainers integration checks batch publication, two monotonically increasing live event IDs, exactly one durable signal per original outbox ID, safe retry after reset without duplicate, and no mutation of business-outbox `processed_at`. An invalid synthetic event fails transactionally and remains pending with no corresponding live signal. Scheduled worker disabled by default in tests; Docker Compose enables it. The existing full browser HTTP/HTTPS cash flow must continue to pass. This is **not** a browser test of NOTIFY delivery or replay yet.
+
+## M2 durable live cursor (draft PR #13)
+
+A PostgreSQL Testcontainers/MockMvc regression exercises the new role/owner-scoped live cursor endpoint after actual checkout/approval/kitchen transitions and durable outbox publication. It checks foreign guest 404, guest-without-auth 401, cross-role 403, waiter not responsible for a visit cannot observe its event cursor, and previous cursor still detects a change after publication. Existing Chromium cash lifecycle now exercises order SSE using the real NOTIFY/cursor BFF bridge over HTTP and local HTTPS. No performance or production proxy capacity guarantee.
