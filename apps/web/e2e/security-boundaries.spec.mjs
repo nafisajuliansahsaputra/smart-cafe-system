@@ -91,10 +91,8 @@ test("cross-site POST on guest join action cannot bypass Origin guard", async ({
     // After cash-cycle closes, this QR remains a public table locator, not
     // authorization to join. The Server Action endpoint must still reject
     // cross-origin requests before any guest token could be issued.
-    const field = await actionField(page.locator("form"));
-    // Closed visits omit the join form, so test against staff login above
-    // instead; assert no lingering credential on public QR.
-    expect(field).toBeNull();
+    // Closed visits omit the join form; no credential may be fetched.
+    await expect(page.locator("form")).toHaveCount(0);
     expect((await context.cookies()).some((c) => c.name === "scs_guest_session")).toBe(false);
     expect(await page.locator("body").innerText()).toContain("Meja belum diaktifkan");
   } finally {
