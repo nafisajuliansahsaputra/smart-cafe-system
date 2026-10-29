@@ -54,6 +54,7 @@ export default async function CartPage({ searchParams }: {
               </div>
               <form action={updateCartItem} className="guest-quantity-form">
                 <input type="hidden" name="itemId" value={line.menuItemId} />
+                <input type="hidden" name="expectedVersion" value={cart.data.version} />
                 <label htmlFor={`quantity-${line.menuItemId}`}>Jumlah</label>
                 <input id={`quantity-${line.menuItemId}`} name="quantity" type="number"
                   min={0} max={20} defaultValue={line.quantity} required />
