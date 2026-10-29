@@ -198,6 +198,25 @@ class CashOrderFlowIntegrationTest {
         assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/" + ticket + "/ready")
             .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
         var unassignedWaiter=staff("WAITER");
+        var ownerTasks=mvc.perform(get("/api/v1/waiter/orders/tasks")
+            .header("Authorization","Bearer " + waiter)).andReturn().getResponse();
+        assertEquals(200,ownerTasks.getStatus());
+        assertTrue(ownerTasks.getContentAsString().contains(orderId.toString()));
+        assertTrue(ownerTasks.getContentAsString().contains(intent.toString()));
+        assertTrue(ownerTasks.getContentAsString().contains("READY"));
+        assertTrue(!ownerTasks.getContentAsString().contains("accessToken"));
+        var otherTasks=mvc.perform(get("/api/v1/waiter/orders/tasks")
+            .header("Authorization","Bearer " + unassignedWaiter)).andReturn().getResponse();
+        assertEquals(200,otherTasks.getStatus());
+        assertTrue(!otherTasks.getContentAsString().contains(orderId.toString()));
+        var cashierTasks=mvc.perform(get("/api/v1/waiter/orders/tasks")
+            .header("Authorization","Bearer " + cashier)).andReturn().getResponse();
+        assertEquals(200,cashierTasks.getStatus());
+        assertTrue(cashierTasks.getContentAsString().contains(orderId.toString()));
+        assertEquals(403,mvc.perform(get("/api/v1/waiter/orders/tasks")
+            .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/waiter/orders/tasks"))
+            .andReturn().getResponse().getStatus());
         assertEquals(403,mvc.perform(post("/api/v1/waiter/orders/" + orderId + "/served")
             .header("Authorization","Bearer " + unassignedWaiter)).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(post("/api/v1/waiter/orders/" + orderId + "/served")
@@ -227,6 +246,11 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer " + cashier).header("Idempotency-Key",tenderKey)
             .contentType(MediaType.APPLICATION_JSON).content("{\"amountReceivedIdr\":61000}"))
             .andReturn().getResponse().getStatus());
+        var settledTasks=mvc.perform(get("/api/v1/waiter/orders/tasks")
+            .header("Authorization","Bearer " + waiter)).andReturn().getResponse();
+        assertEquals(200,settledTasks.getStatus());
+        assertTrue(settledTasks.getContentAsString().contains("\"receivedIdr\":60000"));
+        assertTrue(settledTasks.getContentAsString().contains("\"changeGivenIdr\":4000"));
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM cash_tenders WHERE payment_intent_id=?",
             Integer.class,intent));
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM receipts WHERE order_id=?",

@@ -106,3 +106,10 @@ V9 removes the old one-group-per-item limit and introduces normalized `cart_line
 A first staff browser implementation is proposed on `feat/m2-staff-oc-browser`: server-side staff auth bridge (HttpOnly SameSite=Strict cookie), role-gated staff homepage, server-rendered OCC queue/filter/detail, and server-only approve/reject actions. Backend still performs authorization and transactional state transitions. The UI is **read/snapshot on reload**, not realtime. Staff sessions, cash lifecycle and rejection correctness are provided by PR #2.
 
 Keep the OCC and M2 full-flow checkboxes unchecked until the stacked PR passes final-head CI plus authenticated operator E2E, denial/CSRF checks, and full waiter/kitchen/receipt coverage. Manual browser acceptance is recorded in [docs/M2-STAFF-BROWSER.md](docs/M2-STAFF-BROWSER.md).
+
+
+### M2 kitchen/waiter browser follow-up (stacked PR #4)
+
+A new backend waiter tasks projection restricts regular waiters to their own table visits; supervisor roles can read all. The first operational `/staff/kitchen` and `/staff/waiter` screens now submit authenticated, server-authoritative start/ready/served/cash-tender commands via Next.js Server Actions, with explicit physical-handover and physical-cash confirmations. Cash amounts and recorded change are returned from database projections rather than frontend estimates.
+
+The M2 KDS/waiter/full cash-E2E checkboxes remain open until authenticated browser E2E, accessibility, deployed-origin security checks, table management UX and closed-visit cases pass. This PR adds no provider connection or production money handling. See [docs/M2-FULFILLMENT-UI.md](docs/M2-FULFILLMENT-UI.md).

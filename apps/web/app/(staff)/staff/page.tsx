@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutStaff } from "./actions";
-import { canUseOcc, staffIdentity } from "@/lib/staff-server";
+import { canUseOcc, canUseKitchen, canUseWaiter, staffIdentity } from "@/lib/staff-server";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +33,25 @@ export default async function StaffPage() {
           <p>Antrean pesanan aktual dari database, bukan data simulasi. Persetujuan cash tidak berarti sudah dibayar.</p>
           <Link className="staff-link-button" href="/staff/orders">Buka antrean pesanan</Link>
         </section>
-      ) : (
+      ) : null}
+      {canUseKitchen(current.staff.roles) && (
         <section className="staff-panel">
-          <h2>Belum ada layar untuk peran ini</h2>
-          <p>Akun terverifikasi, tetapi antarmuka waiter dan kitchen belum tersedia pada iterasi ini. Anda tidak mendapat akses OCC tanpa peran yang sesuai.</p>
+          <h2>Kitchen Display</h2>
+          <p>Antrean masak hanya berisi pesanan yang sudah diterima dapur. Ubah status menyiapkan dan siap diantar melalui API.</p>
+          <Link className="staff-link-button" href="/staff/kitchen">Buka dashboard dapur</Link>
+        </section>
+      )}
+      {canUseWaiter(current.staff.roles) && (
+        <section className="staff-panel">
+          <h2>Waiter &amp; Cash</h2>
+          <p>Daftar pengantaran dan penerimaan uang tunai, dibatasi berdasarkan meja yang ditangani. Cash baru lunas setelah dicatat oleh server.</p>
+          <Link className="staff-link-button" href="/staff/waiter">Buka tugas waiter</Link>
+        </section>
+      )}
+      {!canUseOcc(current.staff.roles) && !canUseKitchen(current.staff.roles) && !canUseWaiter(current.staff.roles) && (
+        <section className="staff-panel">
+          <h2>Tidak ada layar untuk peran ini</h2>
+          <p>Akun terverifikasi tetapi belum memiliki izin untuk antarmuka operasional.</p>
         </section>
       )}
     </main>

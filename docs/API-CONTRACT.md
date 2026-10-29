@@ -191,3 +191,12 @@ New public `GET /api/v1/menu/{itemId}/variant-groups` returns an array of every 
 Cart `PUT /me/cart` and direct `POST /orders` lines now accept `variantOptionIds: [uuid, ...]` (zero to eight unique UUIDs) in addition to the backwards-compatible singular `variantOptionId`. **Do not send both fields in one line.** Empty/missing array means no choices; any active required group then causes 409. Duplicate choices, multiple choices in one group, inactive/foreign options or a negative/overflow adjusted price are rejected server-side. The complete option UUID list is sorted for direct checkout idempotency so reversing an array does not create a distinct order.
 
 The singular public legacy route `/menu/{id}/variants` remains for one-group items, but returns 409 for a multi-group item rather than hiding other required choices. M2 still stores one cart line per menu-item ID and uses parent menu item stock quantities, not modifier-level inventory. Order line `variant_snapshot` includes immutable `label` and `options[]` metadata. Receipt/KDS/guest/OCC read the snapshot label, never a live option name.
+
+
+## M2 fulfillment UI follow-up (stacked development PR #4)
+
+`GET /api/v1/waiter/orders/tasks` returns actionable order deliveries and cash tasks. Each row has `orderId`, `paymentIntentId`, `tableCode`, `orderStatus`, `paymentStatus`, `totalIdr`, `createdAt`, safe snapshotted lines, and nullable `receivedIdr`/`changeGivenIdr` sourced from a recorded cash tender. This endpoint is **not public**, and waiter-only actors see orders exclusively for visits they opened. Cashier/manager/admin see supervisor scope. Kitchen and guests are forbidden. Once served and paid, the record remains visible for up to one day by order creation timestamp for handover verification.
+
+`/staff/kitchen` consumes existing `GET /kitchen/tickets`, `POST /kitchen/tickets/{id}/start` and `POST /kitchen/tickets/{id}/ready`. `/staff/waiter` consumes `GET /waiter/orders/tasks`, `POST /waiter/orders/{id}/served`, `POST /ops/payments/{intentId}/cash-tenders` with a fresh idempotency key. All browser commands are server-side, scoped to the current backend-authenticated staff session and require confirmation. The backend, not the browser, remains responsible for financial and fulfillment state.
+
+M2 limits remain: delivery allocation still binds the table-opening waiter (no reassignment workflow); cash-at-handover is a provisional demo rule; task refresh is manual, not SSE. Do not enable actual cash or customer data in a publicly deployed environment.
