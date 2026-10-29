@@ -143,3 +143,9 @@ This is still an unmerged development-only slice; see [table management acceptan
 ## M2 guest join abuse guard (draft PR #7)
 
 A new PostgreSQL-backed, fixed-window guest join throttle limits well-formed join attempts before short-lived proof verification. Counters persist even when a proof is wrong, 429 responses are safe and no-store, and a configured HMAC key prevents raw source IPs/aliases from being stored in the throttle table. It uses the actual backend socket peer, **not untrusted X-Forwarded-For**; when using the Next.js BFF that peer can be shared by many guests. This is not a complete edge per-client abuse defense. **Configure a unique `SCS_JOIN_THROTTLE_SECRET` of at least 32 bytes** in every backend environment (the .env example contains a development-only placeholder). See [M2 guest join hardening](docs/M2-GUEST-JOIN-THROTTLE.md).
+
+## M2 browser end-to-end acceptance (draft PR #8)
+
+A real Chromium acceptance suite now exercises `/staff/tables` → `/t/e2e-01` → guest menu/modifiers/cart/checkout → cashier approve → kitchen start/ready → waiter serve/collect cash → paid-only guest receipt → settle/close visit. Playwright uses distinct waiter, cashier, kitchen and two independent guest browser contexts against an isolated Docker/PostgreSQL app, with a **synthetic CI-only fixture**. No application path or real funds are touched in testing. CI job logs/traces are the evidence; check the exact commit before treating E2E as passing.
+
+See [browser acceptance notes](docs/M2-BROWSER-E2E.md). This does not certify production HTTPS, edge anti-abuse or real payment gateways.

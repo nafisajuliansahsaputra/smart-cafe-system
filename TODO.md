@@ -125,3 +125,7 @@ Added first role-protected table inventory and browser actions to open visits, r
 ### M2 guest join security guard (stacked draft PR #7)
 
 Added a PostgreSQL V10 fixed-window HMAC-keyed rate limiter with safe HTTP 429 and 10-minute Retry-After behavior, separate committed throttle transaction, bounded peer/table/pair attempt budgets, stale-counter cleanup and negative integration tests. This hardens the backend but **does not close the public launch security gate**: the Next.js server-to-server join means socket IP can be shared; a trusted edge per-client rate limiter plus network/origin hardening and malformed-body controls are still required before internet exposure. See [docs/M2-GUEST-JOIN-THROTTLE.md](docs/M2-GUEST-JOIN-THROTTLE.md).
+
+### M2 Chromium real browser E2E (stacked draft PR #8)
+
+Added isolated Chromium workflow with ephemeral synthetic PostgreSQL fixture and independent waiter/cashier/kitchen/guest sessions, covering the full cash/receipt/table lifecycle. Role isolation, unauthorized cross-guest read, cookie security attributes, modifier pricing and non-PAID-before-cash also covered. **Do not mark production acceptance complete**: actual proxy/origin/CSRF/TLS, manual mobile/a11y, payment policy and external provider remain open. See [docs/M2-BROWSER-E2E.md](docs/M2-BROWSER-E2E.md).
