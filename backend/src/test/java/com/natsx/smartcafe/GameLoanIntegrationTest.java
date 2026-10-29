@@ -405,6 +405,16 @@ class GameLoanIntegrationTest {
         assertEquals(2,jdbc.queryForObject("""
             SELECT count(*) FROM physical_game_copy_condition_events WHERE copy_id=?
             """,Integer.class,copy));
+        var managerHistory=getAs("/api/v1/admin/games/condition-history",manager.token());
+        assertEquals(200,managerHistory.getStatus(),managerHistory.getContentAsString());
+        assertTrue(managerHistory.getContentAsString().contains("Torn game cards"));
+        assertTrue(managerHistory.getContentAsString().contains("All cards replaced"));
+        assertTrue(managerHistory.getContentAsString().contains(code));
+        assertFalse(managerHistory.getContentAsString().contains(guest.id().toString()));
+        assertEquals(403,getAs("/api/v1/admin/games/condition-history",
+            waiter.token()).getStatus());
+        assertEquals(403,getAs("/api/v1/admin/games/condition-history",
+            cashier.token()).getStatus());
         assertEquals(200,postEmpty("/api/v1/waiter/game-loans/"+nextLoan+"/assign",
             waiter.token()).getStatus());
         assertEquals(409,postJson(manage,manager.token(),

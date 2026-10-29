@@ -8,6 +8,12 @@ export type GameCopyView = {
   id: string; gameId: string; gameName: string;
   copyCode: string; condition: "AVAILABLE" | "DAMAGED" | "LOST" | "RETIRED";
 };
+export type GameConditionHistoryView = {
+  id: string; copyId: string; gameName: string; copyCode: string;
+  beforeCondition: "AVAILABLE" | "DAMAGED";
+  afterCondition: "AVAILABLE" | "DAMAGED";
+  reason: string; actorLogin: string; recordedAt: string;
+};
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
   status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED";
@@ -46,6 +52,18 @@ function gameCopy(value: unknown): value is GameCopyView {
 }
 const copies = (value: unknown): value is GameCopyView[] =>
   Array.isArray(value) && value.every(gameCopy);
+function historyItem(value: unknown): value is GameConditionHistoryView {
+  return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
+    typeof value.copyId === "string" && uuid.test(value.copyId) &&
+    typeof value.gameName === "string" &&
+    typeof value.copyCode === "string" && typeof value.reason === "string" &&
+    typeof value.actorLogin === "string" &&
+    typeof value.recordedAt === "string" && !Number.isNaN(Date.parse(value.recordedAt)) &&
+    ["AVAILABLE","DAMAGED"].includes(String(value.beforeCondition)) &&
+    ["AVAILABLE","DAMAGED"].includes(String(value.afterCondition));
+}
+const history = (value: unknown): value is GameConditionHistoryView[] =>
+  Array.isArray(value) && value.every(historyItem);
 const games = (value: unknown): value is GameView[] =>
   Array.isArray(value) && value.every(game);
 const loans = (value: unknown): value is GameLoanView[] =>
@@ -82,4 +100,12 @@ export async function adminGameCopies(): Promise<Result<GameCopyView[]>> {
   if (!token) return { ok: false, status: 401 };
   const r = await staffApi("/api/v1/admin/games/copies", "GET", token);
   return result(r.status, dataFromEnvelope(r.payload), copies);
+}
+
+/** Read-only manager/admin inventory condition audit, latest 100 events. */
+export async function adminGameConditionHistory(): Promise<Result<GameConditionHistoryView[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const r = await staffApi("/api/v1/admin/games/condition-history", "GET", token);
+  return result(r.status, dataFromEnvelope(r.payload), history);
 }

@@ -226,3 +226,12 @@ audit/reason preservation. Chromium synthetic cash/loan cycle now returns a
 damaged demo unit, checks zero availability and restores it from a manager
 session with no real funds or customer records. Existing cash closure and
 HTTPS acceptance remain required on the exact head SHA.
+
+## M4 manager condition history visibility (draft PR #23)
+
+Manager/admin-only no-store endpoint and read-only dashboard show the latest
+100 copy-condition events with before/after, reason, actor login, timestamp
+and copy code, without guest or payment data. Testcontainers covers the
+manager response, denied waiter/cashier reads and no guest ID leakage.
+Chromium cash lifecycle verifies both damage and restoration notes appear
+after a real staff action. Requires exact-head Java/browser CI.

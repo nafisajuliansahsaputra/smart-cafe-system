@@ -125,3 +125,13 @@ No financial or rental changes, penalties, refunds, tenant expansion, or
 customer fault determination are implemented. PostgreSQL integration and
 synthetic Chromium scenarios cover incorrect code, role denial, duplicate
 mutation, quarantine, blocked assignment and inspected manager restoration.
+
+## Manager condition-change audit view (stacked draft PR #23)
+
+The manager/admin inventory page shows the 100 latest physical-copy condition
+changes, newest first. Each entry includes game name, unit code, previous and
+new condition, timestamp, inspection note and responsible staff login. No
+guest identity, phone, order, table join proof or payment data is returned.
+This is read-only reporting: deleting/editing evidence and assigning blame
+are not included. A bounded no-store GET endpoint and an independently
+validated Next.js server response keep the browser fail-closed.

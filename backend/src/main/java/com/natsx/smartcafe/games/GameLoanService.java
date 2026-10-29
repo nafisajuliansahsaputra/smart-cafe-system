@@ -35,6 +35,9 @@ public class GameLoanService {
                            String tableCode, String copyCode, Instant requestedAt) {}
     public record CopyView(UUID id, UUID gameId, String gameName,
                            String copyCode, String condition) {}
+    public record ConditionHistoryView(UUID id, UUID copyId, String gameName,
+            String copyCode, String beforeCondition, String afterCondition,
+            String reason, String actorLogin, Instant recordedAt) {}
     private record Loan(UUID id, UUID visitId, String status, UUID gameId, UUID copyId,
                         UUID guestId, String code) {}
 
@@ -241,6 +244,26 @@ public class GameLoanService {
             """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
                 rs.getObject("game_id",UUID.class),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")));
+    }
+
+    /** Bounded, manager-only inventory audit. No guest identity or payment data. */
+    @Transactional(readOnly = true)
+    public List<ConditionHistoryView> conditionHistory() {
+        return jdbc.query("""
+            SELECT e.id,e.copy_id,g.name,c.copy_code,
+                   e.before_condition,e.after_condition,e.reason,
+                   s.login AS actor_login,e.recorded_at
+            FROM physical_game_copy_condition_events e
+            JOIN physical_game_copies c ON c.id=e.copy_id
+            JOIN physical_games g ON g.id=c.game_id
+            JOIN staff_users s ON s.id=e.actor_id
+            ORDER BY e.recorded_at DESC,e.id DESC LIMIT 100
+            """,(rs,n)->new ConditionHistoryView(
+                rs.getObject("id",UUID.class),rs.getObject("copy_id",UUID.class),
+                rs.getString("name"),rs.getString("copy_code"),
+                rs.getString("before_condition"),rs.getString("after_condition"),
+                rs.getString("reason"),rs.getString("actor_login"),
+                rs.getTimestamp("recorded_at").toInstant()));
     }
 
     @Transactional

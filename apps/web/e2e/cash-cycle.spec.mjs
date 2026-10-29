@@ -300,6 +300,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
     })).toContainText("AVAILABLE");
+    await expect(manager.getByRole("heading", { name: "Riwayat pemeriksaan unit" })).toBeVisible();
+    await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
+    await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang")).toBeVisible();
 
     // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");

@@ -145,6 +145,13 @@ public class GameLoanController {
             .body(ApiEnvelope.of(games.copies(),RequestIdFilter.get(request)));
     }
 
+    @GetMapping("/admin/games/condition-history")
+    public ResponseEntity<ApiEnvelope<List<GameLoanService.ConditionHistoryView>>> history(
+        @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.conditionHistory(),RequestIdFilter.get(request)));
+    }
+
     @PostMapping("/admin/games/copies/{id}/condition")
     public ApiEnvelope<GameLoanService.CopyView> changeCondition(
         @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
