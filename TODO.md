@@ -134,3 +134,7 @@ Added isolated Chromium workflow with ephemeral synthetic PostgreSQL fixture and
 ### M2 origin/role boundary (draft PR #9)
 
 Implemented explicit staff-role requirement for staff identity/logout as defense-in-depth; the existing guest bearer filter already excludes staff paths, plus Java regression assertions. Server Action body size capped at 32KB; new Chromium negative tests attack forged Origin and large payload, and assert unsettled table cannot close. **Remain open:** real HTTPS reverse-proxy forwarded-host/Origin review, trusted edge request limits, native mobile/accessibility and external money/PII approval. See [docs/M2-ORIGIN-ROLE-HARDENING.md](docs/M2-ORIGIN-ROLE-HARDENING.md).
+
+### M2 HTTPS edge staging acceptance (draft PR #10)
+
+Added an isolated nginx:1.27-alpine HTTPS edge, strict localhost Host handling, forwarded-header overwrite, direct-peer POST-only login/join throttling and full browser acceptance CI through a self-signed TLS endpoint. **Public deployment remains blocked** on actual trusted certificate/domain/SNI configuration, authenticated staging topology, real-client limiter behind the real CDN/LB chain, CSP/HSTS and payments/privacy approval. See [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](docs/M2-HTTPS-EDGE-ACCEPTANCE.md).

@@ -154,3 +154,7 @@ See [browser acceptance notes](docs/M2-BROWSER-E2E.md). This does not certify pr
 ## M2 cross-role and Server Action hardening (draft PR #9)
 
 [PR #9](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/9) adds defense-in-depth explicit role checks: guest bearer tokens remain unauthorized for staff `/auth/me` or `/auth/logout`. Next.js keeps its default same-origin Server Actions protection, now with a 32KB body size limit and explicit page security headers. Chromium negative acceptance covers foreign-Origin staff logout attempts, oversized form rejection and declining a waiter close while cash is unsettled. See [Origin and role security notes](docs/M2-ORIGIN-ROLE-HARDENING.md). Do not treat CI as a real public HTTPS proxy security audit.
+
+## M2 HTTPS edge integration acceptance (draft PR #10)
+
+A new **local-only** TLS reverse-proxy Compose overlay and an independent CI Chromium job exercise Next.js Server Actions through an actual HTTPS ingress, with hostile Host, X-Forwarded-Host and spoofed X-Forwarded-For tests. The edge is bound only to 127.0.0.1, uses a short-lived disposable self-signed cert and stores no keys in Git. See [HTTPS edge acceptance](docs/M2-HTTPS-EDGE-ACCEPTANCE.md). This is not a public-ready reverse proxy.
