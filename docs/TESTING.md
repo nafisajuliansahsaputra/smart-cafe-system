@@ -306,3 +306,17 @@ the synthetic UNO manager-confirmed missing-unit scenario, then
 recovers into DAMAGED quarantine, verifies zero available copies and
 unchanged guest LOST status, separately restores AVAILABLE, checks
 two inspection notes and keeps past incident CONFIRMED_LOST.
+
+
+## M4 manager loss register paging and incident workload (draft PR #29)
+
+Testcontainers seeds 54 uniquely identified synthetic reports (53
+historically resolved + one OPEN) and confirms OPEN-first sort,
+25/25/4/0 pages and hasNext, results beyond legacy first-100 window
+via complete-database search, outcome filters, separately computed
+openCount independent of page and query, invalid page/filter inputs,
+case-insensitive safe literal search, wildcard/SQL-like input probes
+and guest/waiter/cashier/kitchen access denial. Chromium HTTP/HTTPS
+validates manager live OPEN count, missing-result search, mismatching
+DISMISSED filter and reset before the manager confirms loss in the
+normal synthetic cash/order/physical-game acceptance flow.

@@ -363,6 +363,27 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.getByText(
       "Laporan staf: UNO deck missing during staff delivery check",
     )).toBeVisible({ timeout: 25000 });
+    // OPEN queue count is independent from manager filters; incident search
+    // reaches the database and preserves copy/audit selections.
+    await expect(manager.getByText("1 laporan kehilangan menunggu pemeriksaan manager."))
+      .toBeVisible();
+    await manager.getByLabel("Cari laporan berdasarkan unit, game, meja, pelapor atau catatan")
+      .fill("NO-SUCH-LOSS-E2E-REPORT");
+    await manager.getByRole("button", { name: "Cari laporan" }).click();
+    await expect(manager.getByText("Tidak ada laporan yang sesuai.")).toBeVisible();
+    await expect(manager.getByText("1 laporan kehilangan menunggu pemeriksaan manager."))
+      .toBeVisible();
+    await manager.getByRole("link", { name: "Reset laporan" }).click();
+    await expect(manager.getByText(
+      "Laporan staf: UNO deck missing during staff delivery check",
+    )).toBeVisible();
+    await manager.getByLabel("Filter status laporan").selectOption("DISMISSED");
+    await manager.getByRole("button", { name: "Cari laporan" }).click();
+    await expect(manager.getByText("Tidak ada laporan yang sesuai.")).toBeVisible();
+    await manager.getByRole("link", { name: "Reset laporan" }).click();
+    await expect(manager.getByText(
+      "Laporan staf: UNO deck missing during staff delivery check",
+    )).toBeVisible();
     await manager.getByLabel("Verifikasi kode unit yang hilang").fill("UNO-E2E-001");
     await manager.getByLabel("Alasan konfirmasi kehilangan")
       .fill("Counted all game units and verified this serial is missing");

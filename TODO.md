@@ -279,3 +279,15 @@ history/audit and scoped inventory live marker. PostgreSQL and
 HTTP/HTTPS browser checks cover full workflow. Still open: formal
 claims/retention policy, paging for loss incidents, physical field
 testing, manager incident notification and commercial rollout gates.
+
+
+### M4 manager incident search/paging + OPEN backlog (stacked draft PR #29)
+
+Added full-DB manager-only incident search by game, serial, table,
+reporter and notes, exact state filters, OPEN-first pagination
+(25/page; max page 2000) and independent outstanding-review count on
+the staff dashboard. Flyway V22 OPEN-first sort index, strict backend
+validation, and PostgreSQL/Chromium regression coverage added.
+Legacy 100-entry API unchanged. Future work: keyset paging at scale,
+manager role-specific operational alert entry points, field usability,
+record retention/appeal rules and security/production review.

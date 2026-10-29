@@ -393,3 +393,21 @@ DAMAGED. Explicitly separate `POST /api/v1/admin/games/copies/{id}/condition`
 restocking. Past LOAN LOST and incident CONFIRMED_LOST remain unchanged.
 A safe `GAME_INVENTORY_CHANGED` marker (empty outbox payload) prompts
 authorized live catalogue refresh; no guest/financial data is emitted.
+
+
+## M4 manager searchable loss incident register (stacked draft PR #29)
+
+`GET /api/v1/admin/games/loss-incidents/search?q=&status=&page=0`
+is MANAGER/ADMIN only; 401 without staff auth, 403 for guest, waiter,
+cashier and kitchen. Search `q` is trimmed to at most 80 printable
+characters and case-insensitive literal substring text in name, serial,
+table, reporter login, report or decision note; wildcard-looking SQL
+characters remain ordinary text. `status` is blank, OPEN, DISMISSED or
+CONFIRMED_LOST. `page` is integer 0..2000; invalid filters/page →
+400. Success 200/no-store `ApiEnvelope.data = {
+  items: IncidentView[], page: number, hasNext: boolean, openCount: number
+}`. At most 25 items, OPEN first then newest by reported timestamp and
+UUID. `openCount` counts **all** OPEN incidents irrespective of the
+query, filter or current page. The legacy `GET /admin/games/loss-incidents`
+remains bounded/latest-100 for compatibility. No mutations, private
+guest/phone data, or financial fields.

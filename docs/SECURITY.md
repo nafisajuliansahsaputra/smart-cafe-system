@@ -278,3 +278,19 @@ payment/receipt action. Only a second independently confirmed
 DAMAGED → AVAILABLE action can restock. Original LOST loans and
 confirmed incident evidence are immutable; a recovered unit is not
 proof of fault, theft, restitution or any compensation entitlement.
+
+
+## M4 manager incident search authorization and workload (draft PR #29)
+
+Loss reports contain operational free-text findings and staff details.
+The new search/read endpoint remains strictly manager/admin-only
+through Spring Security, no-store and server-side result verification.
+Search uses bound SQL `POSITION` expressions (literal, not pattern
+wildcards), validated query/status/page and a 25-row per-page cap.
+`openCount` only reports number of OPEN records to authorized staff;
+it does not expose report contents or unauthorized identifiers.
+The existing authenticated game live stream already scopes supervisor
+loan events to staff and refreshes manager pages. Search is read-only;
+no inferred customer liability, collection, automatic fee, incident
+rewrite, or data export is introduced. Real-world evidence retention
+and appeals policies remain explicit release blockers.
