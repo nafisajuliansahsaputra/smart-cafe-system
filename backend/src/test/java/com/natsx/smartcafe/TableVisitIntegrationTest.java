@@ -103,6 +103,14 @@ class TableVisitIntegrationTest {
         String guestToken=extract(guest.getContentAsString(),"accessToken");
         assertEquals(200,mvc.perform(get("/api/v1/me/visit")
             .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
+        // A GUEST bearer must not pass a generic .authenticated() staff auth gate,
+        // where @AuthenticationPrincipal requires StaffPrincipal.
+        assertEquals(403,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(post("/api/v1/staff/auth/logout")
+            .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(get("/api/v1/me/visit")
+            .header("Authorization","Bearer " + guestToken)).andReturn().getResponse().getStatus());
         assertEquals(401,mvc.perform(get("/api/v1/me/visit"))
             .andReturn().getResponse().getStatus());
         var closed=mvc.perform(post("/api/v1/waiter/table-visits/" + visitId + "/close")
