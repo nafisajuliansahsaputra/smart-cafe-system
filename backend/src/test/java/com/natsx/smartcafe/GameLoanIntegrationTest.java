@@ -334,4 +334,103 @@ class GameLoanIntegrationTest {
         assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
             waiter.token()).getStatus());
     }
+
+    @Test void damagedReturnQuarantinesUnitUntilManagerInspectsRestoration() throws Exception {
+        User manager=staff("MANAGER"),waiter=staff("WAITER"),
+             cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
+        UUID game=createGame(manager,1);
+        UUID copy=jdbc.queryForObject("""
+            SELECT id FROM physical_game_copies WHERE game_id=?
+            """,UUID.class,game);
+        String manage="/api/v1/admin/games/copies/"+copy+"/condition";
+        String inventory="/api/v1/admin/games/copies";
+        assertEquals(200,getAs(inventory,manager.token()).getStatus());
+        assertEquals(403,getAs(inventory,waiter.token()).getStatus());
+        assertEquals(403,postJson(manage,cashier.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"Not authorized\"}").getStatus());
+        assertEquals(403,postJson(manage,kitchen.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"Not authorized\"}").getStatus());
+        assertEquals(400,postJson(manage,manager.token(),
+            "{\"condition\":\"LOST\",\"reason\":\"Unsupported policy\"}").getStatus());
+        assertEquals(400,postJson(manage,manager.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"bad\"}").getStatus());
+
+        Visit visit=open(waiter);
+        User guest=join(visit);
+        UUID loan=requestLoan(guest,game);
+        var assign=postEmpty("/api/v1/waiter/game-loans/"+loan+"/assign",waiter.token());
+        assertEquals(200,assign.getStatus(),assign.getContentAsString());
+        String code=field(assign.getContentAsString(),"copyCode");
+        assertEquals(409,postJson(manage,manager.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"While assigned\"}").getStatus());
+        assertEquals(200,postJson("/api/v1/waiter/game-loans/"+loan+"/handover",
+            waiter.token(),"{\"copyCode\":\""+code+"\"}").getStatus());
+        String damage="/api/v1/waiter/game-loans/"+loan+"/return-damaged";
+        assertEquals(403,postJson(damage,kitchen.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"Torn game cards\"}").getStatus());
+        assertEquals(400,postJson(damage,waiter.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"x\"}").getStatus());
+        assertEquals(409,postJson(damage,waiter.token(),
+            "{\"copyCode\":\"OTHER-UNIT\",\"reason\":\"Torn game cards\"}").getStatus());
+        var returned=postJson(damage,waiter.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"Torn game cards\"}");
+        assertEquals(200,returned.getStatus(),returned.getContentAsString());
+        assertTrue(returned.getContentAsString().contains("RETURNED"));
+        assertEquals("DAMAGED",jdbc.queryForObject(
+            "SELECT condition FROM physical_game_copies WHERE id=?",String.class,copy));
+        assertTrue(getAs("/api/v1/me/games",guest.token()).getContentAsString()
+            .contains("\"availableCopies\":0"));
+        assertEquals(409,postJson(damage,waiter.token(),
+            "{\"copyCode\":\""+code+"\",\"reason\":\"Repeated return\"}").getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events
+            WHERE copy_id=? AND loan_id=? AND actor_id=?
+              AND before_condition='AVAILABLE' AND after_condition='DAMAGED'
+              AND reason='Torn game cards'
+            """,Integer.class,copy,loan,waiter.id()));
+        assertEquals(200,postEmpty("/api/v1/waiter/table-visits/"+visit.id()+"/close",
+            waiter.token()).getStatus());
+
+        Visit another=open(waiter);
+        User otherGuest=join(another);
+        UUID nextLoan=requestLoan(otherGuest,game);
+        assertEquals(409,postEmpty("/api/v1/waiter/game-loans/"+nextLoan+"/assign",
+            waiter.token()).getStatus()); // quarantined units cannot circulate
+        var restore=postJson(manage,manager.token(),
+            "{\"condition\":\"AVAILABLE\",\"reason\":\"All cards replaced\"}");
+        assertEquals(200,restore.getStatus(),restore.getContentAsString());
+        assertTrue(restore.getContentAsString().contains("AVAILABLE"));
+        assertEquals(409,postJson(manage,manager.token(),
+            "{\"condition\":\"AVAILABLE\",\"reason\":\"Duplicate restore\"}").getStatus());
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events WHERE copy_id=?
+            """,Integer.class,copy));
+        assertEquals(200,postEmpty("/api/v1/waiter/game-loans/"+nextLoan+"/assign",
+            waiter.token()).getStatus());
+        assertEquals(409,postJson(manage,manager.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"Unit currently assigned\"}").getStatus());
+    }
+
+    @Test void managerCanQuarantineIdleCopyAndRestoreWithPermanentHistory() throws Exception {
+        User manager=staff("MANAGER");
+        UUID game=createGame(manager,1);
+        UUID copy=jdbc.queryForObject("SELECT id FROM physical_game_copies WHERE game_id=?",
+            UUID.class,game);
+        String manage="/api/v1/admin/games/copies/"+copy+"/condition";
+        assertEquals(200,postJson(manage,manager.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"Missing game pieces\"}").getStatus());
+        assertEquals(409,postJson(manage,manager.token(),
+            "{\"condition\":\"DAMAGED\",\"reason\":\"Duplicate command\"}").getStatus());
+        assertEquals(200,postJson(manage,manager.token(),
+            "{\"condition\":\"AVAILABLE\",\"reason\":\"Pieces were restored\"}").getStatus());
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM physical_game_copy_condition_events
+            WHERE copy_id=? AND actor_id=? AND loan_id IS NULL
+            """,Integer.class,copy,manager.id()));
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_type='PHYSICAL_GAME_COPY' AND resource_id=?
+              AND operation IN ('GAME_COPY_QUARANTINED','GAME_COPY_RESTORED_INSPECTED')
+            """,Integer.class,copy));
+    }
 }

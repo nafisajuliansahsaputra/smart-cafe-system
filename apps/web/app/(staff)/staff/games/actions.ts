@@ -25,13 +25,21 @@ async function send(path: string, body?: Record<string,unknown>) {
 export async function updateGameLoan(form: FormData) {
   const id = form.get("loanId"), action = form.get("operation");
   if (typeof id!=="string" || !UUID.test(id) ||
-      !["assign","handover","return","cancel"].includes(String(action)) ||
+      !["assign","handover","return","return-damaged","cancel"].includes(String(action)) ||
       form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
   const op=String(action);
-  if (op==="handover" || op==="return") {
+  if (op==="handover" || op==="return" || op==="return-damaged") {
     const code=form.get("copyCode");
     if (typeof code!=="string" || !CODE.test(code))
       redirect("/staff/games?notice=invalid");
+    if (op==="return-damaged") {
+      const reason=form.get("reason");
+      if (typeof reason!=="string" || reason.trim().length<5 ||
+          reason.trim().length>300 || /[\x00-\x1f\x7f]/.test(reason))
+        redirect("/staff/games?notice=invalid");
+      await send(`/api/v1/waiter/game-loans/${id}/return-damaged`,
+        {copyCode:code,reason:reason.trim()});
+    }
     await send(`/api/v1/waiter/game-loans/${id}/${op}`,{copyCode:code});
   }
   await send(`/api/v1/waiter/game-loans/${id}/${op}`);
@@ -49,4 +57,16 @@ export async function registerGameCopy(form: FormData) {
     typeof code!=="string" || !CODE.test(code))
     redirect("/staff/games?notice=invalid");
   await send(`/api/v1/admin/games/${id}/copies`,{copyCode:code});
+}
+
+/** Only manager/admin may change physical-copy condition. */
+export async function updateGameCopyCondition(form: FormData) {
+  const id=form.get("copyId"), condition=form.get("condition"), reason=form.get("reason");
+  if (typeof id!=="string" || !UUID.test(id) ||
+      (condition!=="DAMAGED" && condition!=="AVAILABLE") ||
+      typeof reason!=="string" || reason.trim().length<5 ||
+      reason.trim().length>300 || /[\x00-\x1f\x7f]/.test(reason) ||
+      form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
+  await send(`/api/v1/admin/games/copies/${id}/condition`,
+    {condition,reason:reason.trim()});
 }

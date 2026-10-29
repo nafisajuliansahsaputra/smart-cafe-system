@@ -2,8 +2,8 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, staffIdentity } from "@/lib/staff-server";
-import { staffGames, staffGameLoans } from "@/lib/game-server";
-import { createPhysicalGame, registerGameCopy, updateGameLoan } from "./actions";
+import { adminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
+import { createPhysicalGame, registerGameCopy, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string,string> = {
@@ -25,7 +25,9 @@ export default async function StaffGamesPage({searchParams}:{
   if(!canUseWaiter(identity.staff.roles)) notFound();
   const isManager=identity.staff.roles.some(r=>r==="MANAGER"||r==="ADMIN");
   const {notice}=await searchParams;
-  const [loans,catalog]=await Promise.all([staffGameLoans(),staffGames()]);
+  const [loans,catalog,copies]=await Promise.all([
+    staffGameLoans(),staffGames(),isManager ? adminGameCopies() : Promise.resolve(null),
+  ]);
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
       <div className="staff-eyebrow">SMART CAFE / PHYSICAL GAMES</div>
@@ -79,6 +81,24 @@ export default async function StaffGamesPage({searchParams}:{
             {l.status==="ASSIGNED"?"Konfirmasi serah-terima":"Tandai dikembalikan"}
           </button>
         </form>}
+        {(l.status==="IN_USE"||l.status==="RETURN_PENDING") && (
+          <form action={updateGameLoan} className="staff-form">
+            <input type="hidden" name="loanId" value={l.id}/>
+            <input type="hidden" name="operation" value="return-damaged"/>
+            <label htmlFor={`damage-code-${l.id}`}>Kode unit rusak/tidak lengkap</label>
+            <input id={`damage-code-${l.id}`} name="copyCode"
+              required maxLength={80} autoComplete="off" placeholder="Kode unit"/>
+            <label htmlFor={`damage-reason-${l.id}`}>Temuan pemeriksaan (wajib)</label>
+            <input id={`damage-reason-${l.id}`} name="reason"
+              minLength={5} maxLength={300} required
+              placeholder="Contoh: dua kartu hilang"/>
+            <label className="staff-check">
+              <input type="checkbox" name="confirm" value="yes" required/>
+              Unit fisik sudah diterima dan harus dikarantina, bukan dipinjamkan lagi
+            </label>
+            <button className="staff-danger">Terima & karantina unit</button>
+          </form>
+        )}
       </article>
     ))}</div>}
     <section className="staff-panel">
@@ -94,6 +114,42 @@ export default async function StaffGamesPage({searchParams}:{
           </form>}
         </li>)}</ul>}
     </section>
+    {isManager && <section className="staff-panel">
+      <h2>Kondisi unit fisik</h2>
+      <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.
+        Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Tidak ada denda otomatis.</p>
+      {copies && !copies.ok && <p role="alert">Inventaris unit tidak tersedia.
+        Tidak ada tindakan yang dapat dikonfirmasi.</p>}
+      {copies?.ok && copies.data.length===0 && <p>Belum ada unit tercatat.</p>}
+      {copies?.ok && <div className="staff-task-grid">
+        {copies.data.map(copy=><article className="staff-panel staff-task-card" key={copy.id}>
+          <h3>{copy.gameName} · {copy.copyCode}</h3>
+          <strong className="staff-status">{copy.condition}</strong>
+          {(copy.condition==="AVAILABLE" || copy.condition==="DAMAGED") &&
+            <form action={updateGameCopyCondition} className="staff-form">
+              <input type="hidden" name="copyId" value={copy.id}/>
+              <input type="hidden" name="condition"
+                value={copy.condition==="AVAILABLE"?"DAMAGED":"AVAILABLE"}/>
+              <label htmlFor={`copy-reason-${copy.id}`}>
+                {copy.condition==="AVAILABLE"?"Alasan karantina":"Catatan pemeriksaan ulang"}
+              </label>
+              <input id={`copy-reason-${copy.id}`} name="reason" required
+                minLength={5} maxLength={300} placeholder="Deskripsi pemeriksaan"/>
+              <label className="staff-check">
+                <input type="checkbox" name="confirm" value="yes" required/>
+                {copy.condition==="AVAILABLE"
+                  ? "Saya sudah memastikan unit tidak sedang dipinjam"
+                  : "Saya sudah memeriksa langsung dan unit layak dipinjam lagi"}
+              </label>
+              <button className={copy.condition==="AVAILABLE"?"staff-danger":"staff-primary"}>
+                {copy.condition==="AVAILABLE"?"Karantina unit":"Aktifkan kembali"}
+              </button>
+            </form>}
+          {(copy.condition==="LOST"||copy.condition==="RETIRED") &&
+            <p>Unit tidak dapat diaktifkan melalui alur karantina.</p>}
+        </article>)}
+      </div>}
+    </section>}
     {isManager && <section className="staff-panel"><h2>Tambahkan jenis permainan</h2>
       <form action={createPhysicalGame} className="staff-form">
         <label htmlFor="new-game-name">Nama permainan</label>

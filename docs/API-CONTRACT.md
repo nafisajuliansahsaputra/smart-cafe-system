@@ -277,3 +277,23 @@ denied. This status remains an active occupied copy. Waiter
 `POST /api/v1/waiter/game-loans/{id}/return` now accepts physical
 IN_USE or RETURN_PENDING only with a matching copy code and inspection
 confirmation. Guest-only request is never final return/payment truth.
+
+## Physical game damaged-copy quarantine (stacked draft PR #22)
+
+Waiter/cashier/manager/admin:
+`POST /api/v1/waiter/game-loans/{id}/return-damaged`
+with `{"copyCode":"UNO-001","reason":"Two cards are missing"}`.
+The confirmed copy is returned and marked DAMAGED atomically, with a durable
+condition event and audit. Wrong code or incorrect loan state → 409;
+invalid reason → 400. This is not an incident fee or claim of liability.
+
+Manager/admin only:
+`GET /api/v1/admin/games/copies` lists at most 250 registered serialized
+copies with ID, game ID/name, code and condition (no borrower data).
+`POST /api/v1/admin/games/copies/{id}/condition` with
+`{"condition":"DAMAGED"|"AVAILABLE","reason":"Inspection details"}`
+quarantines idle AVAILABLE or restores inspected DAMAGED only. Assigned
+copies, repeat/other transitions → 409; invalid note → 400;
+wrong role → 403; missing copy → 404. Mutation responses are 200 in
+ApiEnvelope; list responses are no-store. No LOST/RETIRED transition
+or automatic damage penalty is exposed.

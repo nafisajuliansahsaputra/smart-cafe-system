@@ -274,14 +274,32 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
 
     await waiter.goto("/staff/games");
     await expect(waiter.getByText("RETURN_PENDING", { exact: true })).toBeVisible();
-    await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
+    // Damaged physical return removes the unit from circulation without fee.
+    await waiter.getByLabel("Kode unit rusak/tidak lengkap").fill("UNO-E2E-001");
+    await waiter.getByLabel("Temuan pemeriksaan (wajib)").fill("Dua kartu terlipat");
     await waiter.getByRole("checkbox", {
-      name: /Unit diterima kembali dan sudah diperiksa kondisinya/,
+      name: /Unit fisik sudah diterima dan harus dikarantina/,
     }).check();
-    await waiter.getByRole("button", { name: "Tandai dikembalikan" }).click();
+    await waiter.getByRole("button", { name: "Terima & karantina unit" }).click();
     await expect(waiter.getByText("Belum ada pinjaman aktif")).toBeVisible();
     await guest.goto("/visit/games");
     await expect(guest.getByText("Sudah dikembalikan")).toBeVisible();
+    await expect(guest.getByText("0 unit tersedia saat terakhir diperiksa")).toBeVisible();
+    const manager = await staff("manager");
+    await manager.goto("/staff/games");
+    const quarantinedUnit=manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    });
+    await expect(quarantinedUnit).toContainText("DAMAGED");
+    await quarantinedUnit.getByLabel("Catatan pemeriksaan ulang")
+      .fill("Kartu sudah diganti dan dihitung ulang");
+    await quarantinedUnit.getByRole("checkbox", {
+      name: /Saya sudah memeriksa langsung dan unit layak dipinjam lagi/,
+    }).check();
+    await quarantinedUnit.getByRole("button", { name: "Aktifkan kembali" }).click();
+    await expect(manager.locator("article").filter({
+      has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
+    })).toContainText("AVAILABLE");
 
     // Table closure is now eligible; server checks both paid orders and game.
     await waiter.goto("/staff/tables");

@@ -214,3 +214,15 @@ changes after physical handover. Verify the **exact PR head** against all
 seven CI jobs; no prior branch's green run proves this commit. This is
 change-only UI resynchronization, not offline borrowing, production mobile
 acceptance, or an approved financial workflow.
+
+## M4 damage quarantine and safe restoration (draft PR #22)
+
+Testcontainers checks damaged-return proof (exact copy code), required
+inspection reason, staff roles, active-copy guard, per-copy condition history,
+damaged stock omitted from public availability, refusal to assign quarantined
+stock, successful inspected manager restoration and active-copy re-quarantine
+rejection. Separate test covers direct manager quarantine of an idle unit and
+audit/reason preservation. Chromium synthetic cash/loan cycle now returns a
+damaged demo unit, checks zero availability and restores it from a manager
+session with no real funds or customer records. Existing cash closure and
+HTTPS acceptance remain required on the exact head SHA.

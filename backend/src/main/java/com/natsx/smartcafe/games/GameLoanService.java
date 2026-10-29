@@ -33,6 +33,8 @@ public class GameLoanService {
     public record GameView(UUID id, String name, String description, int availableCopies) {}
     public record LoanView(UUID id, UUID gameId, String gameName, String status,
                            String tableCode, String copyCode, Instant requestedAt) {}
+    public record CopyView(UUID id, UUID gameId, String gameName,
+                           String copyCode, String condition) {}
     private record Loan(UUID id, UUID visitId, String status, UUID gameId, UUID copyId,
                         UUID guestId, String code) {}
 
@@ -175,21 +177,122 @@ public class GameLoanService {
         return one(loanId);
     }
 
+    /** A clean return releases the unit; a damaged return quarantines it
+     * in the SAME transaction before a new assignment can observe it.
+     */
     @Transactional
     public LoanView returnCopy(UUID loanId, String confirmedCopyCode, StaffPrincipal staff,
                                String requestId) {
+        return finishReturn(loanId,confirmedCopyCode,null,staff,requestId);
+    }
+
+    @Transactional
+    public LoanView returnDamagedCopy(UUID loanId, String confirmedCopyCode,
+                                      String damageReason, StaffPrincipal staff,
+                                      String requestId) {
+        return finishReturn(loanId,confirmedCopyCode,requiredReason(damageReason),
+            staff,requestId);
+    }
+
+    private LoanView finishReturn(UUID loanId, String confirmedCopyCode, String damageReason,
+                                  StaffPrincipal staff, String requestId) {
         Loan loan=lockLoanByVisit(loanId,staff);
         if (!loan.status().equals("IN_USE") && !loan.status().equals("RETURN_PENDING"))
             throw conflict("Game has not been handed over");
         if (confirmedCopyCode==null || !confirmedCopyCode.equals(loan.code()))
             throw conflict("Physical game copy code does not match");
+        // Serialize inspection with manager quarantine/restoration and
+        // automatic assignment. Never release an already non-available copy.
+        String condition=jdbc.query("""
+            SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,loan.copyId());
+        if (!"AVAILABLE".equals(condition))
+            throw conflict("Physical game copy is not available for clean return");
+        if (damageReason!=null) {
+            jdbc.update("""
+                UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?
+                """,loan.copyId());
+            recordCondition(loan.copyId(),loanId,staff.staffId(),
+                "AVAILABLE","DAMAGED",damageReason);
+            audit.staff(staff.staffId(),"GAME_COPY_QUARANTINED_AT_RETURN",
+                "PHYSICAL_GAME_COPY",loan.copyId(),requestId);
+        }
         jdbc.update("""
             UPDATE physical_game_loans SET status='RETURNED',
                 returned_at=now(),returned_by=? WHERE id=?
             """,staff.staffId(),loanId);
         events.gameLoan(loanId,"GAME_LOAN_RETURNED");
-        audit.staff(staff.staffId(),"GAME_COPY_RETURNED_INSPECTED","GAME_LOAN",loanId,requestId);
+        audit.staff(staff.staffId(),damageReason==null
+            ? "GAME_COPY_RETURNED_INSPECTED" : "GAME_COPY_RETURNED_QUARANTINED",
+            "GAME_LOAN",loanId,requestId);
         return one(loanId);
+    }
+
+    /** Manager/admin inventory remediation is never a guest/loan operation.
+     * Quarantine only unborrowed AVAILABLE units; restore only DAMAGED units.
+     * A reason and before/after history are mandatory on both transitions.
+     */
+    @Transactional(readOnly = true)
+    public List<CopyView> copies() {
+        return jdbc.query("""
+            SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
+            FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
+            ORDER BY g.name,c.copy_code LIMIT 250
+            """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
+                rs.getObject("game_id",UUID.class),rs.getString("name"),
+                rs.getString("copy_code"),rs.getString("condition")));
+    }
+
+    @Transactional
+    public CopyView changeCopyCondition(UUID copyId, String desired, String reason,
+                                        StaffPrincipal staff, String requestId) {
+        if (!"AVAILABLE".equals(desired) && !"DAMAGED".equals(desired))
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"INVALID_INPUT",
+                "Only AVAILABLE and DAMAGED transitions are supported");
+        String note=requiredReason(reason);
+        String current=jdbc.query("""
+            SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
+            """,rs->rs.next()?rs.getString(1):null,copyId);
+        if (current==null) throw missing();
+        if (!("AVAILABLE".equals(current) && "DAMAGED".equals(desired)
+              || "DAMAGED".equals(current) && "AVAILABLE".equals(desired)))
+            throw conflict("Only quarantine or inspected restoration is permitted");
+        Boolean active=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM physical_game_loans
+                WHERE copy_id=? AND status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
+            """,Boolean.class,copyId);
+        if (Boolean.TRUE.equals(active))
+            throw conflict("Cannot change condition while physical copy is assigned");
+        jdbc.update("UPDATE physical_game_copies SET condition=? WHERE id=?",desired,copyId);
+        recordCondition(copyId,null,staff.staffId(),current,desired,note);
+        audit.staff(staff.staffId(),"DAMAGED".equals(desired)
+            ? "GAME_COPY_QUARANTINED" : "GAME_COPY_RESTORED_INSPECTED",
+            "PHYSICAL_GAME_COPY",copyId,requestId);
+        return jdbc.query("""
+            SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
+            FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
+            WHERE c.id=?
+            """,rs->rs.next()?new CopyView(rs.getObject("id",UUID.class),
+                rs.getObject("game_id",UUID.class),rs.getString("name"),
+                rs.getString("copy_code"),rs.getString("condition")):null,copyId);
+    }
+
+    private void recordCondition(UUID copyId, UUID loanId, UUID actorId,
+                                 String before, String after, String reason) {
+        jdbc.update("""
+            INSERT INTO physical_game_copy_condition_events
+                (copy_id,loan_id,actor_id,before_condition,after_condition,reason)
+            VALUES (?,?,?,?,?,?)
+            """,copyId,loanId,actorId,before,after,reason);
+    }
+
+    private String requiredReason(String value) {
+        String note=value==null?"":value.strip();
+        if (note.length()<5 || note.length()>300
+                || note.chars().anyMatch(Character::isISOControl))
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"INVALID_INPUT",
+                "Inspection reason must contain 5-300 printable characters");
+        return note;
     }
 
     @Transactional

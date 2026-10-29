@@ -194,3 +194,15 @@ close guard and PostgreSQL/Chromium tests. An accepted pickup request is
 **not** a return: the physical copy remains assigned until staff verifies
 its serial. CI acceptance pending. Damage/loss, maintenance, guest disputes
 and policy-dependent fees remain unimplemented.
+
+### M4 quarantine & inspected restock (stacked draft PR #22)
+
+V16 history table records every condition change with staff ID, copy ID,
+optional returned loan and required reason. A verified damaged return
+atomically marks loan RETURNED and copy DAMAGED; stock stays unavailable
+until manager/admin inspection restores AVAILABLE. Manager may also
+quarantine an idle copy, but no role can change an assigned unit.
+Unauthorized, invalid and replayed actions are rejected; Java/PostgreSQL
+and HTTP/HTTPS browser acceptance gate this slice. No damage charge,
+refund, guest liability, lost-property or disposal resolution has been
+approved or implemented. Inventory-only updates are manually refreshed.
