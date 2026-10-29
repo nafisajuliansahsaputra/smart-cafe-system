@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Testcontainers
 @AutoConfigureMockMvc
-@SpringBootTest(properties = "SCS_JOIN_THROTTLE_SECRET=only-for-isolated-game-tests")
+@SpringBootTest(properties = "SCS_JOIN_THROTTLE_SECRET=only-for-isolated-game-tests-more-than-thirty-two-bytes")
 class GameLoanIntegrationTest {
     @Container
     static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
