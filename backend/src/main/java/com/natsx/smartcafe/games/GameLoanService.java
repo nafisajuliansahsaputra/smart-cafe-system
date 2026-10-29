@@ -145,7 +145,7 @@ public class GameLoanService {
             SELECT c.id FROM physical_game_copies c
             WHERE c.game_id=? AND c.condition='AVAILABLE'
               AND NOT EXISTS(SELECT 1 FROM physical_game_loans l
-                  WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE'))
+                  WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
             ORDER BY c.copy_code LIMIT 1 FOR UPDATE OF c SKIP LOCKED
             """,rs->rs.next()?rs.getObject("id",UUID.class):null,loan.gameId());
         if (copy==null) throw conflict("No available physical copy for this game");
