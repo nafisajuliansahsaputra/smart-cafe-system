@@ -170,3 +170,7 @@ The backend now contains a restart-safe, PostgreSQL-backed relay that converts e
 ## M2 durable event subscriber (draft PR #13)
 
 Guest and staff order SSE feeds now react to PostgreSQL NOTIFY-backed **authorized durable event cursors**, rather than repeatedly fetching entire order/kitchen/waiter projections. The backend uses one shared LISTEN connection and bounded role/ownership-scoped long polls; Next.js BFF keeps session credentials in HttpOnly cookies and emits empty change signals only. The table management watcher still uses authenticated snapshots. See [M2 live event subscriber](docs/M2-LIVE-EVENT-SUBSCRIBER.md).
+
+## M2 table occupancy events (draft PR #14)
+
+Table visit open, join-proof rotation and close now publish transactional durable events, consumed by the same authorized live cursor/SSE pipeline as ORDER. Waiters see occupancy changes without refreshing; rotation metadata is only visible to the owning waiter or supervisor, and no join proof enters notifications. See [docs/M2-TABLE-LIVE-EVENTS.md](docs/M2-TABLE-LIVE-EVENTS.md). This does not approve production capacity or deployment.
