@@ -235,3 +235,15 @@ and copy code, without guest or payment data. Testcontainers covers the
 manager response, denied waiter/cashier reads and no guest ID leakage.
 Chromium cash lifecycle verifies both damage and restoration notes appear
 after a real staff action. Requires exact-head Java/browser CI.
+
+## M4 catalogue inventory change wake-up (stacked draft PR #24)
+
+V17 uses one shared durable game cursor for both owner-only loan events
+and global-to-authenticated-viewer stock signals. Testcontainers
+verifies new game/copy creation, assignment depletion, damaged return,
+manager inspection/restoration, bounded public information, and that
+foreign guests see inventory updates but never private loan requests.
+Chromium HTTP/HTTPS keeps a guest games page open while the manager
+restores the only damaged UNO and asserts the count updates without
+navigating or manually refreshing. Existing two-replica and async
+subscriber CI jobs still run.

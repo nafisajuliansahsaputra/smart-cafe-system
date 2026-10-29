@@ -135,3 +135,26 @@ guest identity, phone, order, table join proof or payment data is returned.
 This is read-only reporting: deleting/editing evidence and assigning blame
 are not included. A bounded no-store GET endpoint and an independently
 validated Next.js server response keep the browser fail-closed.
+
+## Shared realtime game catalogue and inventory (stacked draft PR #24)
+
+Flyway V17 reuses the existing `live_game_signals.sequence_id` and
+`/visit/live?topic=games` / `/staff/live?topic=games` SSE paths.
+`GAME_INVENTORY` outbox events commit alongside manager game creation,
+copy registration, waiter allocation, inspected return (including damaged
+returns), and manager quarantine/restoration. The relay stores only
+`game_id` and `GAME_INVENTORY_CHANGED`, never a copy serial,
+condition reason, borrower, guest name, payment or staff login.
+Every active authenticated guest and waiter receives the inventory
+change marker, including viewers with **no loan**, while ordinary
+per-loan events remain scoped to the exact owning guest/responsible waiter.
+Both types share a single ordered cursor and single subscriber per page
+for crash/restart and multi-replica recovery. The browser re-fetches
+its authorized catalogue and inventory data rather than applying
+unsafe optimistic counts. No new public/anonymous endpoints.
+
+Tests prove that a foreign guest cannot observe a private loan request
+but **does** observe catalogue stock depletion/restock; the synthetic
+Chromium guest page sees a manager restore a quarantined UNO copy without
+manual page navigation. This is UI freshness, not stock reservation or
+proof of in-person release readiness.

@@ -306,3 +306,16 @@ condition transitions with `id`, `copyId`, `gameName`, `copyCode`,
 `recordedAt` in a no-store 200 ApiEnvelope.data array. 401 unauthenticated,
 403 waiter/cashier/kitchen, with no guest or payment identifiers exposed.
 Rows are immutable evidence of staff inspection events, not monetary claims.
+
+## M4 game inventory change-only realtime (stacked draft PR #24)
+
+The existing `topic=games` live cursor now contains two kinds of
+durable, monotonically ordered markers under one sequence: loan events
+remain scoped to their owning guest or responsible waiter; inventory
+changes (`GAME_INVENTORY_CHANGED`) are observable by every authenticated,
+active-visit game viewer and authorized waiter/supervisor. No guest,
+staff or copy identities, inspection notes, quantities, reasons or
+payment information are emitted in SSE. `GAME_INVENTORY` outbox records
+contain the game UUID and empty JSON; backend checks the referenced
+catalogue game before relay publication. This adds no anonymous public
+game SSE, no change to financial authority, and no second EventSource.

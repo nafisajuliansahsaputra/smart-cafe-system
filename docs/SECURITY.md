@@ -210,3 +210,16 @@ never creates a payment, debt or legal finding. LOST/RETIRED states remain
 read-only until an explicit policy/reconciliation process exists. E2E uses
 ephemeral synthetic-only manager credentials. This still requires final
 review of real-world equipment condition and production security gates.
+
+## M4 authenticated inventory live-change separation (draft PR #24)
+
+Public static table QR remains unrelated to game authorization.
+Only a valid active guest session or permitted waiter/staff session may
+watch `topic=games`; private loan markers still use owner/visit
+or visit-opening-waiter filters. Authenticated viewers of the
+catalogue can observe generic game inventory changes even when they
+do not own that loan, because the available count is visible in the
+same catalogue. Outbox and browser SSE do not contain copy codes,
+inspection reasons, staff credentials, guest identities or financial
+data. A lost NOTIFY triggers the existing durable cursor catch-up.
+No PII-bearing realtime inventory details are authorized.

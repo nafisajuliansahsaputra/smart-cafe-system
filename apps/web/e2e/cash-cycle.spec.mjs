@@ -300,6 +300,10 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
     })).toContainText("AVAILABLE");
+    // Guest page stayed open in a separate browser context; no manual
+    // reload is permitted after manager restores the only physical copy.
+    await expect(guest.getByText("1 unit tersedia saat terakhir diperiksa"))
+      .toBeVisible({ timeout: 25000 });
     await expect(manager.getByRole("heading", { name: "Riwayat pemeriksaan unit" })).toBeVisible();
     await expect(manager.getByText("Catatan: Dua kartu terlipat")).toBeVisible();
     await expect(manager.getByText("Catatan: Kartu sudah diganti dan dihitung ulang")).toBeVisible();
