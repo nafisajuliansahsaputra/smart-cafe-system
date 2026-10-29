@@ -48,6 +48,7 @@ class CashOrderFlowIntegrationTest {
     @Autowired PasswordEncoder passwords;
     @Autowired CashCheckoutService checkout;
     @Autowired com.natsx.smartcafe.orders.CashWorkflowService workflow;
+    @Autowired com.natsx.smartcafe.common.events.OutboxLiveRelay liveRelay;
 
     private String value(String json,String field) {
         var m=Pattern.compile("\"" + field + "\":\"([^\"]+)\"").matcher(json);
@@ -420,4 +421,88 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer "+waiter))
             .andReturn().getResponse().getStatus());
     }
+
+    private long liveCursor(String json) {
+        var matcher=Pattern.compile("\"cursor\":(\\d+)").matcher(json);
+        assertTrue(matcher.find(),"Missing cursor in response");
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private org.springframework.mock.web.MockHttpServletResponse live(
+        String url, String token, String topic, UUID order, Long after) throws Exception {
+        var request=get(url).param("topic",topic)
+            .header("Authorization","Bearer "+token);
+        if(order!=null) request.param("orderId",order.toString());
+        if(after!=null) request.param("after",String.valueOf(after));
+        return mvc.perform(request).andReturn().getResponse();
+    }
+
+    @Test void durableLiveCursorIsScopedAndReconnectCanCatchUp() throws Exception {
+        var waiter=staff("WAITER");
+        var unassigned=staff("WAITER");
+        var cashier=staff("CASHIER");
+        var kitchen=staff("KITCHEN");
+        var visit=open(waiter);
+        var owner=join(visit,"Live owner");
+        var other=join(visit,"Live other");
+        var meal=item(12000);
+        var orderResponse=submit(owner,meal,1,"live-"+UUID.randomUUID());
+        assertEquals(200,orderResponse.getStatus(),orderResponse.getContentAsString());
+        UUID order=UUID.fromString(value(orderResponse.getContentAsString(),"id"));
+
+        // Domain event exists, but remains pending until the separate relay runs.
+        assertTrue(jdbc.queryForObject("""
+            SELECT count(*) FROM outbox_events
+            WHERE aggregate_id=? AND live_published_at IS NULL
+            """,Integer.class,order)>0);
+        assertTrue(liveRelay.dispatchBatch()>0);
+        var ownerOrder=live("/api/v1/me/live-cursor",owner.token(),"order",order,null);
+        assertEquals(200,ownerOrder.getStatus());
+        long first=liveCursor(ownerOrder.getContentAsString());
+        assertTrue(first>0);
+
+        assertEquals(404,live("/api/v1/me/live-cursor",other.token(),"order",order,null).getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/me/live-cursor").param("topic","orders"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,live("/api/v1/ops/live-cursor",waiter,"orders",null,null).getStatus());
+        assertEquals(403,live("/api/v1/kitchen/live-cursor",cashier,"kitchen",null,null).getStatus());
+        assertEquals(400,live("/api/v1/me/live-cursor",owner.token(),"order",null,null).getStatus());
+        assertEquals(400,live("/api/v1/me/live-cursor",owner.token(),"order",order,-1L).getStatus());
+
+        long strangerCursor=liveCursor(live("/api/v1/me/live-cursor",
+            other.token(),"orders",null,null).getContentAsString());
+        long waiterBefore=liveCursor(live("/api/v1/waiter/live-cursor",
+            waiter,"waiter",null,null).getContentAsString());
+        long otherWaiterBefore=liveCursor(live("/api/v1/waiter/live-cursor",
+            unassigned,"waiter",null,null).getContentAsString());
+        long kitchenBefore=liveCursor(live("/api/v1/kitchen/live-cursor",
+            kitchen,"kitchen",null,null).getContentAsString());
+
+        assertEquals(200,mvc.perform(post("/api/v1/ops/orders/"+order+"/approve-cash")
+            .header("Authorization","Bearer "+cashier))
+            .andReturn().getResponse().getStatus());
+        liveRelay.dispatchBatch();
+        long kitchenAfter=liveCursor(live("/api/v1/kitchen/live-cursor",
+            kitchen,"kitchen",null,null).getContentAsString());
+        assertTrue(kitchenAfter>kitchenBefore);
+        long ownerLater=liveCursor(live("/api/v1/me/live-cursor",
+            owner.token(),"order",order,first).getContentAsString());
+        assertTrue(ownerLater>first);
+        assertEquals(strangerCursor,liveCursor(live("/api/v1/me/live-cursor",
+            other.token(),"orders",null,null).getContentAsString()));
+
+        UUID ticket=jdbc.queryForObject(
+            "SELECT id FROM kitchen_tickets WHERE order_id=?",UUID.class,order);
+        assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/"+ticket+"/start")
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post("/api/v1/kitchen/tickets/"+ticket+"/ready")
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        liveRelay.dispatchBatch();
+        long waiterAfter=liveCursor(live("/api/v1/waiter/live-cursor",
+            waiter,"waiter",null,null).getContentAsString());
+        assertTrue(waiterAfter>waiterBefore);
+        assertEquals(otherWaiterBefore,liveCursor(live("/api/v1/waiter/live-cursor",
+            unassigned,"waiter",null,null).getContentAsString()));
+    }
+
 }

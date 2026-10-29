@@ -146,3 +146,7 @@ Implemented BFF-authorized, bounded, change-only SSE and server-render refresh a
 ### M2 durable live relay (draft PR #12)
 
 Added V11 live signals, transaction-locked multi-instance-safe outbox relay and commit-only PG NOTIFY hints with idempotent replay/rollback tests. **Still needed before real push:** authenticated event cursor/LISTEN consumer, waiter/guest per-object scoping, late-subscriber replay, bounded connection pool and production load testing; plus poison-event quarantine and retention/monitoring policy. SSE from PR #11 remains snapshot-based until those are complete. See docs/M2-DURABLE-LIVE-RELAY.md.
+
+### M2 scoped durable subscriber (draft PR #13)
+
+Added shared PostgreSQL LISTEN wakeup, scoped durable cursor query, bounded 48-request backend long-poll, revocation rechecks and BFF SSE bridge for OCC, Kitchen, Waiter and guest orders/receipts. Only event-change notifications leave Next.js, with no token/PII. Table status watcher still polls. **Production open:** async concurrency/load tests, request executor sizing, proxy failure recovery and metrics, poison-event retries/quarantine, outbox retention, mobile/accessibility, real TLS setup and payment rules. See docs/M2-LIVE-EVENT-SUBSCRIBER.md.
