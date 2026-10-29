@@ -49,7 +49,7 @@ export default async function StaffGamesPage({searchParams}:{
           <strong className="staff-status">{l.status}</strong></div>
         {l.copyCode && <p>Unit: <strong>{l.copyCode}</strong></p>}
         {l.status==="RETURN_PENDING" &&
-          <p role="status">Pelanggan meminta pengambilan. Pastikan unit sudah diterima dan diperiksa sebelum menyelesaikan.</p>}}
+          <p role="status">Pelanggan meminta pengambilan. Pastikan unit sudah diterima dan diperiksa sebelum menyelesaikan.</p>}
         {l.status==="REQUESTED" && <>
           <form action={updateGameLoan} className="staff-form">
             <input type="hidden" name="loanId" value={l.id}/>
