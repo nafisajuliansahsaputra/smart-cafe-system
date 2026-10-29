@@ -25,7 +25,7 @@ function loan(value: unknown): value is GameLoanView {
   return record(value) && typeof value.id === "string" && uuid.test(value.id) &&
     typeof value.gameId === "string" && uuid.test(value.gameId) &&
     typeof value.gameName === "string" &&
-    ["REQUESTED","ASSIGNED","IN_USE","RETURNED","CANCELLED"].includes(String(value.status)) &&
+    ["REQUESTED","ASSIGNED","IN_USE","RETURN_PENDING","RETURNED","CANCELLED"].includes(String(value.status)) &&
     typeof value.tableCode === "string" &&
     (value.copyCode === null || typeof value.copyCode === "string") &&
     typeof value.requestedAt === "string";
