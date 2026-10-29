@@ -97,8 +97,10 @@ async function updateCart(lines: { menuItemId: string; quantity: number; variant
 export async function addCartItem(form: FormData): Promise<void> {
   const id = form.get("itemId");
   const rawQuantity = form.get("quantity");
+  const expectedVersion = form.get("expectedVersion");
   if (typeof id !== "string" || !UUID_PATTERN.test(id) ||
-      typeof rawQuantity !== "string" || !/^(?:[1-9]|1[0-9]|20)$/.test(rawQuantity)) {
+      typeof rawQuantity !== "string" || !/^(?:[1-9]|1[0-9]|20)$/.test(rawQuantity) ||
+      typeof expectedVersion !== "string" || !/^(?:0|[1-9][0-9]{0,12})$/.test(expectedVersion)) {
     redirect("/visit?notice=invalid");
   }
   const itemDestination = `/visit/menu/${id}`;
@@ -119,6 +121,9 @@ export async function addCartItem(form: FormData): Promise<void> {
   }
   const cart = await getCart();
   if (!cart.ok) redirect(`${itemDestination}?notice=${notice(cart.status)}`);
+  if (cart.data.version !== Number(expectedVersion)) {
+    redirect(`${itemDestination}?notice=conflict`);
+  }
   const remaining = cart.data.lines
     .filter((line) => line.menuItemId !== id)
     .map((line) => ({ menuItemId: line.menuItemId, quantity: line.quantity,
@@ -131,12 +136,17 @@ export async function addCartItem(form: FormData): Promise<void> {
 export async function updateCartItem(form: FormData): Promise<void> {
   const id = form.get("itemId");
   const quantity = form.get("quantity");
+  const expectedVersion = form.get("expectedVersion");
   if (typeof id !== "string" || !UUID_PATTERN.test(id) ||
-      typeof quantity !== "string" || !/^(?:0|[1-9]|1[0-9]|20)$/.test(quantity)) {
+      typeof quantity !== "string" || !/^(?:0|[1-9]|1[0-9]|20)$/.test(quantity) ||
+      typeof expectedVersion !== "string" || !/^(?:0|[1-9][0-9]{0,12})$/.test(expectedVersion)) {
     redirect("/visit/cart?notice=invalid");
   }
   const cart = await getCart();
   if (!cart.ok) redirect(toVisitDestination(cart.status));
+  if (cart.data.version !== Number(expectedVersion)) {
+    redirect("/visit/cart?notice=conflict");
+  }
   if (!cart.data.lines.some((line) => line.menuItemId === id)) {
     redirect("/visit/cart?notice=conflict");
   }
