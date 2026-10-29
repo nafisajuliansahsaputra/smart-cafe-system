@@ -37,6 +37,8 @@ public class GameLoanController {
                                 @NotBlank @Size(min=5,max=300) String reason) {}
     public record ConditionChange(@NotBlank String condition,
                                   @NotBlank @Size(min=5,max=300) String reason) {}
+    public record FoundCopy(@NotBlank @Size(max=80) String copyCode,
+                            @NotBlank @Size(min=5,max=300) String reason) {}
 
     @GetMapping("/me/games")
     public ResponseEntity<ApiEnvelope<List<GameLoanService.GameView>>> catalog(
@@ -187,6 +189,16 @@ public class GameLoanController {
         @Valid @RequestBody ConditionChange body,HttpServletRequest request) {
         return ApiEnvelope.of(games.changeCopyCondition(id,body.condition(),
             body.reason(),staff,RequestIdFilter.get(request)),RequestIdFilter.get(request));
+    }
+
+    /** Finding a previously lost unit mandates quarantine and later inspection. */
+    @PostMapping("/admin/games/copies/{id}/recover")
+    public ResponseEntity<ApiEnvelope<GameLoanService.CopyView>> recoverLostCopy(
+        @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
+        @Valid @RequestBody FoundCopy body,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.recoverLostCopy(id,body.copyCode(),body.reason(),
+                staff,RequestIdFilter.get(request)),RequestIdFilter.get(request)));
     }
 
     @PostMapping("/admin/games/{id}/copies")

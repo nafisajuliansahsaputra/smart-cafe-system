@@ -3,7 +3,7 @@ import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { canUseWaiter, localTime, staffIdentity } from "@/lib/staff-server";
 import { adminGameLossIncidents, searchAdminGameConditionHistory, searchAdminGameCopies, staffGames, staffGameLoans } from "@/lib/game-server";
-import { createPhysicalGame, registerGameCopy, reportMissingGame, reviewMissingGame, updateGameCopyCondition, updateGameLoan } from "./actions";
+import { createPhysicalGame, recoverLostGameCopy, registerGameCopy, reportMissingGame, reviewMissingGame, updateGameCopyCondition, updateGameLoan } from "./actions";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string,string> = {
@@ -210,7 +210,9 @@ export default async function StaffGamesPage({searchParams}:{
     {isManager && <section className="staff-panel">
       <h2>Kondisi unit fisik</h2>
       <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.
-        Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Tidak ada denda otomatis.</p>
+        Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Unit LOST yang ditemukan
+        wajib dikarantina sebagai DAMAGED lebih dahulu, bukan langsung tersedia.
+        Tidak ada denda otomatis.</p>
       <form method="GET" action="/staff/games" className="staff-form" role="search">
         <input type="hidden" name="hq" value={historyQuery}/>
         <input type="hidden" name="hchange" value={historyChange}/>
@@ -260,8 +262,26 @@ export default async function StaffGamesPage({searchParams}:{
                 {copy.condition==="AVAILABLE"?"Karantina unit":"Aktifkan kembali"}
               </button>
             </form>}
-          {(copy.condition==="LOST"||copy.condition==="RETIRED") &&
-            <p>Unit tidak dapat diaktifkan melalui alur karantina.</p>}
+          {copy.condition==="LOST" &&
+            <form action={recoverLostGameCopy} className="staff-form">
+              <input type="hidden" name="copyId" value={copy.id}/>
+              <label htmlFor={`found-code-${copy.id}`}>
+                Kode fisik unit yang ditemukan kembali
+              </label>
+              <input id={`found-code-${copy.id}`} name="copyCode" required
+                maxLength={80} autoComplete="off" placeholder="Verifikasi kode dari unit"/>
+              <label htmlFor={`found-note-${copy.id}`}>Catatan lokasi dan kondisi penemuan</label>
+              <input id={`found-note-${copy.id}`} name="reason" required
+                minLength={5} maxLength={300} placeholder="Lokasi ditemukan dan kondisi awal"/>
+              <label className="staff-check"><input type="checkbox"
+                name="confirm" value="yes" required/>
+                Unit benar-benar ditemukan dan akan masuk karantina DAMAGED.
+                Ini bukan aktivasi stok, dan laporan kehilangan lama tetap tersimpan
+              </label>
+              <button className="staff-secondary">Temukan &amp; karantina unit</button>
+            </form>}
+          {copy.condition==="RETIRED" &&
+            <p>Unit telah dipensiunkan dan tidak dapat diaktifkan melalui alur ini.</p>}
         </article>)}
       </div>}
       {copies?.ok && <nav aria-label="Navigasi halaman inventaris"

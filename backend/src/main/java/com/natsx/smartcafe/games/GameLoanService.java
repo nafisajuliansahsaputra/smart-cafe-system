@@ -42,6 +42,7 @@ public class GameLoanService {
     public record ConditionHistoryPage(List<ConditionHistoryView> items, int page, boolean hasNext) {}
     private record Loan(UUID id, UUID visitId, String status, UUID gameId, UUID copyId,
                         UUID guestId, String code) {}
+    private record RecoveryCopy(UUID gameId, String code, String condition) {}
 
     @Transactional(readOnly = true)
     public List<GameView> catalog() {
@@ -373,6 +374,59 @@ public class GameLoanService {
         audit.staff(staff.staffId(),"DAMAGED".equals(desired)
             ? "GAME_COPY_QUARANTINED" : "GAME_COPY_RESTORED_INSPECTED",
             "PHYSICAL_GAME_COPY",copyId,requestId);
+        return jdbc.query("""
+            SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
+            FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
+            WHERE c.id=?
+            """,rs->rs.next()?new CopyView(rs.getObject("id",UUID.class),
+                rs.getObject("game_id",UUID.class),rs.getString("name"),
+                rs.getString("copy_code"),rs.getString("condition")):null,copyId);
+    }
+
+    /** Physical recovery does not erase a confirmed-loss incident or alter
+     * historical LOST loans. Always quarantine the found copy first.
+     * Manager must separately inspect DAMAGED -> AVAILABLE afterward.
+     * Copy row lock serializes with assignment and condition changes.
+     */
+    @Transactional
+    public CopyView recoverLostCopy(UUID copyId, String verifiedCopyCode, String reason,
+                                   StaffPrincipal staff, String requestId) {
+        if (!staff.roles().stream().anyMatch(r->r.equals("MANAGER")||r.equals("ADMIN")))
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Only manager/admin can recover missing physical equipment");
+        String note=requiredReason(reason);
+        RecoveryCopy copy=jdbc.query("""
+            SELECT game_id,copy_code,condition
+            FROM physical_game_copies WHERE id=? FOR UPDATE
+            """,rs->rs.next()?new RecoveryCopy(
+                rs.getObject("game_id",UUID.class),rs.getString("copy_code"),
+                rs.getString("condition")):null,copyId);
+        if (copy==null) throw missing();
+        if (!"LOST".equals(copy.condition())) throw conflict("Copy is not marked LOST");
+        if (verifiedCopyCode==null || !verifiedCopyCode.equals(copy.code()))
+            throw conflict("Verified physical game copy code does not match");
+        // The LOST classification must come from an actual, explicitly
+        // reviewed incident. Do not permit recovery of arbitrary legacy flags.
+        UUID loanId=jdbc.query("""
+            SELECT l.id FROM physical_game_loans l
+            JOIN physical_game_loss_incidents i ON i.loan_id=l.id
+            WHERE l.copy_id=? AND l.status='LOST' AND i.status='CONFIRMED_LOST'
+            ORDER BY i.reviewed_at DESC,i.id DESC LIMIT 1
+            """,rs->rs.next()?rs.getObject(1,UUID.class):null,copyId);
+        if (loanId==null) throw conflict("Copy has no verified lost-loan incident");
+        Boolean active=jdbc.queryForObject("""
+            SELECT EXISTS(SELECT 1 FROM physical_game_loans
+                WHERE copy_id=? AND status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
+            """,Boolean.class,copyId);
+        if (Boolean.TRUE.equals(active))
+            throw conflict("Cannot recover while copy is assigned to an active visit");
+        jdbc.update("UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?",copyId);
+        // Before/after inspection history is permanent; original LOST loan
+        // and confirmed incident are deliberately never rewritten.
+        recordCondition(copyId,loanId,staff.staffId(),"LOST","DAMAGED",note);
+        audit.staff(staff.staffId(),"GAME_COPY_FOUND_QUARANTINED",
+            "PHYSICAL_GAME_COPY",copyId,requestId);
+        events.gameInventory(copy.gameId());
         return jdbc.query("""
             SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
             FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id

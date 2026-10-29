@@ -92,3 +92,17 @@ export async function updateGameCopyCondition(form: FormData) {
   await send(`/api/v1/admin/games/copies/${id}/condition`,
     {condition,reason:reason.trim()});
 }
+
+/** Manager-only: finding a LOST serial sends it to DAMAGED quarantine.
+ * A second, physically verified inspection is required to restore stock.
+ */
+export async function recoverLostGameCopy(form: FormData) {
+  const id=form.get("copyId"),code=form.get("copyCode"),reason=form.get("reason");
+  if (typeof id!=="string" || !UUID.test(id) ||
+      typeof code!=="string" || !CODE.test(code) ||
+      typeof reason!=="string" || reason.trim().length<5 ||
+      reason.trim().length>300 || /[\x00-\x1f\x7f]/.test(reason) ||
+      form.get("confirm")!=="yes") redirect("/staff/games?notice=invalid");
+  await send(`/api/v1/admin/games/copies/${id}/recover`,
+    {copyCode:code,reason:reason.trim()});
+}
