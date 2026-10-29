@@ -11,6 +11,7 @@ const messages: Record<string, string> = {
   approved: "Pesanan telah disetujui untuk dapur. Pembayaran masih menunggu penagihan cash.",
   rejected: "Pesanan ditolak dan alokasi stok dibebaskan sesuai aturan server.",
   reason: "Alasan penolakan wajib antara 4 dan 300 karakter.",
+  confirm: "Konfirmasi pemeriksaan pesanan sebelum melanjutkan.",
   forbidden: "Aksi ditolak: akun ini tidak memiliki izin.",
   conflict: "Status pesanan berubah atau tindakan tidak diizinkan. Periksa status terbaru.",
   offline: "API sedang tidak tersedia. Belum ada perubahan pesanan yang dapat dikonfirmasi.",
@@ -80,11 +81,16 @@ export default async function OrderDetailPage({
               <h2>Keputusan pesanan cash</h2>
               <p className="staff-muted">Tinjau pesanan dan keberadaan tamu sebelum menyetujui. Aksi diverifikasi ulang secara transaksional di backend.</p>
               <div className="staff-actions">
-                <form action={approveCash}><input type="hidden" name="orderId" value={id} /><button className="staff-primary" type="submit">Setujui untuk dapur</button></form>
+                <form action={approveCash} className="staff-reject-form">
+                  <input type="hidden" name="orderId" value={id} />
+                  <label className="staff-check"><input name="confirm" value="yes" type="checkbox" required /> Saya telah memeriksa pesanan dan meja tamu.</label>
+                  <button className="staff-primary" type="submit">Setujui untuk dapur</button>
+                </form>
                 <form action={rejectCash} className="staff-reject-form">
                   <input type="hidden" name="orderId" value={id} />
                   <label htmlFor="reason">Alasan penolakan (wajib)</label>
                   <input id="reason" name="reason" minLength={4} maxLength={300} required placeholder="Contoh: item tidak tersedia" />
+                  <label className="staff-check"><input name="confirm" value="yes" type="checkbox" required /> Saya yakin pesanan perlu ditolak.</label>
                   <button className="staff-danger" type="submit">Tolak pesanan</button>
                 </form>
               </div>

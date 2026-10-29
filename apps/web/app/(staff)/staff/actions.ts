@@ -92,6 +92,9 @@ async function command(form: FormData, kind: "approve" | "reject"): Promise<void
   if (typeof id !== "string" || !ORDER_ID.test(id)) {
     redirect("/staff/orders?notice=invalid");
   }
+  if (form.get("confirm") !== "yes") {
+    redirect(`/staff/orders/${id}?notice=confirm`);
+  }
   const reason = form.get("reason");
   if (
     kind === "reject" &&

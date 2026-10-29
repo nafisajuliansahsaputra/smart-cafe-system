@@ -45,3 +45,6 @@
   .staff-filters { grid-template-columns: 1fr; }
   .staff-table { min-width: 700px; }
 }
+
+.staff-check { display: flex; align-items: start; gap: 10px; line-height: 1.35; }
+.staff-shell .staff-check input { width: 20px; height: 20px; min-height: 20px; margin: 0; flex: 0 0 20px; }
