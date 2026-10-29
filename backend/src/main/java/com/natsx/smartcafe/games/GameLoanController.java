@@ -32,6 +32,10 @@ public class GameLoanController {
     public record NewGame(@NotBlank @Size(max=120) String name,
                           @Size(max=500) String description) {}
     public record NewCopy(@NotBlank @Size(max=80) String copyCode) {}
+    public record DamagedReturn(@NotBlank @Size(max=80) String copyCode,
+                                @NotBlank @Size(min=5,max=300) String reason) {}
+    public record ConditionChange(@NotBlank String condition,
+                                  @NotBlank @Size(min=5,max=300) String reason) {}
 
     @GetMapping("/me/games")
     public ResponseEntity<ApiEnvelope<List<GameLoanService.GameView>>> catalog(
@@ -110,6 +114,14 @@ public class GameLoanController {
             RequestIdFilter.get(request));
     }
 
+    @PostMapping("/waiter/game-loans/{id}/return-damaged")
+    public ApiEnvelope<GameLoanService.LoanView> returnedDamaged(
+        @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
+        @Valid @RequestBody DamagedReturn body,HttpServletRequest request) {
+        return ApiEnvelope.of(games.returnDamagedCopy(id,body.copyCode(),
+            body.reason(),staff,RequestIdFilter.get(request)),RequestIdFilter.get(request));
+    }
+
     @PostMapping("/waiter/game-loans/{id}/cancel")
     public ApiEnvelope<GameLoanService.LoanView> cancelled(
         @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
@@ -124,6 +136,21 @@ public class GameLoanController {
         HttpServletRequest request) {
         return ApiEnvelope.of(games.addGame(body.name(),body.description(),staff,
             RequestIdFilter.get(request)),RequestIdFilter.get(request));
+    }
+
+    @GetMapping("/admin/games/copies")
+    public ResponseEntity<ApiEnvelope<List<GameLoanService.CopyView>>> gameCopies(
+        @AuthenticationPrincipal StaffPrincipal staff,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(games.copies(),RequestIdFilter.get(request)));
+    }
+
+    @PostMapping("/admin/games/copies/{id}/condition")
+    public ApiEnvelope<GameLoanService.CopyView> changeCondition(
+        @AuthenticationPrincipal StaffPrincipal staff,@PathVariable UUID id,
+        @Valid @RequestBody ConditionChange body,HttpServletRequest request) {
+        return ApiEnvelope.of(games.changeCopyCondition(id,body.condition(),
+            body.reason(),staff,RequestIdFilter.get(request)),RequestIdFilter.get(request));
     }
 
     @PostMapping("/admin/games/{id}/copies")
