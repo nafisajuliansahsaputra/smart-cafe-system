@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
 import { getOrder, getOrderReceipt, guestIdentity, idr, timeWib, UUID_PATTERN } from "@/lib/guest-server";
 
@@ -24,6 +25,7 @@ export default async function OrderDetailPage({ params, searchParams }: {
       <header className="guest-top"><Link className="guest-wordmark" href="/visit">SMART CAFE</Link>
         <Link href="/visit/cart">Keranjang</Link></header>
       <nav className="guest-breadcrumb"><Link href="/visit/orders">Pesanan saya</Link><span>/</span><strong>Detail</strong></nav>
+      <div className="guest-live-line"><LiveRefresh url={`/visit/live?topic=order&id=${id}`} /></div>
       {notice === "submitted" && <p className="guest-alert" role="status">Pesanan berhasil dicatat oleh server. Menunggu persetujuan cash dari staf, belum dibayar.</p>}
       {!order.ok && <section className="guest-panel"><h1>Detail tidak dapat dimuat</h1>
         <p>Periksa koneksi dan coba lagi. Tidak ada status sukses yang diasumsikan.</p></section>}

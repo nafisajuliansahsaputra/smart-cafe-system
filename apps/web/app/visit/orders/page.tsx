@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { redirect } from "next/navigation";
 import { getOrders, guestIdentity, idr } from "@/lib/guest-server";
 
@@ -16,6 +17,7 @@ export default async function OrdersPage() {
       <header className="guest-top"><Link className="guest-wordmark" href="/visit">SMART CAFE</Link>
         <Link href="/visit/cart">Keranjang</Link></header>
       <nav className="guest-breadcrumb"><Link href="/visit">Menu</Link><span>/</span><strong>Pesanan</strong></nav>
+      <div className="guest-live-line"><LiveRefresh url={`/visit/live?topic=orders`} /></div>
       <h1>Pesanan saya</h1><p className="guest-subtitle">Pantau progres makanan dan pembayaran secara terpisah.</p>
       <form method="GET"><button type="submit" className="guest-secondary">Segarkan status</button></form>
       {!orders.ok && <section className="guest-panel"><h2>Pesanan tidak dapat dimuat</h2>
