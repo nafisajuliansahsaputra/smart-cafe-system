@@ -23,6 +23,9 @@ export type GameLossIncidentView = {
   tableCode: string; status: "OPEN" | "DISMISSED" | "CONFIRMED_LOST";
   reason: string; reviewReason: string | null; reportedAt: string;
 };
+export type GameLossIncidentPage = {
+  items: GameLossIncidentView[]; page: number; hasNext: boolean; openCount: number;
+};
 export type GameLoanView = {
   id: string; gameId: string; gameName: string;
   status: "REQUESTED" | "ASSIGNED" | "IN_USE" | "RETURN_PENDING" | "RETURNED" | "CANCELLED" | "LOST";
@@ -97,6 +100,13 @@ function gameLossIncident(value: unknown): value is GameLossIncidentView {
 }
 const gameLossIncidents=(value:unknown): value is GameLossIncidentView[] =>
   Array.isArray(value) && value.length<=100 && value.every(gameLossIncident);
+function incidentPage(value:unknown):value is GameLossIncidentPage {
+  return record(value) && Array.isArray(value.items) &&
+    value.items.length<=25 && value.items.every(gameLossIncident) &&
+    Number.isSafeInteger(value.page) && (value.page as number)>=0 &&
+    (value.page as number)<=2000 && typeof value.hasNext==="boolean" &&
+    Number.isSafeInteger(value.openCount) && (value.openCount as number)>=0;
+}
 const games = (value: unknown): value is GameView[] =>
   Array.isArray(value) && value.every(game);
 const loans = (value: unknown): value is GameLoanView[] =>
@@ -173,4 +183,18 @@ export async function adminGameLossIncidents(): Promise<Result<GameLossIncidentV
   if (!token) return {ok:false,status:401};
   const r=await staffApi("/api/v1/admin/games/loss-incidents","GET",token);
   return result(r.status,dataFromEnvelope(r.payload),gameLossIncidents);
+}
+
+/** Manager-only full-database incident register, with independently scoped
+ * OPEN backlog count; never fetch notes into guest or waiter pages.
+ */
+export async function searchAdminGameLossIncidents(
+  q:string,status:string,page:number,
+):Promise<Result<GameLossIncidentPage>> {
+  const token=await staffToken();
+  if (!token) return {ok:false,status:401};
+  const params=new URLSearchParams({q,status,page:String(page)});
+  const r=await staffApi(`/api/v1/admin/games/loss-incidents/search?${params}`,"GET",token);
+  const parsed=result(r.status,dataFromEnvelope(r.payload),incidentPage);
+  return parsed.ok && parsed.data.page!==page ? {ok:false,status:502} : parsed;
 }
