@@ -19,7 +19,8 @@ INSERT INTO staff_role_assignments (staff_user_id, role_key) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO cafe_tables (id, table_code, public_alias, capacity) VALUES
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1111','E2E-01','e2e-01',4)
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1111','E2E-01','e2e-01',4),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa2222','E2E-QR-CLOSE','e2e-qr-close',4)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO menu_categories (id, name, slug, sort_order) VALUES
