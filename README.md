@@ -127,3 +127,9 @@ See [staff browser verification and security notes](docs/M2-STAFF-BROWSER.md). P
 Draft [PR #4](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/4) adds real API-backed `/staff/kitchen` and `/staff/waiter` views atop the staff login/Order Control Center in PR #3. Kitchen can start preparation and mark ready; waiter can acknowledge physical handover and record cash received after service. The backend calculates and persists exact change; the waiter view reads recorded amount/change from the database. A new `GET /api/v1/waiter/orders/tasks` API strictly scopes ordinary waiters to visits they opened, while cashier/manager/admin may supervise all. All mutations require a fresh active staff bearer session and backend authorization.
 
 This is an **unmerged development-only slice**, not a pilot or payments certification. No live money, actual customer data or provider integrations. Manual snapshot refresh remains until SSE. See [fulfillment implementation notes](docs/M2-FULFILLMENT-UI.md).
+
+## M2 guest ordering browser (draft PR #5)
+
+[PR #5](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/5) adds QR/NFC table entry and temporary join proof, scoped guest browser session, available menu, required/optional modifier groups, persistent/versioned cart, cash checkout, own order tracking, and paid-only in-session receipt. Tokens never enter client JavaScript; new backend guest logout revokes the bearer, and paid receipts are fetched by owning order ID.
+
+**Still draft, not deployed or commercial-ready.** Public join abuse throttling, authenticated browser E2E, TLS/CSRF review, staff QR proof UX, optional phone receipt provider and QRIS/VA are still required. See [M2 guest ordering verification](docs/M2-GUEST-ORDERING.md).
