@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
-import { liveStream } from "@/lib/live-stream";
 import { liveCursorStream } from "@/lib/live-cursor-stream";
-import { STAFF_COOKIE, staffApi } from "@/lib/staff-server";
+import { STAFF_COOKIE } from "@/lib/staff-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +12,6 @@ export async function GET(request: Request): Promise<Response> {
   const id = url.searchParams.get("id");
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   let path: string;
-  let legacySnapshot = false;
   switch (topic) {
     case "orders":
       path = "/api/v1/ops/live-cursor?topic=orders"; break;
@@ -25,11 +23,7 @@ export async function GET(request: Request): Promise<Response> {
     case "waiter":
       path = "/api/v1/waiter/live-cursor?topic=waiter"; break;
     case "tables":
-      // Table openings/closures do not yet write ORDER outbox events.
-      // Retain existing authenticated table snapshots until table events exist.
-      path = "/api/v1/waiter/tables";
-      legacySnapshot = true;
-      break;
+      path = "/api/v1/waiter/live-cursor?topic=tables"; break;
     default: return new Response(null, { status: 400 });
   }
   if (topic !== "order" && id !== null) return new Response(null, { status: 400 });
@@ -38,7 +32,5 @@ export async function GET(request: Request): Promise<Response> {
   }
   const token = (await cookies()).get(STAFF_COOKIE)?.value;
   if (!token) return new Response(null, { status: 401 });
-  return legacySnapshot
-    ? liveStream(request, () => staffApi(path, "GET", token))
-    : liveCursorStream(request, path, token);
+  return liveCursorStream(request, path, token);
 }

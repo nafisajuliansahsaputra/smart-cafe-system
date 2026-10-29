@@ -2,6 +2,7 @@ package com.natsx.smartcafe.tables;
 
 import com.natsx.smartcafe.common.api.ApiFailureException;
 import com.natsx.smartcafe.audit.AuditTrail;
+import com.natsx.smartcafe.common.events.OutboxEvents;
 import com.natsx.smartcafe.identity.SecureToken;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,10 +22,12 @@ public class TableVisitService {
     private static final Duration GUEST_TTL = Duration.ofHours(8);
     private final JdbcTemplate jdbc;
     private final AuditTrail audit;
+    private final OutboxEvents outbox;
 
-    public TableVisitService(JdbcTemplate jdbc, AuditTrail audit) {
+    public TableVisitService(JdbcTemplate jdbc, AuditTrail audit, OutboxEvents outbox) {
         this.jdbc = jdbc;
         this.audit = audit;
+        this.outbox = outbox;
     }
 
     public record TableEntry(String tableCode, boolean activeVisit) {}
@@ -63,6 +66,7 @@ public class TableVisitService {
             VALUES (?,?,'ACTIVE',?,?,?)
             """, id, tableId, staffId, SecureToken.sha256(proof), Timestamp.from(expires));
         audit.staff(staffId, "TABLE_VISIT_OPENED", "TABLE_VISIT", id, requestId);
+        outbox.tableVisit(id, "TABLE_VISIT_OPENED");
         return new VisitOpened(id, tableId, proof, expires);
     }
 
@@ -83,6 +87,7 @@ public class TableVisitService {
             """, SecureToken.sha256(proof), Timestamp.from(expires), visitId);
         UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?", UUID.class, visitId);
         audit.staff(staffId, "TABLE_JOIN_PROOF_ROTATED", "TABLE_VISIT", visitId, requestId);
+        outbox.tableVisit(visitId, "TABLE_JOIN_PROOF_ROTATED");
         return new VisitOpened(visitId, tableId, proof, expires);
     }
 
@@ -147,6 +152,7 @@ public class TableVisitService {
         jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", visitId);
         jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", visitId);
         audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
+        outbox.tableVisit(visitId, "TABLE_VISIT_CLOSED");
     }
 
     private void requireWaiterOwnershipOrSupervisor(UUID visitId,UUID staffId) {

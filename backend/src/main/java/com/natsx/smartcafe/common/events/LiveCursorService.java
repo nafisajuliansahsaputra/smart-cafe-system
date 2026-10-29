@@ -80,6 +80,23 @@ public class LiveCursorService {
         if ("waiter".equals(scope)) {
             if (!staff.roles().stream().anyMatch(r -> r.equals("WAITER") ||
                 r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"))) throw forbidden();
+            if ("tables".equals(topic)) {
+                if (orderId != null) badTopic();
+                // Every waiter may see table occupancy open/close (same as
+                // GET /waiter/tables). Only the owner/supervisor can observe
+                // secret-rotation metadata, never the proof itself.
+                boolean supervisor = staff.roles().stream().anyMatch(r ->
+                    r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"));
+                return await(after, stillAuthorized, () -> supervisor
+                    ? cursor("SELECT COALESCE(MAX(sequence_id),0) FROM live_table_signals")
+                    : cursor("""
+                        SELECT COALESCE(MAX(s.sequence_id),0)
+                        FROM live_table_signals s
+                        JOIN table_visits v ON v.id=s.visit_id
+                        WHERE s.event_type IN ('TABLE_VISIT_OPENED','TABLE_VISIT_CLOSED')
+                           OR (s.event_type='TABLE_JOIN_PROOF_ROTATED' AND v.opened_by=?)
+                        """,staff.staffId()));
+            }
             if (!"waiter".equals(topic) || orderId != null) badTopic();
             if (staff.roles().stream().anyMatch(r -> r.equals("CASHIER") ||
                 r.equals("MANAGER") || r.equals("ADMIN"))) {
