@@ -129,7 +129,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       name: /Sudah memeriksa ketersediaan unit fisik/,
     }).check();
     await waiter.getByRole("button", { name: "Alokasikan unit" }).click();
-    await expect(waiter.getByText("ASSIGNED", { exact: true })).toBeVisible();
+    await expect(waiter.getByText("Perubahan permainan berhasil disimpan. Periksa status terbaru.")).toBeVisible();
+    expect(await waiter.locator("main").innerText()).toContain("ASSIGNED");
     await expect(waiter.getByText(/UNO-E2E-001/)).toBeVisible();
     await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
     await waiter.getByRole("checkbox", {
