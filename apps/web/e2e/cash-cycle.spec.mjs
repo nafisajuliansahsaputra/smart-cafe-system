@@ -107,6 +107,18 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     const denied = await stranger.goto(`/visit/orders/${orderId}`);
     expect(denied?.status()).toBe(404);
 
+    // Unsettled cash must block visit close even if waiter confirms in UI.
+    await waiter.goto("/staff/tables");
+    const unsettledCard = waiter.locator("article").filter({
+      has: waiter.getByRole("heading", { name: `Meja ${TABLE}` }),
+    });
+    await unsettledCard.getByRole("checkbox", {
+      name: /Semua pesanan dan pembayaran telah selesai/,
+    }).check();
+    await unsettledCard.getByRole("button", { name: "Tutup kunjungan" }).click();
+    await expect(waiter.getByText(/masih ada pesanan\/pembayaran belum selesai/)).toBeVisible();
+    await expect(unsettledCard).toContainText("TERISI");
+
     // Cashier approves but money remains UNPAID until physical handover.
     await cashier.goto(`/staff/orders/${orderId}`);
     await expect(cashier.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
