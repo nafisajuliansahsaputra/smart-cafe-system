@@ -240,7 +240,8 @@ class GameLoanIntegrationTest {
         String guestPath="/api/v1/me/live-cursor?topic=games";
         String staffPath="/api/v1/waiter/live-cursor?topic=games";
         assertEquals(403,getAs(staffPath,kitchen.token()).getStatus());
-        assertEquals(403,getAs(staffPath,guest.token()).getStatus());
+        // Guest Bearer is not a staff authentication credential: fail closed (401).
+        assertEquals(401,getAs(staffPath,guest.token()).getStatus());
         assertEquals(400,getAs(guestPath+"&orderId="+UUID.randomUUID(),guest.token()).getStatus());
         long beforeGuest=liveCursor(guestPath,guest.token());
         long beforeWaiter=liveCursor(staffPath,waiter.token());
