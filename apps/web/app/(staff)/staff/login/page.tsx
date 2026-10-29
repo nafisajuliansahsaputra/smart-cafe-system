@@ -22,7 +22,7 @@ export default async function StaffLogin({
   const current = await staffIdentity();
   if (current.kind === "signed-in") redirect("/staff");
   const { status } = await searchParams;
-  const message = status ? messages[status] : undefined;
+  const message = status && Object.hasOwn(messages, status) ? messages[status] : undefined;
   return (
     <main className="staff-shell staff-login">
       <div className="staff-eyebrow">SMART CAFE SYSTEM / STAFF</div>

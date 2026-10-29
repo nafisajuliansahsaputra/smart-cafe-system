@@ -34,6 +34,7 @@ export default async function OrderDetailPage({
   const { id } = await params;
   if (!ORDER_ID.test(id)) notFound();
   const { notice } = await searchParams;
+  const message = notice && Object.hasOwn(messages, notice) ? messages[notice] : undefined;
   const result = await orderDetail(id);
   if (!result.ok && result.status === 401) redirect("/staff/login?status=expired");
   if (!result.ok && result.status === 404) notFound();
@@ -46,7 +47,7 @@ export default async function OrderDetailPage({
         <form action={logoutStaff}><button className="staff-secondary" type="submit">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><Link href="/staff/orders">Antrean</Link><span>/</span><strong>Detail</strong></nav>
-      {notice && messages[notice] && <p className="staff-notice" role="status">{messages[notice]}</p>}
+      {message && <p className="staff-notice" role="status">{message}</p>}
       {!order ? (
         <section className="staff-panel"><h2>Detail tidak dapat dimuat</h2><p>Periksa koneksi API dan izin staf. Tidak ada tindakan yang dilakukan.</p><Link href={`/staff/orders/${id}`}>Coba lagi</Link></section>
       ) : (
