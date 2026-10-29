@@ -103,8 +103,22 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "Pinjam permainan fisik." })).toBeVisible();
     // Assert the synthetic catalogue entry and include the rendered status in
     // failure output, so an unavailable API cannot look like empty inventory.
+    // Diagnostic contract: verify the same scoped guest token against
+    // the internal backend in this disposable CI environment, then verify
+    // Next.js server-side parsing separately.
+    const gameBackendResponse = await guestContext.request.get(
+      "http://127.0.0.1:8080/api/v1/me/games",
+      { headers: { Authorization: `Bearer ${guestCookie.value}` } },
+    );
+    expect(gameBackendResponse.status()).toBe(200);
+    const gameBackendData = await gameBackendResponse.json();
+    expect(gameBackendData.data.some((game) => game.name === "UNO Demo")).toBe(true);
+    // Only a synthetic fixture is printed. Never dump access tokens.
+    console.log("SYNTHETIC_GAME_CATALOG_SHAPE", JSON.stringify(gameBackendData.data));
+    const catalogStatus = await guest.locator(".guest-category").getAttribute("data-catalog-status");
+    expect(catalogStatus).toBe("ok");
     expect(await guest.locator("main").innerText()).toContain("UNO Demo");
-    // Keep the waiter page open: game requests must arrive without manual refresh.
+    // Keep waiter task board open; guest requests must arrive without manual refresh.
     await waiter.goto("/staff/games");
     await expect(waiter.getByText("Belum ada pinjaman aktif")).toBeVisible();
     await expect(waiter.getByText("Live · otomatis")).toBeVisible({ timeout: 25000 });
@@ -118,7 +132,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       name: /Sudah memeriksa ketersediaan unit fisik/,
     }).check();
     await waiter.getByRole("button", { name: "Alokasikan unit" }).click();
-    await expect(waiter.getByText("ASSIGNED", { exact: true })).toBeVisible();
+    await expect(waiter.getByText("Perubahan permainan berhasil disimpan. Periksa status terbaru.")).toBeVisible();
+    expect(await waiter.locator("main").innerText()).toContain("ASSIGNED");
     await expect(waiter.getByText(/UNO-E2E-001/)).toBeVisible();
     await waiter.getByLabel("Masukkan kode pada unit fisik").fill("UNO-E2E-001");
     await waiter.getByRole("checkbox", {
