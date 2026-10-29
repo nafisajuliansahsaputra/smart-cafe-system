@@ -430,7 +430,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(cashierEvidence?.status()).toBe(404);
     await auditLink.click();
     await expect(manager.getByRole("heading",{name:"Riwayat laporan unit"})).toBeVisible();
-    await expect(manager.getByText("e2e-waiter")).toBeVisible();
+    await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
     await expect(manager.getByText("Staf melaporkan unit belum ditemukan")).toBeVisible();
     await expect(manager.getByText("Belum ada keputusan manager untuk laporan ini."))
       .toBeVisible();
@@ -448,7 +448,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await manager.getByRole("link",{name:"Lihat jejak aktivitas staf"}).click();
     await expect(manager.getByText("Manager mengonfirmasi kehilangan setelah pemeriksaan"))
       .toBeVisible();
-    await expect(manager.getByText("e2e-manager")).toBeVisible();
+    await expect(manager.getByText("Staf: e2e-manager")).toBeVisible();
     await expect(manager.getByText("Staf melaporkan unit belum ditemukan")).toBeVisible();
     await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
     await expect(manager.getByText("Staf: e2e-manager")).toBeVisible();
