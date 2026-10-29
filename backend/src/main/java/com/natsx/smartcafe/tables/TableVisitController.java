@@ -23,7 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class TableVisitController {
     private final TableVisitService visits;
-    public TableVisitController(TableVisitService visits) { this.visits = visits; }
+    private final GuestJoinThrottle throttle;
+
+    public TableVisitController(TableVisitService visits, GuestJoinThrottle throttle) {
+        this.visits = visits;
+        this.throttle = throttle;
+    }
 
     public record OpenRequest(UUID tableId) {}
     public record JoinRequest(@NotBlank String tableAlias, @NotBlank String joinProof,
@@ -61,6 +66,11 @@ public class TableVisitController {
     @PostMapping("/table-visits/join")
     public ResponseEntity<ApiEnvelope<TableVisitService.JoinResult>> join(
         @Valid @RequestBody JoinRequest payload, HttpServletRequest request) {
+        if (!throttle.allow(payload.tableAlias(), request.getRemoteAddr())) {
+            throw new com.natsx.smartcafe.common.api.ApiFailureException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMITED", "Too many join attempts. Try again later");
+        }
         var result = visits.join(payload.tableAlias(), payload.joinProof(), payload.displayName());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(result, RequestIdFilter.get(request)));

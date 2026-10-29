@@ -11,6 +11,7 @@ import {
 function notice(status: number): string {
   if (status === 401 || status === 403) return "expired";
   if (status === 409) return "conflict";
+  if (status === 429) return "limited";
   if (status === 404) return "missing";
   if (status === 400) return "invalid";
   if (status === 0 || status >= 500) return "offline";

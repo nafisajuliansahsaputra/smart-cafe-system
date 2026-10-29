@@ -12,6 +12,7 @@ const messages: Record<string, string> = {
   expired: "Sesi sudah berakhir. Minta waiter membuka sesi meja.",
   offline: "Koneksi ke sistem belum tersedia. Silakan coba lagi.",
   failed: "Gagal bergabung ke meja. Silakan coba lagi.",
+  limited: "Terlalu banyak percobaan bergabung. Tunggu sekitar 10 menit atau hubungi waiter.",
 };
 type Props = {
   params: Promise<{ tableAlias: string }>;

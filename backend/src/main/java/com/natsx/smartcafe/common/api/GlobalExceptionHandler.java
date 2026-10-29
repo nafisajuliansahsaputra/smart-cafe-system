@@ -13,8 +13,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
     @ExceptionHandler(ApiFailureException.class)
     ResponseEntity<ApiError> apiFailure(ApiFailureException ex, HttpServletRequest request) {
-        return ResponseEntity.status(ex.status())
-            .header("Cache-Control", "no-store")
+        var response = ResponseEntity.status(ex.status()).header("Cache-Control", "no-store");
+        if (ex.status() == HttpStatus.TOO_MANY_REQUESTS) {
+            response.header("Retry-After", "600");
+        }
+        return response
             .body(ApiError.of(ex.code(), ex.getMessage(), RequestIdFilter.get(request), Map.of()));
     }
 
