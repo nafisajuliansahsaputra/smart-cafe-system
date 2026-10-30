@@ -467,3 +467,12 @@ they are not counted as fully remediated by a green job.
 This workflow is separate from the existing main CI eight jobs,
 CodeQL (Java/TS) and Maven OSV checks. It runs on PRs, main
 pushes and a weekly schedule, using only local CI-built images.
+
+
+## M5 cash reporting verification (draft PR #39)
+
+- API: read-only GET /api/v1/ops/reports/cash-daily?date=YYYY-MM-DD, restricted to CASHIER/MANAGER/ADMIN by the existing /ops role gate, no-store responses. Calendar validation rejects malformed, out-of-range and impossible dates.
+- Only issued immutable CASH receipts count as gross collected, using Asia/Jakarta midnight-to-midnight boundaries on indexed receipt timestamps. Pending/unpaid orders, online gateway attempts and unissued receipts are excluded. Amounts are read server-side using exact integer conversions.
+- Snapshot item sales aggregate a bounded top-ten selection from order_lines without customer names, phone numbers, session tokens or unit serials.
+- PostgreSQL integration checks actual reporting values after physical cash tender, zero days, anonymous/guest/waiter/kitchen denials, malformed date rejection and cache policy. Chromium HTTP/HTTPS verifies cashier dashboard values and waiter/kitchen route denial.
+- This is not cash drawer reconciliation, refunded net revenue, cost accounting, tax calculation or QRIS/VA reporting. All tests are synthetic.

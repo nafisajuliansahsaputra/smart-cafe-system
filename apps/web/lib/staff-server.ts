@@ -322,3 +322,43 @@ export async function staffTables(): Promise<LoadResult<StaffTable[]>> {
   }
   return { ok: true, data };
 }
+
+
+export type DailyCashReport = {
+  date: string;
+  timezone: "Asia/Jakarta";
+  currency: "IDR";
+  paidOrders: number;
+  grossCollectedIdr: number;
+  topItems: { name: string; quantity: number; grossIdr: number }[];
+};
+
+function safeCashNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isDailyCashReport(data: unknown): data is DailyCashReport {
+  return record(data) && typeof data.date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(data.date) &&
+    data.timezone === "Asia/Jakarta" && data.currency === "IDR" &&
+    safeCashNumber(data.paidOrders) && safeCashNumber(data.grossCollectedIdr) &&
+    Array.isArray(data.topItems) && data.topItems.length <= 10 &&
+    data.topItems.every((item: unknown) => record(item) &&
+      typeof item.name === "string" &&
+      safeCashNumber(item.quantity) && safeCashNumber(item.grossIdr));
+}
+
+export async function dailyCashReport(date: string): Promise<LoadResult<DailyCashReport>> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, status: 400 };
+  }
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const response = await staffApi(
+    "/api/v1/ops/reports/cash-daily?date=" + encodeURIComponent(date),
+    "GET", token,
+  );
+  if (response.status !== 200) return { ok: false, status: response.status };
+  const data = dataFromEnvelope(response.payload);
+  return isDailyCashReport(data) ? { ok: true, data } : { ok: false, status: 502 };
+}

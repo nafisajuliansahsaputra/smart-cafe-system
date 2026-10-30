@@ -263,6 +263,47 @@ class CashOrderFlowIntegrationTest {
             Integer.class,intent));
         assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM receipts WHERE order_id=?",
             Integer.class,orderId));
+
+        // M5 daily cash reporting: finalized receipts, never pending orders.
+        var reportDay=jdbc.queryForObject("""
+            SELECT (issued_at AT TIME ZONE 'Asia/Jakarta')::date
+            FROM receipts WHERE order_id=?
+            """,java.sql.Date.class,orderId).toLocalDate().toString();
+        var report=mvc.perform(get("/api/v1/ops/reports/cash-daily")
+            .param("date",reportDay)
+            .header("Authorization","Bearer "+cashier)).andReturn().getResponse();
+        assertEquals(200,report.getStatus(),report.getContentAsString());
+        assertTrue(report.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(report.getContentAsString().contains("\"timezone\":\"Asia/Jakarta\""));
+        assertTrue(report.getContentAsString().contains("\"currency\":\"IDR\""));
+        assertTrue(report.getContentAsString().contains("\"name\":\"Synthetic Meal\""));
+        var expectedGross=jdbc.queryForObject("""
+            SELECT COALESCE(SUM(r.total_idr),0) FROM receipts r
+            JOIN payment_intents p ON p.id=r.payment_intent_id
+            WHERE p.method_selected='CASH'
+              AND (r.issued_at AT TIME ZONE 'Asia/Jakarta')::date=CAST(? AS date)
+            """,Long.class,reportDay);
+        assertTrue(report.getContentAsString().contains(
+            "\"grossCollectedIdr\":"+expectedGross));
+        assertEquals(401,mvc.perform(get("/api/v1/ops/reports/cash-daily"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get("/api/v1/ops/reports/cash-daily")
+            .header("Authorization","Bearer "+waiter)).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get("/api/v1/ops/reports/cash-daily")
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/ops/reports/cash-daily")
+            .header("Authorization","Bearer "+a.token())).andReturn().getResponse().getStatus());
+        for(String invalid : List.of("2026-02-30", "2026/10/31", "1800-01-01", "x' OR 1=1 --")) {
+            assertEquals(400,mvc.perform(get("/api/v1/ops/reports/cash-daily")
+                .param("date",invalid).header("Authorization","Bearer "+cashier))
+                .andReturn().getResponse().getStatus());
+        }
+        var emptyReport=mvc.perform(get("/api/v1/ops/reports/cash-daily")
+            .param("date","2000-01-01")
+            .header("Authorization","Bearer "+cashier)).andReturn().getResponse();
+        assertEquals(200,emptyReport.getStatus());
+        assertTrue(emptyReport.getContentAsString().contains("\"paidOrders\":0"));
+        assertTrue(emptyReport.getContentAsString().contains("\"grossCollectedIdr\":0"));
         assertEquals("PAID",jdbc.queryForObject(
             "SELECT aggregate_status FROM payment_intents WHERE id=?",String.class,intent));
         assertEquals(200,mvc.perform(get("/api/v1/me/receipts/" + receipt)

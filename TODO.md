@@ -403,3 +403,8 @@ security approval remain open.
 ### M5 in-session receipt print increment (draft PR #38)
 
 A guest-scoped PAID receipt HTML detail and browser print/Save as PDF action are added on top of the cash vertical slice, with negative Chromium checks for unpaid/foreign orders. This is a **partial** M5 improvement, not final download-link, phone-delivery, financial-reporting or public production readiness. Do not mark M5 complete before authenticated CI results and the remaining requirements pass.
+
+
+### M5: first daily cash report (draft PR #39)
+
+A WIB daily cash gross report and top-ten item summary are implemented on a stacked development branch with a role-protected /staff/reports screen for cashiers/managers/admins. The source is finalized immutable CASH receipts, not unpaid orders. Date validation, no-store, access denial and synthetic PostgreSQL/Chromium coverage are added. This is **partial** daily operations reporting: no bank/drawer reconciliation, QRIS/VA, refunds, reporting exports, receipt messaging or production pilot. Await exact-head CI; keep the original M5 checkbox open until complete.
