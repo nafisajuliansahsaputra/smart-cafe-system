@@ -331,3 +331,28 @@ notes, but still omits guest identity, contact, billing, receipts and
 unrestricted audit metadata. No new migration is needed: existing V1
 resource index supports lookup by type/resource ID; no audit row
 updates are implemented.
+
+
+## M4 phone-size staff accessibility and field navigation (stacked draft PR #32)
+
+Waiter, manager, and evidence views now share scoped staff-only
+mobile styling: long serialized game codes, employee notes and
+correlation IDs wrap inside cards rather than overflowing the
+viewport. Forms maintain a minimum 44px confirmation tap target,
+44–46px links/buttons, 16px mobile text fields to avoid unintended
+mobile browser focus zoom, and an explicit visible keyboard focus
+ring. Multiple high-impact physical inventory forms have a visual
+separator so staff do not mistake "DISMISS" for "CONFIRM_LOST".
+On narrow screens primary actions fill the available card width.
+These changes do not alter desktop UI data, permissions or any
+backend/inventory/payment transition.
+
+Manager links from the home OPEN incident summary now land directly
+at `/staff/games?istatus=OPEN#loss-incidents`. Filter form submits
+and reset/page links for incident, inventory and condition history
+sections keep the user at their relevant section, rather than
+jumping to the top of a long phone page. Cards have explicit
+accessible headings; the individual evidence timeline has
+a named ordered list and machine-readable `<time datetime>` elements.
+All manager evidence still enforces the existing server-side role
+boundary and is read-only.

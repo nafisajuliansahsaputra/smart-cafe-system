@@ -395,7 +395,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       .toHaveCount(0);
     await expect(managerHome.getByRole("link",{
       name:"Buka laporan menunggu pemeriksaan",
-    })).toHaveAttribute("href","/staff/games?istatus=OPEN");
+    })).toHaveAttribute("href","/staff/games?istatus=OPEN#loss-incidents");
     await manager.bringToFront();
     // OPEN queue count is independent from manager filters; incident search
     // reaches the database and preserves copy/audit selections.
@@ -436,6 +436,15 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     // authenticated live subscriptions and operational page state.
     await auditLink.click();
     await expect(manager.getByRole("heading",{name:"Riwayat laporan unit"})).toBeVisible();
+    // Audit correlation identifiers must wrap on a 320px phone, and the
+    // read-only timeline must preserve accessible event chronology.
+    await manager.setViewportSize({width:320,height:740});
+    await expect(manager.locator("ol[aria-label='Urutan aktivitas staf']")).toBeVisible();
+    await expect.poll(async()=>manager.evaluate(
+      ()=>document.documentElement.scrollWidth-window.innerWidth
+    )).toBeLessThanOrEqual(1);
+    await expect(manager.locator("ol time[datetime]")).toHaveCount(1);
+    await manager.setViewportSize({width:1280,height:720});
     await expect(manager.getByText("Staf: e2e-waiter")).toBeVisible();
     await expect(manager.getByText("Staf melaporkan unit belum ditemukan")).toBeVisible();
     await expect(manager.getByText("Belum ada keputusan manager untuk laporan ini."))

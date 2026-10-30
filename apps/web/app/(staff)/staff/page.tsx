@@ -58,7 +58,7 @@ export default async function StaffPage() {
           {lossAlerts.data.openCount>lossAlerts.data.recent.length &&
             <p className="staff-muted">Masih ada laporan lain dalam antrean.</p>}
         </>}
-        <Link className="staff-link-button" href="/staff/games?istatus=OPEN">
+        <Link className="staff-link-button" href="/staff/games?istatus=OPEN#loss-incidents">
           Buka laporan menunggu pemeriksaan
         </Link>
       </section>}

@@ -319,3 +319,17 @@ production configuration changes. Remaining: incident evidence
 retention and appeals policy, explicit incident staff shift handoff,
 mobile field usability/accessibility checks, and release security
 review before a real-world cafe pilot.
+
+
+### M4 phone/tablet staff accessibility pilot (draft PR #32)
+
+Improved staff-only CSS for 320–768px phone/tablet layouts, safe
+long-serial/note/audit-ID wrapping, keyboard focus visibility,
+44px+ touch targets, mobile-width actions and separated risky
+decision forms. Manager OPEN notification, incident search, copy
+inventory and audit history now use anchored navigation to reduce
+long scrolling after filter/reset/next-page actions. Synthetic
+Chromium mobile tests verify responsive overflow, interactive
+target size, keyboard focus and evidence timeline semantics on
+HTTP and HTTPS. Still required: hands-on touch/zoom/assistive
+technology testing on real Android/iOS before a cafe field pilot.
