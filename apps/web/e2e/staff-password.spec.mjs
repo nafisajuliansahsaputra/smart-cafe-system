@@ -29,7 +29,7 @@ test("staff self-service rotation revokes other browser sessions and old passwor
     await a.goto("/staff/account");
     await expect(a.getByRole("heading", { name: "Ganti kata sandi" })).toBeVisible();
     await a.getByLabel("Kata sandi saat ini").fill("incorrect-current-password");
-    await a.getByLabel("Kata sandi baru", { exact: false }).fill(NEXT);
+    await a.locator("#new-password").fill(NEXT);
     await a.getByLabel("Ulangi kata sandi baru").fill(NEXT);
     await a.getByRole("button", { name: /Ganti kata sandi dan keluar/ }).click();
     await expect(a).toHaveURL(/\/staff\/account\?notice=incorrect$/);
@@ -37,7 +37,7 @@ test("staff self-service rotation revokes other browser sessions and old passwor
     await expect(b.getByRole("heading", { name: "Ruang operasional" })).toBeVisible();
 
     await a.getByLabel("Kata sandi saat ini").fill(OLD);
-    await a.getByLabel("Kata sandi baru", { exact: false }).fill(NEXT);
+    await a.locator("#new-password").fill(NEXT);
     await a.getByLabel("Ulangi kata sandi baru").fill(NEXT);
     await a.getByRole("button", { name: /Ganti kata sandi dan keluar/ }).click();
     await expect(a).toHaveURL(/\/staff\/login\?status=password-changed$/);
