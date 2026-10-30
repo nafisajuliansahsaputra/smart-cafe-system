@@ -291,7 +291,7 @@ class StaffAuthIntegrationTest {
         String second=loginToken(waiter);
         String changed="synthetic-rotated-Password-2026";
         String path="/api/v1/staff/auth/password/change";
-        String body="{\\"currentPassword\\":\\"safe-test-password-123\\",\\"newPassword\\":\\""+changed+"\\"}";
+        String body="{\"currentPassword\":\"safe-test-password-123\",\"newPassword\":\""+changed+"\"}";
         assertEquals(401,mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
             .content(body)).andReturn().getResponse().getStatus());
         assertEquals(400,mvc.perform(post(path).header("Authorization","Bearer "+first)
@@ -335,7 +335,7 @@ class StaffAuthIntegrationTest {
         var cashier=staff("CASHIER");
         String bearer=loginToken(cashier);
         String path="/api/v1/staff/auth/password/change";
-        String body="{\\"currentPassword\\":\\"incorrect-current-password\\",\\"newPassword\\":\\"new-synthetic-password-2026\\"}";
+        String body="{\"currentPassword\":\"incorrect-current-password\",\"newPassword\":\"new-synthetic-password-2026\"}";
         for(int i=0;i<4;i++) {
             assertEquals(403,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -369,7 +369,7 @@ class StaffAuthIntegrationTest {
             for(String next:java.util.List.of("synthetic-new-first-2026","synthetic-new-second-2026")) {
                 tasks.add(pool.submit(()->{
                     start.await();
-                    String body="{\\"currentPassword\\":\\"safe-test-password-123\\",\\"newPassword\\":\\""+next+"\\"}";
+                    String body="{\"currentPassword\":\"safe-test-password-123\",\"newPassword\":\""+next+"\"}";
                     return mvc.perform(post(path).header("Authorization","Bearer "+bearer)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                         .andReturn().getResponse().getStatus();
