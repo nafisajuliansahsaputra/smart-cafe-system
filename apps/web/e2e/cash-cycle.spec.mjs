@@ -262,6 +262,16 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toBeVisible();
     await expect(guest.getByText(/Struk #/)).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
+
+    // Cash report is server-backed: only this finalized receipt is counted.
+    await cashier.goto("/staff/reports");
+    await expect(cashier.getByRole("heading", { name: "Laporan cash harian" })).toBeVisible();
+    await expect(cashier.getByLabel("Ringkasan penerimaan cash")).toContainText("35.000");
+    await expect(cashier.getByRole("table")).toContainText("E2E Latte");
+    const deniedWaiterReport = await waiter.goto("/staff/reports");
+    expect(deniedWaiterReport?.status()).toBe(404);
+    const deniedKitchenReport = await kitchen.goto("/staff/reports");
+    expect(deniedKitchenReport?.status()).toBe(404);
     await expect(guest.getByRole("link", { name: "Cetak atau simpan PDF" })).toBeVisible();
     const printablePage = await guest.goto("/visit/orders/" + orderId + "/receipt");
     expect(printablePage?.status()).toBe(200);
