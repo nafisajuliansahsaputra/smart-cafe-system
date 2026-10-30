@@ -8,6 +8,25 @@ permissions:
   contents: read
 
 jobs:
+  security-baseline:
+    name: Security baseline / tracked secrets / production npm advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prove scanner catches synthetic credentials and insecure browser storage
+        run: node --test scripts/security-preflight.test.mjs
+      - name: Reject high-confidence exposed secrets in the tracked tree
+        run: node scripts/security-preflight.mjs
+      - name: Audit production JavaScript dependencies via npm advisory database
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high --no-fund
+
   backend:
     name: Java tests / Flyway / PostgreSQL
     runs-on: ubuntu-latest

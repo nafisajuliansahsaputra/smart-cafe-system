@@ -139,3 +139,18 @@ storage, access-controlled backup retention, staging restore on
 production-like hosting, PITR/WAL planning, measured recovery time and
 data loss windows, incident response, and real payment reconciliation.
 Never apply the disposable E2E fixtures to a real cafe database.
+
+
+## 11. Minimal CI security gate (stacked draft PR #34)
+
+An eighth required-for-review workflow job independently tests
+high-confidence committed secret detection, unsafe credential
+storage/browser injection sinks and npm production dependency
+advisories at HIGH/CRITICAL level. A failing or unreachable
+advisory source is not treated as an all-clear. The workflow
+has read-only contents permissions and uses no production keys.
+Before public release, extend coverage to Java dependency
+vulnerability scanning, proper CodeQL/SAST, GitHub secret scanning
+including history, verified build provenance, production image
+scanning, vulnerability remediation/SLA and protected branch
+status requirements. This change creates no deployment workflow.

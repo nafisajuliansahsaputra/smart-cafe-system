@@ -354,3 +354,29 @@ A real backup, even encrypted, is sensitive; production credentials,
 billing records and customer PII must never be copied into this test.
 The content hashes here are deterministic integrity smoke checks, supplemented by active CHECK/FK rejection tests in the restored database,
 not a substitute for authenticated encrypted backups.
+
+
+## M6 CI HEAD-tree secret screening and npm production advisory gate (draft PR #34)
+
+A separate, fail-closed `security-baseline` GitHub Actions job
+checks **all tracked text files in the checked-out tree** for
+high-confidence credential formats: PEM private key headers, GitHub,
+AWS, Google, GitLab, Slack, Stripe, and OpenAI key patterns.
+Within first-party Next.js app/components/lib JavaScript/TypeScript,
+it additionally blocks raw browser local/session storage access,
+`dangerouslySetInnerHTML`, dynamic `eval` and `new Function`.
+Findings report **only file, line and rule**, never source text or
+matching secret material. Six synthetic test cases verify detection,
+scope and non-disclosure, including a generated fake token.
+
+The same job runs `npm audit --omit=dev --audit-level=high` against
+the committed frontend lockfile and fails on known HIGH/CRITICAL
+production JavaScript dependency advisories. Advisory registry
+unavailability also fails the security job, rather than silently
+claiming a pass. This is a **first automated security gate**, not
+a full SAST solution: it cannot catch unrecognized/historical leaks,
+text in binary blobs, compromised runtime dependencies, Java/Maven
+vulnerabilities, dynamic flows, or browser/network misconfiguration.
+No token should be assumed safe merely because this scanner is green.
+CodeQL or equivalent backend SAST, full history scanning,
+credential rotation policy and production release review remain open.

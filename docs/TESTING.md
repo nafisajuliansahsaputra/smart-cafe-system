@@ -392,3 +392,22 @@ The script removes only its own temporary archive and verification DB
 under an EXIT trap; normal CI destroys the entire disposable Compose
 environment afterward. No production database or external payment
 account is involved. This does not establish backup schedules or RPO/RTO.
+
+
+## M6 security gate (stacked draft PR #34)
+
+The eighth GitHub Actions job runs with read-only repository
+permissions and disabled checkout credential persistence.
+It first executes `node --test scripts/security-preflight.test.mjs`,
+covering positive fake GitHub/AWS/PEM/Stripe token findings,
+browser localStorage/HTML sink detection, scope boundaries,
+documented synthetic secrets and non-disclosure of secret values.
+Then `node scripts/security-preflight.mjs` scans the current tracked
+tree using `git ls-files -z` and fails on matches with only
+file:line:rule diagnostics. Finally `npm audit --omit=dev
+--audit-level=high --no-fund` checks **production frontend
+dependencies**, using the committed `apps/web/package-lock.json`
+and npm's advisory feed. No real credentials or production DB.
+All original 7 jobs continue and must pass at the same HEAD.
+The scanner deliberately does not claim full Java/SAST or
+historical-secret coverage.
