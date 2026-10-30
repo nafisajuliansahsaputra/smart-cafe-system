@@ -91,8 +91,14 @@ schema_fingerprint() {
   docker compose exec -T db sh -c '
     exec psql -X -q -t -A -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$1"
   ' sh "$database" <<'SQL'
+-- pg_restore parses some varchar[] CHECK expressions into equivalent
+-- text[] AST forms. Compare constraint identity/type/validation/keys; prove
+-- two critical CHECK/FK behaviors with actual rejected writes below.
 SELECT 'constraint|' || conrelid::regclass::text || '|' || conname ||
-       '|' || pg_get_constraintdef(oid)
+       '|' || contype || '|' || convalidated || '|' ||
+       coalesce(conkey::text,'') || '|' ||
+       CASE WHEN contype='c' THEN 'CHECK_VALIDATED'
+            ELSE pg_get_constraintdef(oid) END
 FROM pg_constraint
 WHERE connamespace='public'::regnamespace
 ORDER BY conrelid::regclass::text,conname;
@@ -142,6 +148,28 @@ fi
 [[ "$(data_fingerprint "$source_db")" == "$(data_fingerprint "$restore_db")" ]] || {
   echo "FAIL: staff, game, menu, audit or Flyway content differs." >&2; exit 1;
 }
+# Demonstrate that restored constraints still enforce real invalid states,
+# instead of relying solely on textual schema-object metadata.
+docker compose exec -T db sh -c '
+  exec psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$1"
+' sh "$restore_db" <<'SQL'
+DO $verify$
+BEGIN
+  BEGIN
+    UPDATE physical_game_copies SET condition='INVALID'
+    WHERE copy_code='UNO-E2E-001';
+    RAISE EXCEPTION 'invalid game-copy condition accepted after restore';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE physical_game_copies SET game_id=gen_random_uuid()
+    WHERE copy_code='UNO-E2E-001';
+    RAISE EXCEPTION 'broken game-copy foreign key accepted after restore';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+END $verify$;
+SQL
+
 audit_link="$(psql_db "$restore_db" "
   SELECT count(*) FROM audit_logs a
   JOIN staff_users u ON u.id=a.actor_id
@@ -153,5 +181,5 @@ audit_link="$(psql_db "$restore_db" "
   echo "FAIL: restored audit actor/inventory reference inconsistent." >&2; exit 1;
 }
 echo "PASS: PostgreSQL custom archive restored into a separate, newly created database."
-echo "PASS: table counts, schema constraints/indexes, six content signatures and audit links."
+echo "PASS: table counts, schema identities/indexes, six content signatures, rejected bad writes and audit links."
 echo "LIMIT: synthetic CI only, not production backups, PITR or an RPO/RTO guarantee."
