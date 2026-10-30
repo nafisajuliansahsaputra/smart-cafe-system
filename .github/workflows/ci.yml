@@ -379,6 +379,10 @@ jobs:
           docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml exec -T db \
             sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
             < infra/fixtures/e2e-browser.sql
+      - name: Check effective nonroot sandbox on both backend replicas
+        run: |
+          bash scripts/verify-container-sandbox.sh api
+          bash scripts/verify-container-sandbox.sh api_replica
       - name: Test two listeners and missed NOTIFY recovery after replica restart
         run: |
           set -euo pipefail
