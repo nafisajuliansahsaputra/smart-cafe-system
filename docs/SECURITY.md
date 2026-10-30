@@ -380,3 +380,34 @@ vulnerabilities, dynamic flows, or browser/network misconfiguration.
 No token should be assumed safe merely because this scanner is green.
 CodeQL or equivalent backend SAST, full history scanning,
 credential rotation policy and production release review remain open.
+
+
+## M6 CodeQL and Maven OSV checks (stacked draft PR #35)
+
+Two independent GitHub Actions security workflows cover **source-code
+analysis** and **known Java dependency advisories** on top of the
+existing npm/secrets checks. CodeQL runs `java-kotlin` (JDK 21,
+instrumented Maven compilation, `mvn -B -ntp -DskipTests package`)
+and `javascript-typescript` (buildless), both with extended
+security queries. CodeQL uploads findings to GitHub Code Scanning;
+a green workflow means the analysis completed, **not** that there
+are zero security alerts. Alerts still require independent triage
+and explicit review before any production release.
+
+OSV-Scanner checks `backend/pom.xml`, resolving Maven's direct and
+transitive production dependency graph using its supported resolver.
+Its **PR comparison** checks for newly introduced vulnerabilities
+relative to the PR's base, important for stacked draft PRs. Full,
+fail-on-vulnerability scanning runs on pushes to `main` and a
+weekly schedule, so new advisories affecting existing packages can
+still raise a failed check. An OSV PR pass does **not** imply that
+existing vulnerable packages are safe, and Maven test dependencies
+may not be completely covered. Both workflows have explicit narrow
+read access, granting `security-events:write` only to their scanning
+jobs for result uploads; neither has deployment credentials.
+
+Before public pilot, manually examine both tools' actual security
+alerts, confirm applicability, set branch protection and vulnerability
+response policies, and review container images, auth, payments,
+privacy, logs, ingress and third-party integrations. Static
+analysis cannot establish correct business authorization by itself.

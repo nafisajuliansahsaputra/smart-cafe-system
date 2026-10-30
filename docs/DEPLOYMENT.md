@@ -154,3 +154,18 @@ vulnerability scanning, proper CodeQL/SAST, GitHub secret scanning
 including history, verified build provenance, production image
 scanning, vulnerability remediation/SLA and protected branch
 status requirements. This change creates no deployment workflow.
+
+
+## 12. Static analysis and Maven dependency advisory workflows (draft PR #35)
+
+CodeQL extended security analysis now runs Java source through a
+Java 21 instrumented Maven build and JavaScript/TypeScript in a
+separate parallel job, publishing results in GitHub Code Scanning.
+A second workflow checks newly introduced Maven vulnerabilities
+on pull requests and full known Java dependency advisories weekly
+and after a main-branch push. Results are not automatically
+considered remediated when an analysis job succeeds; treat all
+alerts as release triage items. External vulnerability feeds and
+GitHub code scanning availability are environmental dependencies.
+Production release still needs reviewed high-severity alert policy,
+actual fixes and manual sign-off.

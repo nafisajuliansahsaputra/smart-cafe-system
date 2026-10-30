@@ -411,3 +411,22 @@ and npm's advisory feed. No real credentials or production DB.
 All original 7 jobs continue and must pass at the same HEAD.
 The scanner deliberately does not claim full Java/SAST or
 historical-secret coverage.
+
+
+## M6 Java/TypeScript CodeQL and Maven advisory coverage (draft PR #35)
+
+Two additional workflows run on PRs (including stacked branches):
+`.github/workflows/codeql.yml` executes CodeQL extended-security
+queries for Java/Kotlin under instrumented Java 21 Maven compilation
+and JavaScript/TypeScript without a build, uploading the SARIF alerts.
+`.github/workflows/osv-maven.yml` executes the documented OSV-Scanner
+**PR comparison** on `backend/pom.xml`, detecting newly introduced
+Maven dependency advisories against the target branch; **full**
+fail-on-vulnerability scanning additionally runs on `main` pushes
+and weekly schedule. OSV supports transitive Maven resolution, but
+the resolver may omit some test-scoped dependencies.
+
+Review the workflow conclusions **and Code Scanning alerts** before
+sign-off. Passing CodeQL means analysis and SARIF upload succeeded,
+not that zero findings exist. Existing eight CI jobs stay unchanged.
+No production database, keys or payment integrations are accessed.
