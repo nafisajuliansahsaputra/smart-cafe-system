@@ -48,6 +48,9 @@ class SandboxDigitalCheckoutIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
+    @Autowired com.natsx.smartcafe.orders.CartService carts;
+    @Autowired com.natsx.smartcafe.common.events.OutboxEvents outbox;
+    @Autowired com.natsx.smartcafe.catalog.VariantPricingService variants;
 
     private record Session(UUID guest,UUID visit,String token,UUID item) {}
 
@@ -192,6 +195,31 @@ class SandboxDigitalCheckoutIntegrationTest {
         assertEquals("AWAITING_CASH",jdbc.queryForObject("""
             SELECT aggregate_status FROM payment_intents WHERE order_id=?
             """,String.class,cashId));
+    }
+
+
+    @Test void environmentAndEnableFlagMustBothBePresent() {
+        var guest=guest();
+        var principal=new com.natsx.smartcafe.identity.GuestPrincipal(
+            guest.guest(),guest.visit(),SecureToken.sha256(guest.token()));
+        var lines=java.util.List.of(
+            new com.natsx.smartcafe.orders.CashCheckoutService.Line(guest.item(),1));
+        // Construct misconfigured variants without an HTTP endpoint or bean.
+        // Both are rejected before any stock or order mutation.
+        for(var service:java.util.List.of(
+            new com.natsx.smartcafe.orders.CashCheckoutService(
+                jdbc,carts,outbox,variants,true,"production"),
+            new com.natsx.smartcafe.orders.CashCheckoutService(
+                jdbc,carts,outbox,variants,false,"sandbox"))) {
+            for(String method:java.util.List.of("QRIS","VA")) {
+                var ex=org.junit.jupiter.api.Assertions.assertThrows(
+                    com.natsx.smartcafe.common.api.ApiFailureException.class,
+                    ()->service.checkout(principal,lines,"sandbox-gate-"+method,method));
+                assertEquals(403,ex.status().value());
+            }
+        }
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT count(*) FROM orders WHERE guest_id=?",Integer.class,guest.guest()));
     }
 
     @Test void invalidMethodDoesNotCreateOrderOrReserveStock() throws Exception {
