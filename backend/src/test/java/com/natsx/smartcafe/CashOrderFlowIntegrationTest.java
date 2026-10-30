@@ -291,7 +291,7 @@ class CashOrderFlowIntegrationTest {
             .header("Authorization","Bearer "+waiter)).andReturn().getResponse().getStatus());
         assertEquals(403,mvc.perform(get("/api/v1/ops/reports/cash-daily")
             .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
-        assertEquals(403,mvc.perform(get("/api/v1/ops/reports/cash-daily")
+        assertEquals(401,mvc.perform(get("/api/v1/ops/reports/cash-daily")
             .header("Authorization","Bearer "+a.token())).andReturn().getResponse().getStatus());
         for(String invalid : List.of("2026-02-30", "2026/10/31", "1800-01-01", "x' OR 1=1 --")) {
             assertEquals(400,mvc.perform(get("/api/v1/ops/reports/cash-daily")
