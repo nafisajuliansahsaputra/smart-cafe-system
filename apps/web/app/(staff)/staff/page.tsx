@@ -67,6 +67,7 @@ export default async function StaffPage() {
           <h2>Order Control Center</h2>
           <p>Antrean pesanan aktual dari database, bukan data simulasi. Persetujuan cash tidak berarti sudah dibayar.</p>
           <Link className="staff-link-button" href="/staff/orders">Buka antrean pesanan</Link>
+          <p><Link href="/staff/reports">Lihat laporan cash harian</Link></p>
         </section>
       ) : null}
       {canUseKitchen(current.staff.roles) && (
