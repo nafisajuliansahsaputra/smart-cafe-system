@@ -126,6 +126,13 @@ class SchemaIntegrationTest {
             UPDATE digital_payment_attempts SET state='EXPIRED',updated_at=now()
             WHERE payment_intent_id=?
             """,intent);
+        assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
+            UPDATE digital_payment_attempts SET state='PENDING',updated_at=now()
+            WHERE payment_intent_id=?
+            """,intent));
+        assertEquals("EXPIRED",jdbc.queryForObject("""
+            SELECT state FROM digital_payment_attempts WHERE payment_intent_id=?
+            """,String.class,intent));
         assertEquals(1,jdbc.update("""
             INSERT INTO digital_payment_attempts(
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
