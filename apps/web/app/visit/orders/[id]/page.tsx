@@ -57,7 +57,8 @@ export default async function OrderDetailPage({ params, searchParams }: {
                 <>
                   <p>Struk #{receipt.data.number} · {timeWib(receipt.data.issuedAt)} WIB</p>
                   <p><strong>{idr(receipt.data.totalIdr)}</strong> · {receipt.data.currency}</p>
-                  <p className="guest-footnote">Struk tersedia setelah pembayaran dikonfirmasi. Gunakan fitur cetak browser untuk menyimpan PDF.</p>
+                  <p className="guest-footnote">Struk tersedia setelah pembayaran dikonfirmasi. Buka rincian untuk mencetak atau menyimpan PDF.</p>
+                  <Link className="guest-secondary" href={"/visit/orders/" + id + "/receipt"}>Cetak atau simpan PDF</Link>
                 </>
               ) : (
                 <p role="alert">Pembayaran tercatat, tetapi struk belum dapat diverifikasi. Silakan muat ulang.</p>

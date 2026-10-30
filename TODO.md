@@ -399,3 +399,7 @@ to discover new vendor advisories. Unfixed alerts stay visible
 for mandatory manual triage; registry provenance, signatures,
 digest pinning, PostgreSQL/Nginx image scans and production
 security approval remain open.
+
+### M5 in-session receipt print increment (draft PR #38)
+
+A guest-scoped PAID receipt HTML detail and browser print/Save as PDF action are added on top of the cash vertical slice, with negative Chromium checks for unpaid/foreign orders. This is a **partial** M5 improvement, not final download-link, phone-delivery, financial-reporting or public production readiness. Do not mark M5 complete before authenticated CI results and the remaining requirements pass.

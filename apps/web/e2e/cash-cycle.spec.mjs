@@ -163,6 +163,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(orderId).toMatch(/^[0-9a-f-]{36}$/);
     await expect(guest.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toHaveCount(0);
+    const unpaidPrintable = await guestContext.request.get("/visit/orders/" + orderId + "/receipt");
+    expect(unpaidPrintable.status()).toBe(404);
     await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible({
       timeout: 25000,
     });
@@ -177,6 +179,8 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(stranger).toHaveURL(/\/visit$/);
     const denied = await stranger.goto(`/visit/orders/${orderId}`);
     expect(denied?.status()).toBe(404);
+    const foreignPrintable = await strangerContext.request.get("/visit/orders/" + orderId + "/receipt");
+    expect(foreignPrintable.status()).toBe(404);
     const foreignStream = await strangerContext.request.get(
       `/visit/live?topic=order&id=${orderId}`,
     );
@@ -258,6 +262,14 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toBeVisible();
     await expect(guest.getByText(/Struk #/)).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
+    await expect(guest.getByRole("link", { name: "Cetak atau simpan PDF" })).toBeVisible();
+    const printablePage = await guest.goto("/visit/orders/" + orderId + "/receipt");
+    expect(printablePage?.status()).toBe(200);
+    await expect(guest.getByRole("heading", { name: "Struk pembayaran" })).toBeVisible();
+    await expect(guest.getByRole("button", { name: "Cetak / simpan PDF" })).toBeVisible();
+    await expect(guest.getByRole("table", { name: "Rincian pembelian" })).toContainText("E2E Latte");
+    await expect(guest.getByText("35.000", { exact: false }).last()).toBeVisible();
+    await guest.goto("/visit/orders/" + orderId);
 
     // Even after cash is PAID and food SERVED, a physical unit in use
     // must block table closure until the waiter has inspected its return.
