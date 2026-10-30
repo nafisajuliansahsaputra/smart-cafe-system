@@ -169,3 +169,27 @@ alerts as release triage items. External vulnerability feeds and
 GitHub code scanning availability are environmental dependencies.
 Production release still needs reviewed high-severity alert policy,
 actual fixes and manual sign-off.
+
+
+## 13. Least-privilege API and web containers (draft PR #36)
+
+The development/CI Compose services `api`, `web` and
+`api_replica` now use read-only root filesystems, all default
+Linux capabilities removed, no-new-privileges, non-root runtime
+users and a 512-process cap. The only writable application paths
+are volatile `tmpfs` for `/tmp` (64 MiB) and the web
+`/app/.next/cache` (128 MiB). Next.js's cache does **not** persist
+through restart; a future production architecture may need an
+explicit trusted cache policy rather than a writable application
+layer. Any feature that needs persistent file storage requires a
+separate, least-privileged storage integration, never silently
+making the root filesystem writable.
+
+CI checks the effective Docker HostConfig/User and runtime write
+permissions with `scripts/verify-container-sandbox.sh`; a
+two-replica acceptance checks both Java processes. PostgreSQL and
+local Nginx edge retain their existing startup privilege model.
+Do not apply this unreviewed Compose topology to public hosting.
+Image CVE scanning, supply-chain attestation, resource-pressure
+testing, DB rootless hardening and real operations recovery are
+still required before production.

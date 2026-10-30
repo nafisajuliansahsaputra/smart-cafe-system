@@ -411,3 +411,35 @@ alerts, confirm applicability, set branch protection and vulnerability
 response policies, and review container images, auth, payments,
 privacy, logs, ingress and third-party integrations. Static
 analysis cannot establish correct business authorization by itself.
+
+
+## M6 Docker least-privilege application sandbox (stacked draft PR #36)
+
+The local/CI Compose `api`, `web` and second `api_replica` now
+run **with their pre-existing non-root image users** (`cafe` and
+`node`) plus `read_only: true`, `cap_drop: [ALL]`,
+`no-new-privileges:true` and `pids_limit: 512`. No
+`privileged` mode, Docker socket mount or new external port is
+introduced. The only writable app paths are bounded, volatile
+`tmpfs` mounts: `/tmp` (64 MiB per service), and
+`/app/.next/cache` (128 MiB) for the Next.js web service.
+Tmpfs uses `nosuid,nodev` and mode `1777`; temporary/cache data
+is lost after a restart. No bearer tokens or guest/staff secrets
+are intentionally stored in this cache.
+
+The existing PostgreSQL container and opt-in localhost Nginx test
+proxy are **deliberately unchanged**: their entrypoint startup and
+privileged-port behavior require separate review before imposing
+non-root or read-only root filesystem constraints. This is an
+application-container hardening increment, not image CVE scanning,
+rootless Docker, encrypted secrets delivery, seccomp/AppArmor
+profiling, production ingress review or proof of zero escape risk.
+
+The executable `scripts/verify-container-sandbox.sh` checks the
+Docker engine's **actual** security options, UID identity, effective
+process limit and tmpfs mounts; it then verifies the app can write
+to its temporary directory but **cannot** create a file under
+`/app`. It checks the Next.js cache mount explicitly. Synthetic
+clean-start and two-replica CI jobs run these checks against real
+containers, while the remaining HTTP/HTTPS browser and Java tests
+exercise normal application behavior.

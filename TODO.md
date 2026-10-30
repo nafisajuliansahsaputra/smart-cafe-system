@@ -373,3 +373,17 @@ proof of zero alerts; an OSV PR pass cannot clear inherited
 vulnerabilities. Still required: triage all findings, security
 release policy, dependency update SLAs, container scanning,
 privileged auth review, real pilot testing and branch protection.
+
+
+### M6 container runtime least privilege (stacked draft PR #36)
+
+Restricted API, web and second API replica Compose services to
+non-root users, read-only rootfs, `cap_drop: ALL`, disabled
+privilege escalation, bounded pids and volatile tmpfs for
+`/tmp` and Next.js runtime cache. Added effective Docker
+inspection + active write-denial probes in clean-start and
+two-replica CI, while leaving PostgreSQL and localhost Nginx
+startup untouched. Still open for production: image CVE scanning,
+deployment topology hardening, DB/edge least privilege, egress
+control, cache policy, secrets delivery, memory/CPU stress and
+real restore/incident drills.
