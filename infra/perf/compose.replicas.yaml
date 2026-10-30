@@ -5,6 +5,14 @@ services:
   api_replica:
     build: ./backend
     restart: "no"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
     environment:
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER}
