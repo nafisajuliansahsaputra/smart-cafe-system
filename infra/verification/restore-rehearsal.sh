@@ -102,7 +102,16 @@ SELECT 'constraint|' || conrelid::regclass::text || '|' || conname ||
 FROM pg_constraint
 WHERE connamespace='public'::regnamespace
 ORDER BY conrelid::regclass::text,conname;
-SELECT 'index|' || tablename || '|' || indexname || '|' || indexdef
+-- PostgreSQL also canonicalizes partial-index varchar[] predicates.
+-- Keep full index structure, partial-index presence and ordered literal
+-- status values; compare byte-for-byte definitions for non-partial indexes.
+SELECT 'index|' || tablename || '|' || indexname || '|' ||
+  CASE WHEN position(' WHERE ' IN indexdef)>0 THEN
+    split_part(indexdef,' WHERE ',1) || ' WHERE [PARTIAL:' ||
+    coalesce((SELECT string_agg(labels[1],',' ORDER BY ordinal)
+      FROM regexp_matches(indexdef,$'([A-Z_]+)'$,'g')
+        WITH ORDINALITY AS m(labels,ordinal)),'') || ']'
+  ELSE indexdef END
 FROM pg_indexes WHERE schemaname='public'
 ORDER BY tablename,indexname;
 SQL
