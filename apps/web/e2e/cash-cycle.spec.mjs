@@ -340,7 +340,45 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     const deniedTeam=await cashierTeam.goto("/staff/team");
     expect(deniedTeam?.status()).toBe(404);
     await cashierTeam.close();
+    await expect(teamTab.getByRole("heading",{name:"Tambah akun staf"})).toHaveCount(0);
     await teamTab.close();
+    const admin=await staff("admin");
+    const adminTeam=await admin.context().newPage();
+    await adminTeam.goto("/staff/team");
+    await expect(adminTeam.getByRole("heading",{name:"Tambah akun staf"})).toBeVisible();
+    await adminTeam.getByLabel("Nama pengguna baru").fill("e2e-new-waiter");
+    await adminTeam.getByLabel("Peran awal").selectOption("WAITER");
+    await adminTeam.getByLabel(/Kata sandi awal/).fill("e2e-Unique-Staff-Password-2026");
+    await adminTeam.getByLabel("Alasan pembuatan akun").fill("Synthetic E2E onboarding");
+    await adminTeam.getByRole("checkbox",{
+      name:/Saya telah memverifikasi kebutuhan akun/,
+    }).check();
+    await adminTeam.getByRole("button",{name:"Buat akun nonaktif"}).click();
+    await expect(adminTeam).toHaveURL(/notice=created/);
+    const newStaffCard=adminTeam.locator("article").filter({
+      has:adminTeam.getByRole("heading",{name:"e2e-new-waiter"}),
+    });
+    await expect(newStaffCard).toContainText("NONAKTIF");
+    const newStaffCtx=await makeContext();
+    const newStaffPage=await newStaffCtx.newPage();
+    await newStaffPage.goto("/staff/login");
+    await newStaffPage.getByLabel("Nama pengguna").fill("e2e-new-waiter");
+    await newStaffPage.getByLabel("Kata sandi").fill("e2e-Unique-Staff-Password-2026");
+    await newStaffPage.getByRole("button",{name:"Masuk",exact:true}).click();
+    await expect(newStaffPage).toHaveURL(/\/staff\/login\?status=invalid/);
+    await newStaffCard.getByLabel("Alasan perubahan (wajib)").fill("Verified E2E activation");
+    await newStaffCard.getByRole("checkbox",{
+      name:/Saya telah memverifikasi akun/,
+    }).check();
+    await newStaffCard.getByRole("button",{name:"Aktifkan akses"}).click();
+    await expect(adminTeam).toHaveURL(/notice=updated/);
+    await newStaffPage.goto("/staff/login");
+    await newStaffPage.getByLabel("Nama pengguna").fill("e2e-new-waiter");
+    await newStaffPage.getByLabel("Kata sandi").fill("e2e-Unique-Staff-Password-2026");
+    await newStaffPage.getByRole("button",{name:"Masuk",exact:true}).click();
+    await expect(newStaffPage).toHaveURL(/\/staff$/);
+    await expect(newStaffPage.getByText(/WAITER/)).toBeVisible();
+    await adminTeam.close();
     await manager.goto("/staff/games");
     const quarantinedUnit=manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),
