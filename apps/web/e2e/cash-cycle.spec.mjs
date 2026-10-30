@@ -378,6 +378,25 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await newStaffPage.getByRole("button",{name:"Masuk",exact:true}).click();
     await expect(newStaffPage).toHaveURL(/\/staff$/);
     await expect(newStaffPage.getByText(/WAITER/)).toBeVisible();
+    // Staff rotates their own password, invalidating the current bearer.
+    await newStaffPage.goto("/staff/account");
+    await expect(newStaffPage.getByRole("heading",{name:"Ganti kata sandi"})).toBeVisible();
+    await newStaffPage.getByLabel("Kata sandi saat ini").fill("e2e-Unique-Staff-Password-2026");
+    await newStaffPage.getByLabel("Kata sandi baru",{exact:true}).fill("e2e-Rotated-Staff-Password-2026!");
+    await newStaffPage.getByLabel("Ulangi kata sandi baru").fill("e2e-Rotated-Staff-Password-2026!");
+    await newStaffPage.getByRole("checkbox",{
+      name:/Saya paham semua sesi akan berakhir/,
+    }).check();
+    await newStaffPage.getByRole("button",{name:"Ganti kata sandi dan keluar"}).click();
+    await expect(newStaffPage).toHaveURL(/\/staff\/login\?status=password-changed/);
+    await newStaffPage.getByLabel("Nama pengguna").fill("e2e-new-waiter");
+    await newStaffPage.getByLabel("Kata sandi").fill("e2e-Unique-Staff-Password-2026");
+    await newStaffPage.getByRole("button",{name:"Masuk",exact:true}).click();
+    await expect(newStaffPage).toHaveURL(/\/staff\/login\?status=invalid/);
+    await newStaffPage.getByLabel("Nama pengguna").fill("e2e-new-waiter");
+    await newStaffPage.getByLabel("Kata sandi").fill("e2e-Rotated-Staff-Password-2026!");
+    await newStaffPage.getByRole("button",{name:"Masuk",exact:true}).click();
+    await expect(newStaffPage).toHaveURL(/\/staff$/);
     await adminTeam.close();
     await manager.goto("/staff/games");
     const quarantinedUnit=manager.locator("article").filter({
