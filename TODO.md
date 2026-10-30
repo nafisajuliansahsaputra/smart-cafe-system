@@ -347,3 +347,16 @@ invocation or existing destination is refused; the source is never
 overwritten. This is one CI rehearsal, **not** the completion of
 production backups, RPO/RTO, PITR, encrypted offsite retention,
 multi-hour soak, or payment reconciliation release gates.
+
+
+### M6 security baseline in CI (stacked draft PR #34)
+
+Added a separate fail-closed tracked-tree secret scanner with six
+self-tests and safe file/line-only findings. First-party browser
+source cannot add local/session token storage, raw HTML injection
+or dynamic eval without an explicit security review and removal.
+`npm audit --omit=dev --audit-level=high` now gates known
+high/critical production frontend advisories. Original seven
+integration/browser jobs remain; full Java dependency/SAST,
+historical secret scanning, runtime image scanning, real security
+incident drill and branch protection remain release blockers.
