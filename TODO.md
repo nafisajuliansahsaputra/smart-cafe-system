@@ -432,3 +432,7 @@ revocation, throttle and race tests plus isolated Chromium browser acceptance
 are proposed; verify exact-head CI before marking this increment accepted.
 **Still open:** enforced first-login rotation, password reset/recovery, secure
 credential distribution, MFA, operational account policy and production review.
+
+### M3 payment adapter and attempt persistence foundation (draft PR #44)
+
+Introduced typed PaymentGateway (QRIS/VA) and deterministic **non-payable** process-local fake adapter plus V24 digital payment attempt metadata with PostgreSQL foreign keys, scoped idempotency, one-pending-attempt constraint, matching method/amount and immutable financial identity. Java unit tests exercise invalid payloads, concurrency, idempotency, fake expiry and non-payable QR/VA; Testcontainers tests validate digital attempt constraints against synthetic QRIS and CASH intents. No gateway endpoint, frontend payment method, webhook, provider network, receipt, or payment PAID transition was activated. This does **not** close M3 and is not a production payment integration.

@@ -469,3 +469,9 @@ revoked auth: 401; wrong current: 403; invalid input: 400; reused: 409;
 rate limit: 429. On success, the Next.js server action at `/staff/account`
 clears the path-scoped HttpOnly cookie and redirects to login. This does not
 implement privileged password reset, first-login enforcement or MFA.
+
+## M3 sandbox adapter foundation (draft PR #44)
+
+`PaymentGateway` is a Java integration boundary for QRIS/VA: typed create request, deterministic sandbox attempt response, and provider status lookup. `SandboxFakePaymentGateway` is **not registered as a Spring Bean, has no HTTP API, holds no real funds, has no valid payable QR/VA and cannot update an order or intent**. Fake references start with `FAKE_`, and the explicit environment is `SANDBOX_FAKE_NOT_MONEY`. This is only a test foundation, **not** payment acceptance or a verified webhook.
+
+Flyway V24 creates `digital_payment_attempts`, storing foreign-key-linked payment intent, method QRIS/VA, provider key/reference, scoped idempotency key, exact integer IDR amount/currency, state and timestamps. DB constraints reject cash intents, mismatched method/amount, duplicate active attempts, reused payment idempotency keys, mutated financial identity, or terminal-state regression. No application path writes this table until next M3 increment, with a reviewed integration and verified callback/reconciliation design.
