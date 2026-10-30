@@ -29,7 +29,10 @@ export default async function StaffPage() {
           <h1>Ruang operasional</h1>
           <p className="staff-muted">Masuk sebagai {current.staff.login}. Peran: {current.staff.roles.join(", ") || "tidak ditetapkan"}.</p>
         </div>
-        <form action={logoutStaff}><button type="submit" className="staff-secondary">Keluar</button></form>
+        <div>
+          <Link className="staff-link-button" href="/staff/account">Ganti kata sandi</Link>
+          <form action={logoutStaff}><button type="submit" className="staff-secondary">Keluar</button></form>
+        </div>
       </header>
       {isManager && <section className="staff-panel">
         <h2>Manajemen staf</h2>
