@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { staffDirectory, staffIdentity, localTime } from "@/lib/staff-server";
-import { setStaffEnabled } from "./actions";
+import { createStaffAccount, setStaffEnabled } from "./actions";
 
 export const dynamic="force-dynamic";
 
 const messages:Record<string,string>={
   updated:"Status staf diperbarui. Sesi lama akun yang dinonaktifkan telah dicabut.",
+  created:"Akun baru dibuat NONAKTIF. Periksa data sebelum mengaktifkan akses.",
+  duplicate:"Nama pengguna sudah terdaftar. Pilih nama lain.",
   conflict:"Status akun berubah. Segarkan daftar sebelum mengulangi tindakan.",
   forbidden:"Perubahan ditolak. Akun manager dan admin dilindungi.",
   offline:"Server tidak dapat mengonfirmasi perubahan. Periksa status terbaru.",
@@ -43,6 +45,43 @@ export default async function TeamPage({searchParams}:{
     {!list.ok && <section className="staff-panel" role="alert">
       <h2>Daftar staf tidak dapat dimuat</h2>
       <p>Jangan mengasumsikan akun aktif atau nonaktif tanpa status dari server.</p>
+    </section>}
+
+    {identity.staff.roles.includes("ADMIN")&&<section className="staff-panel"
+      aria-labelledby="create-team-heading">
+      <h2 id="create-team-heading">Tambah akun staf</h2>
+      <p className="staff-muted">
+        Hanya admin yang dapat membuat staf. Akun baru selalu NONAKTIF sampai
+        diaktifkan secara terpisah. Jangan bagikan kata sandi melalui pesan publik.
+      </p>
+      <form action={createStaffAccount} className="staff-form">
+        <label htmlFor="new-staff-login">Nama pengguna baru</label>
+        <input id="new-staff-login" name="login" required minLength={3} maxLength={40}
+          pattern="[A-Za-z][A-Za-z0-9._-]{2,39}" autoComplete="off"
+          placeholder="contoh.waiter" />
+        <label htmlFor="new-staff-role">Peran awal</label>
+        <select id="new-staff-role" name="role" required defaultValue="WAITER">
+          <option value="WAITER">Waiter</option>
+          <option value="KITCHEN">Kitchen</option>
+          <option value="CASHIER">Cashier</option>
+        </select>
+        <label htmlFor="new-staff-password">Kata sandi awal (16–72 karakter ASCII)</label>
+        <input id="new-staff-password" type="password" name="password"
+          minLength={16} maxLength={72} required autoComplete="new-password"
+          aria-describedby="new-staff-secret-notice" />
+        <p id="new-staff-secret-notice" className="staff-muted">
+          Gunakan kata sandi unik. Sistem tidak akan menampilkannya kembali.
+          Reset kata sandi belum tersedia untuk pilot.
+        </p>
+        <label htmlFor="new-staff-reason">Alasan pembuatan akun</label>
+        <input id="new-staff-reason" name="reason" required minLength={5}
+          maxLength={300} placeholder="Contoh: staf baru shift pagi" />
+        <label className="staff-check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          Saya telah memverifikasi kebutuhan akun dan memahami bahwa akun belum aktif
+        </label>
+        <button type="submit" className="staff-primary">Buat akun nonaktif</button>
+      </form>
     </section>}
     {list.ok && <section className="staff-panel">
       <h2>Daftar akun</h2>
@@ -85,7 +124,8 @@ export default async function TeamPage({searchParams}:{
     </section>}
     <p className="staff-footnote">
       Menonaktifkan staf langsung mencabut sesi aktif, tetapi tidak menghapus transaksi,
-      log audit atau kepemilikan kunjungan. Tidak ada perubahan peran atau kata sandi di fitur ini.
+      log audit atau kepemilikan kunjungan. Admin dapat membuat akun nonaktif,
+      tetapi perubahan peran dan penggantian kata sandi belum tersedia.
       Konfirmasi status terbaru sebelum membuat perubahan berikutnya.
     </p>
   </main>;

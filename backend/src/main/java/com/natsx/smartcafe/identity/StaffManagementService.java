@@ -19,8 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StaffManagementService {
     private final JdbcTemplate jdbc;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwords;
 
-    public StaffManagementService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public StaffManagementService(JdbcTemplate jdbc,
+        org.springframework.security.crypto.password.PasswordEncoder passwords) {
+        this.jdbc=jdbc;
+        this.passwords=passwords;
+    }
 
     public record Entry(UUID id,String login,boolean enabled,List<String> roles,Instant createdAt) {}
     public record StaffPage(int page,boolean hasNext,List<Entry> items) {}
@@ -86,6 +91,63 @@ public class StaffManagementService {
                 jsonb_build_object('enabledBefore',?,'enabledAfter',?))
             """,actor.staffId(),enabled?"STAFF_ENABLED":"STAFF_DISABLED",
                 targetId,reason.strip(),correlationId,current.enabled(),enabled);
+    }
+
+
+    public record CreatedStaff(UUID id,String login,String role,boolean enabled) {}
+
+    /**
+     * ADMIN-only creation of ordinary staff, disabled pending separate approval.
+     * Do not return the secret or its BCrypt digest to the caller.
+     */
+    @Transactional
+    public CreatedStaff create(StaffPrincipal actor,String requestedLogin,
+                               String password,String role,String reason,String correlationId) {
+        if(!actor.roles().contains("ADMIN")) {
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Only an administrator may provision staff accounts");
+        }
+        if(requestedLogin==null||!requestedLogin.matches("[A-Za-z][A-Za-z0-9._-]{2,39}")) {
+            throw bad("Login must contain 3-40 permitted characters");
+        }
+        String login=requestedLogin.toLowerCase(java.util.Locale.ROOT);
+        if(!Set.of("WAITER","KITCHEN","CASHIER").contains(role)) {
+            throw bad("Only ordinary staff roles are supported for provisioning");
+        }
+        // BCrypt silently truncates input beyond 72 bytes. Constrain to printable
+        // ASCII until a full enrollment and password-recovery policy is approved.
+        if(password==null||password.length()<16||password.length()>72||
+           password.chars().anyMatch(c->c<33||c>126)) {
+            throw bad("Password must contain 16-72 printable ASCII characters");
+        }
+        if(reason==null||reason.strip().length()<5||reason.strip().length()>300||
+           reason.chars().anyMatch(c->c<32||c==127)) {
+            throw bad("Reason must contain 5-300 printable characters");
+        }
+        Long existing=jdbc.queryForObject(
+            "SELECT COUNT(*) FROM staff_users WHERE lower(login)=?",Long.class,login);
+        if(existing!=null&&existing>0) {
+            throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT","Login already exists");
+        }
+        UUID id=UUID.randomUUID();
+        int inserted=jdbc.update("""
+            INSERT INTO staff_users(id,login,password_hash,enabled)
+            VALUES (?,?,?,false) ON CONFLICT (login) DO NOTHING
+            """,id,login,passwords.encode(password));
+        if(inserted!=1) {
+            throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT","Login already exists");
+        }
+        jdbc.update("""
+            INSERT INTO staff_role_assignments(staff_user_id,role_key)
+            VALUES (?,?)
+            """,id,role);
+        jdbc.update("""
+            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                                   resource_id,reason,correlation_id,safe_before_after_diff)
+            VALUES ('STAFF',?,'STAFF_PROVISIONED','STAFF_USER',?,?,?,
+                jsonb_build_object('enabledAfter',false,'role',?))
+            """,actor.staffId(),id,reason.strip(),correlationId,role);
+        return new CreatedStaff(id,login,role,false);
     }
 
     private ApiFailureException bad(String message) {

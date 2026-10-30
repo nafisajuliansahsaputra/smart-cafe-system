@@ -25,6 +25,24 @@ public class StaffManagementController {
     public StaffManagementController(StaffManagementService management) {
         this.management=management;
     }
+    public record CreateStaff(
+        @NotBlank @Size(min=3,max=40) String login,
+        @NotBlank @Size(min=16,max=72) String password,
+        @NotBlank String role,
+        @NotBlank @Size(min=5,max=300) String reason) {}
+
+    @PostMapping
+    public ResponseEntity<ApiEnvelope<StaffManagementService.CreatedStaff>> create(
+        @Valid @RequestBody CreateStaff payload,
+        @AuthenticationPrincipal StaffPrincipal staff,
+        HttpServletRequest request) {
+        var created=management.create(staff,payload.login(),payload.password(),
+            payload.role(),payload.reason(),RequestIdFilter.get(request));
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(created,RequestIdFilter.get(request)));
+    }
+
     public record ChangeStatus(boolean enabled,boolean expectedEnabled,
                                @NotBlank @Size(min=5,max=300) String reason) {}
 
