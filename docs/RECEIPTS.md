@@ -41,6 +41,12 @@ Immutable receipt contains:
 
 Receipt must not be issued for PENDING/UNPAID. Served food with unpaid cash must not show a paid receipt. A provisional order summary is distinct from receipt.
 
+## 3a. In-session printable receipt (draft PR #38)
+
+The guest-owned and PAID-only `/visit/orders/[id]/receipt` page renders a full server-validated receipt with immutable line snapshots, quantities, unit prices, variants, issue time, receipt number and final IDR total. A client-only print button invokes the browser's native print dialog so the guest can print or choose **Save as PDF** without an external PDF service, persistent public link or new payment endpoint.
+
+Access requires the existing short-lived, visit-scoped HttpOnly guest session. Unknown, unpaid and foreign orders return 404; a missing/expired session redirects to guest entry; upstream errors never fabricate a receipt. No phone number, bearer token or remote analytics is included. Chromium acceptance on synthetic HTTP and HTTPS fixtures checks these deny paths and the paid print view. This capability does not include automated WhatsApp/SMS, payment gateway integration, tax breakdown not present in the receipt API, or post-visit token sharing. Keep public pilot blocked until provider and privacy approvals.
+
 ## 4. Channel strategy
 
 **MVP:** authenticated in-visit HTML receipt + print/download PDF/print stylesheet. The capability to share a safe short link can be added after review.
