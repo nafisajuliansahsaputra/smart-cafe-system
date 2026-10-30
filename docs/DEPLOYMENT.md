@@ -212,3 +212,8 @@ the other upstream service images (PostgreSQL and HTTPS edge),
 image origin/digest pinning, SBOM, container registry access,
 image signing, staged rollback and operator approval. This
 workflow does not publish Docker images or deploy an application.
+
+
+## M5 report read-model limits (draft PR #39)
+
+The daily CASH gross report is a read-only operational snapshot of finalized cash receipts and their item lines; no new tables, credentials, provider calls or background jobs. Queries use timestamp range predicates with WIB boundaries and at most ten top-item groups returned. For growth, assess receipt timestamp indexes with production-like synthetic volumes, measured query plans and reporting retention before public deployment. Daily gross is **not** the authoritative reconciliation of drawer, refunds or merchant settlement. Do not use this preview report for actual accounting.
