@@ -142,3 +142,7 @@ confirmation with the exact copy serial transitions IN_USE or
 RETURN_PENDING to RETURNED. The unit stays exclusively assigned
 through RETURN_PENDING and the table cannot close. No damage policy,
 fee, override or loss handling is introduced by this change.
+
+## M3 attempt schema guardrail (draft PR #44)
+
+V24 adds `digital_payment_attempts` for future QRIS/VA workflows. Only CREATED -> PENDING/FAILED/EXPIRED/CANCELLED and PENDING -> SUCCEEDED/FAILED/EXPIRED/CANCELLED are valid state changes; a terminal status cannot transition back to PENDING or SUCCEEDED. Only one unresolved attempt per payment intent may exist at a time. Late confirmed success after EXPIRED is not silently applied: the future event processor must record and reconcile it as an exception. No existing cash status or fulfillment path changes. There is no implemented digital checkout, callback or payment settlement in this increment.
