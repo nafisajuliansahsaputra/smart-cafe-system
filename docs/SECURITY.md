@@ -495,3 +495,7 @@ password login cannot survive a completed rotation. Browser secrets are
 submitted only through same-origin Next.js Server Actions; no password or
 token is placed in URLs, client storage or audit records. Initial-password
 rotation is not yet mandatory and privileged recovery/MFA remain release gates.
+
+## M3 fake gateway and attempt persistence boundary (draft PR #44)
+
+A deterministic process-local `SandboxFakePaymentGateway` exists solely for tests and later sandbox integration. It is deliberately neither dependency-injected into production nor exposed through HTTP, and its displayed markers are explicitly non-payable. Returning `PENDING` or a locally expired attempt cannot and does not mutate payment_intents, orders, kitchen tickets, or receipts. A fake reference or any fake result is **never authoritative evidence of money**. V24 adds PostgreSQL idempotency, one-unresolved-attempt uniqueness, immutable identity/amount snapshots, cash-method mismatch denial and terminal-state transition guards. Confirmed payment event verification, signature/merchant/environment matching, durable event dedupe and reconciliation remain mandatory before enabling digital checkout. No real provider secret, real bank/VA number or customer's financial data is present.
