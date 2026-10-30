@@ -21,12 +21,22 @@ public class CashCheckoutService {
     private final CartService carts;
     private final OutboxEvents outbox;
     private final VariantPricingService variants;
+    private final boolean sandboxDigitalCheckoutEnabled;
+    private final String paymentEnvironment;
     public CashCheckoutService(JdbcTemplate jdbc,CartService carts,OutboxEvents outbox,
-                               VariantPricingService variants) {
+                               VariantPricingService variants,
+                               @org.springframework.beans.factory.annotation.Value(
+                                   "${scs.payments.sandbox-digital-checkout-enabled:false}")
+                                   boolean sandboxDigitalCheckoutEnabled,
+                               @org.springframework.beans.factory.annotation.Value(
+                                   "${scs.payments.environment:disabled}")
+                                   String paymentEnvironment) {
         this.jdbc=jdbc;
         this.carts=carts;
         this.outbox=outbox;
         this.variants=variants;
+        this.sandboxDigitalCheckoutEnabled=sandboxDigitalCheckoutEnabled;
+        this.paymentEnvironment=paymentEnvironment;
     }
 
     public record Line(UUID menuItemId,int quantity,UUID variantOptionId,List<UUID> variantOptionIds) {
@@ -45,17 +55,35 @@ public class CashCheckoutService {
     public record Checkout(UUID id, String status, String paymentStatus, long totalIdr) {}
     private record MenuRow(UUID id, String name, long price) {}
 
+    // Legacy CASH checkout remains identical when paymentMethod is omitted.
     @Transactional
-    public Checkout checkout(GuestPrincipal guest, List<Line> lines, String key) {
-        return checkoutResolved(guest,lines,key,null);
+    public Checkout checkout(GuestPrincipal guest,List<Line> lines,String key) {
+        return checkout(guest,lines,key,null);
+    }
+
+    @Transactional
+    public Checkout checkout(GuestPrincipal guest,List<Line> lines,String key,
+                             String requestedPaymentMethod) {
+        String selected=validatePaymentMethod(requestedPaymentMethod);
+        return checkoutResolved(guest,lines,key,null,selected);
     }
 
     @Transactional
     public Checkout checkoutFromCart(GuestPrincipal guest,long expectedVersion,String key) {
+        return checkoutFromCart(guest,expectedVersion,key,null);
+    }
+
+    @Transactional
+    public Checkout checkoutFromCart(GuestPrincipal guest,long expectedVersion,String key,
+                                    String requestedPaymentMethod) {
+        String selected=validatePaymentMethod(requestedPaymentMethod);
         validateKey(key);
         if(expectedVersion<0)throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
             "Invalid cart version");
-        String hash=SecureToken.sha256("CART|"+expectedVersion);
+        // Preserve existing CASH key semantics, but bind QRIS/VA to the
+        // selected method so one key cannot silently change payment type.
+        String hash=SecureToken.sha256("CART|"+expectedVersion+
+            ("CASH".equals(selected)?"":"|SANDBOX|"+selected));
         // Lock first: a completed checkout must remain replayable after cart consumption.
         jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
             Object.class,guest.guestId()+":"+key);
@@ -74,9 +102,25 @@ public class CashCheckoutService {
             return new Checkout(found.id(),found.status(),found.payment(),found.total());
         }
         var lines=carts.lockForCheckout(guest,expectedVersion);
-        var result=checkoutResolved(guest,lines,key,hash);
+        var result=checkoutResolved(guest,lines,key,hash,selected);
         carts.consume(guest,expectedVersion);
         return result;
+    }
+
+    private String validatePaymentMethod(String requested) {
+        String method=requested==null?"CASH":requested;
+        if(!"CASH".equals(method)&&!"QRIS".equals(method)&&!"VA".equals(method)) {
+            throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Payment method must be CASH, QRIS or VA");
+        }
+        if(!"CASH".equals(method)&&
+           (!sandboxDigitalCheckoutEnabled||!"sandbox".equals(paymentEnvironment))) {
+            // Two independent controls protect default deployments: merely
+            // setting one value must not enable digital ordering.
+            throw failure(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Digital checkout is disabled outside explicit sandbox mode");
+        }
+        return method;
     }
 
     private void validateKey(String key) {
@@ -85,7 +129,7 @@ public class CashCheckoutService {
     }
 
     private Checkout checkoutResolved(GuestPrincipal guest,List<Line> lines,String key,
-                                      String overrideHash) {
+                                      String overrideHash,String selectedMethod) {
         validateKey(key);
         if (lines == null || lines.isEmpty() || lines.size()>30) {
             throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Cart must contain 1 to 30 items");
@@ -105,7 +149,9 @@ public class CashCheckoutService {
                     String.join(":",x.selectedOptionIds().stream()
                         .sorted(Comparator.comparing(UUID::toString))
                         .map(UUID::toString).toList()))).toList();
-        String hash = overrideHash!=null?overrideHash:SecureToken.sha256("CASH|" + String.join("|",canonical));
+        String hash = overrideHash!=null?overrideHash:
+            SecureToken.sha256(("CASH".equals(selectedMethod)?"CASH|":
+                "SANDBOX|"+selectedMethod+"|")+String.join("|",canonical));
         // Serializes concurrent submissions for the same guest/key BEFORE reading idempotency.
         jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class,
             guest.guestId()+":"+key);
@@ -168,7 +214,7 @@ public class CashCheckoutService {
             items.add(new PricedLine(item,line.quantity(),lineTotal,unitPrice,selection));
         }
         if(subtotal<=0) throw failure(HttpStatus.CONFLICT,"CONFLICT",
-            "Cash checkout requires a positive total");
+            "Checkout requires a positive total");
 
         UUID orderId=UUID.randomUUID();
         jdbc.update("""
@@ -202,14 +248,16 @@ public class CashCheckoutService {
         }
         jdbc.update("""
             INSERT INTO payment_intents(order_id,method_selected,amount_due_idr,aggregate_status)
-            VALUES (?,'CASH',?,'AWAITING_CASH')
-            """,orderId,subtotal);
+            VALUES (?,?,?,?)
+            """,orderId,selectedMethod,subtotal,
+            "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING");
         jdbc.update("""
             INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
             VALUES (?,'CASH_CHECKOUT',?,?,?,now()+interval '7 days')
             """,guest.guestId(),key,hash,orderId);
         outbox.order(orderId,"ORDER_SUBMITTED");
-        return new Checkout(orderId,"SUBMITTED","AWAITING_CASH",subtotal);
+        return new Checkout(orderId,"SUBMITTED",
+            "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING",subtotal);
     }
 
     private record Existing(UUID id,String hash,String status,long total,String payment) {}

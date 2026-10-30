@@ -114,6 +114,37 @@ class CashOrderFlowIntegrationTest {
                 "\",\"quantity\":" + quantity + "}]}")).andReturn().getResponse();
     }
 
+
+    @Test void qrisAndVaCheckoutAreDisabledInDefaultEnvironment() throws Exception {
+        var waiter=staff("WAITER");
+        var visit=open(waiter);
+        var guest=join(visit,"Synthetic Digital Deny");
+        var menuItem=item(18000);
+        for(String method:List.of("QRIS","VA")) {
+            var response=mvc.perform(post("/api/v1/orders")
+                .header("Authorization","Bearer "+guest.token())
+                .header("Idempotency-Key","blocked-"+method+"-"+UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paymentMethod\":\""+method+"\",\"lines\":[{"+
+                    "\"menuItemId\":\""+menuItem+"\",\"quantity\":1}]}"))
+                .andReturn().getResponse();
+            assertEquals(403,response.getStatus(),response.getContentAsString());
+        }
+        var unexpected=mvc.perform(post("/api/v1/orders")
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key","blocked-unknown-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"paymentMethod\":\"NOT_REAL\",\"lines\":[{"+
+                "\"menuItemId\":\""+menuItem+"\",\"quantity\":1}]}"))
+            .andReturn().getResponse();
+        assertEquals(400,unexpected.getStatus());
+        assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM orders WHERE guest_id=?",
+            Integer.class,guest.id()));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM order_stock_allocations WHERE menu_item_id=?
+            """,Integer.class,menuItem));
+    }
+
     @Test void completeCashFlowSeparatesApprovalServiceAndRealTender() throws Exception {
         String waiter=staff("WAITER"),cashier=staff("CASHIER"),kitchen=staff("KITCHEN");
         var visit=open(waiter);
