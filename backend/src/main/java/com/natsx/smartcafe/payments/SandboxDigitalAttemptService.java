@@ -118,6 +118,11 @@ public final class SandboxDigitalAttemptService {
         // This gateway cannot perform network I/O or create payable QR/VA.
         var created=gateway.create(new PaymentGateway.CreateRequest(
             orderId,intent.due(),method,key));
+        // PostgreSQL timestamptz persists microseconds, not nanoseconds.
+        // Normalize the first response to the exact database precision so
+        // an idempotent replay has byte-for-byte identical expiry semantics.
+        Instant persistedExpiry=created.expiresAt().truncatedTo(
+            java.time.temporal.ChronoUnit.MICROS);
         if(created.state()!=PaymentGateway.State.PENDING||
            created.providerReference()==null||
            !created.providerReference().matches("FAKE_[a-f0-9]{32}")||
@@ -132,9 +137,9 @@ public final class SandboxDigitalAttemptService {
             VALUES (?,?,?,'SANDBOX_FAKE',?,?,?,'IDR','PENDING',?,?)
             """,attemptId,intent.id(),method.name(),created.providerReference(),
             key,intent.due(),Timestamp.from(clock.instant()),
-            Timestamp.from(created.expiresAt()));
+            Timestamp.from(persistedExpiry));
         return new Attempt(attemptId,orderId,method.name(),intent.due(),
-            created.providerReference(),"PENDING",created.expiresAt(),
+            created.providerReference(),"PENDING",persistedExpiry,
             created.nonPayableDisplayHint(),SandboxFakePaymentGateway.ENVIRONMENT);
     }
 
