@@ -44,16 +44,24 @@ BEGIN
      NEW.currency IS DISTINCT FROM i.currency THEN
     RAISE EXCEPTION 'Digital attempt must match authorized payment intent' USING ERRCODE='23514';
   END IF;
-  IF TG_OP='UPDATE' AND (
-    OLD.payment_intent_id,OLD.method,OLD.provider_key,
-    OLD.provider_reference,OLD.idempotency_key,OLD.amount_idr,OLD.currency,
-    OLD.created_at,OLD.expires_at
-  ) IS DISTINCT FROM (
-    NEW.payment_intent_id,NEW.method,NEW.provider_key,
-    NEW.provider_reference,NEW.idempotency_key,NEW.amount_idr,NEW.currency,
-    NEW.created_at,NEW.expires_at
-  ) THEN
-    RAISE EXCEPTION 'Digital attempt identity and financial snapshot immutable' USING ERRCODE='23514';
+  IF TG_OP='UPDATE' THEN
+    IF (OLD.payment_intent_id,OLD.method,OLD.provider_key,
+        OLD.provider_reference,OLD.idempotency_key,OLD.amount_idr,OLD.currency,
+        OLD.created_at,OLD.expires_at)
+       IS DISTINCT FROM
+       (NEW.payment_intent_id,NEW.method,NEW.provider_key,
+        NEW.provider_reference,NEW.idempotency_key,NEW.amount_idr,NEW.currency,
+        NEW.created_at,NEW.expires_at) THEN
+      RAISE EXCEPTION 'Digital attempt identity and financial snapshot immutable'
+        USING ERRCODE='23514';
+    END IF;
+    IF OLD.state<>NEW.state AND NOT (
+       (OLD.state='CREATED' AND NEW.state IN ('PENDING','FAILED','EXPIRED','CANCELLED'))
+       OR (OLD.state='PENDING' AND NEW.state IN ('SUCCEEDED','FAILED','EXPIRED','CANCELLED'))
+    ) THEN
+      RAISE EXCEPTION 'Illegal digital payment attempt status transition'
+        USING ERRCODE='23514';
+    END IF;
   END IF;
   RETURN NEW;
 END;
