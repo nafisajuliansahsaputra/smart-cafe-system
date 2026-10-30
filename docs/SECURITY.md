@@ -338,3 +338,19 @@ manager incident access. URLs keep only pre-existing query and
 filter state; no raw report content or private audit references
 are inserted into a new link. Mobile tests do not connect to
 customer data or external cafe endpoints.
+
+
+## M6 CI-only backup/restore safety controls (draft PR #33)
+
+The restore rehearsal refuses to run without explicit `CI=true`
+and `SCS_RESTORE_TEST_ISOLATED=yes`, the exact known disposable DB
+name and three synthetic fixture signals; it never inserts fixture
+data itself and will not overwrite an existing target database.
+Its temporary PostgreSQL archive stays inside the disposable DB
+container and is deleted on exit. The only database DROP targets a
+verification DB this invocation created. Running the CI command
+outside isolated CI or against merchant records is prohibited.
+A real backup, even encrypted, is sensitive; production credentials,
+billing records and customer PII must never be copied into this test.
+The content hashes here are deterministic integrity smoke checks, supplemented by active CHECK/FK rejection tests in the restored database,
+not a substitute for authenticated encrypted backups.

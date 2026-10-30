@@ -105,6 +105,20 @@ jobs:
           grep -q 'Meja tidak ditemukan' /tmp/scs-unknown-table.html
           receipt_code=$(curl --silent --output /tmp/scs-denied-receipt.json --write-out '%{http_code}' http://127.0.0.1:8080/api/v1/me/orders/00000000-0000-0000-0000-000000000000/receipt)
           test "$receipt_code" = "401" -o "$receipt_code" = "403"
+      - name: Refuse unapproved restore rehearsal
+        run: |
+          if bash infra/verification/restore-rehearsal.sh; then
+            echo "Unsafe restore invocation unexpectedly accepted" >&2
+            exit 1
+          fi
+      - name: Seed isolated synthetic staff, game and audit evidence
+        run: |
+          docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/fixtures/e2e-browser.sql
+          docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/fixtures/restore-rehearsal.sql
+      - name: Rehearse PostgreSQL dump and verified separate-database restore
+        env:
+          SCS_RESTORE_TEST_ISOLATED: "yes"
+        run: bash infra/verification/restore-rehearsal.sh
       - name: Diagnose services if smoke test fails
         if: failure()
         run: docker compose logs --no-color --tail=150

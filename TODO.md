@@ -333,3 +333,17 @@ Chromium mobile tests verify responsive overflow, interactive
 target size, keyboard focus and evidence timeline semantics on
 HTTP and HTTPS. Still required: hands-on touch/zoom/assistive
 technology testing on real Android/iOS before a cafe field pilot.
+
+
+### M6 isolated PostgreSQL backup and restore proof (draft PR #33)
+
+The clean-start Docker CI job now exercises a **guarded** `pg_dump -Fc`
+and `pg_restore --exit-on-error` on a second, newly created DB with
+synthetic staff/game/audit data. Tests compare table counts, schema
+constraint identity/type/validation, index structure/partial filter values,
+restored CHECK/FK rejection, six representative content fingerprints,
+Flyway migrations and the audit actor-to-unit relationship. Unsafe
+invocation or existing destination is refused; the source is never
+overwritten. This is one CI rehearsal, **not** the completion of
+production backups, RPO/RTO, PITR, encrypted offsite retention,
+multi-hour soak, or payment reconciliation release gates.
