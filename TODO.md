@@ -436,3 +436,7 @@ credential distribution, MFA, operational account policy and production review.
 ### M3 payment adapter and attempt persistence foundation (draft PR #44)
 
 Introduced typed PaymentGateway (QRIS/VA) and deterministic **non-payable** process-local fake adapter plus V24 digital payment attempt metadata with PostgreSQL foreign keys, scoped idempotency, one-pending-attempt constraint, matching method/amount and immutable financial identity. Java unit tests exercise invalid payloads, concurrency, idempotency, fake expiry and non-payable QR/VA; Testcontainers tests validate digital attempt constraints against synthetic QRIS and CASH intents. No gateway endpoint, frontend payment method, webhook, provider network, receipt, or payment PAID transition was activated. This does **not** close M3 and is not a production payment integration.
+
+### M3 sandbox attempt coordination (draft stacked PR)
+
+Guest-scoped, transaction-locked, internal SandboxDigitalAttemptService now persists non-payable QRIS/VA fake attempts into Flyway V24 with stable idempotent replay and collision-safe single active attempt. It requires a synthetic pre-existing PENDING digital intent; public digital checkout is NOT implemented. Testcontainers checks guest isolation, bad key/method/cash/closed/paid denials, expired terminal retry, same-key concurrent replay, two-key race and no financial or fulfillment mutation. M3 remains open, pending CI and future digital checkout, authenticated payment notifications, external sandbox adapter and reconciliation.
