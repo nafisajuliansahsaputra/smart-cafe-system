@@ -413,3 +413,7 @@ A WIB daily cash gross report and top-ten item summary are implemented on a stac
 ### M5 staff account lifecycle (draft PR #40)
 
 Manager/admin read-only staff directory and safely audited enable/disable of ordinary staff (WAITER, CASHIER, KITCHEN, or no role) are implemented on a stacked branch. Disabling instantly invalidates existing sessions and revokes their tokens. Manager/admin targets and self-disablement are forbidden by the backend to avoid lockout; password reset, user creation, role assignment, privileged-account recovery and MFA remain unimplemented. Synthetic PostgreSQL/Chromium authorization and replay-conflict tests are included; not production-ready until exact-head CI passes.
+
+### M5: admin-only ordinary staff provisioning (draft PR #41)
+
+The ADMIN role can provision a **disabled** WAITER/KITCHEN/CASHIER with normalized login, BCrypt password and audit reason, without granting manager/admin roles. Enabling remains a separate audited step. Synthetic PostgreSQL tests cover 401/403, rejected escalated roles, weak password, duplicate/login case, disabled authentication, first activation and audit integrity; Chromium acceptance covers manager exclusion and admin creation/activation. This is a **partial** M5 increment, not a complete staff lifecycle: password reset/rotation, invitation delivery, operator recovery, MFA and authorization policy remain open. Await PR-head CI; no main merge, external secrets or production activity.
