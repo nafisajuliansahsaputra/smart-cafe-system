@@ -131,9 +131,14 @@ restore_counts="$(table_counts "$restore_db")"
 [[ "$source_counts" == "$restore_counts" ]] || {
   echo "FAIL: public table row counts differ after restore." >&2; exit 1;
 }
-[[ "$(schema_fingerprint "$source_db")" == "$(schema_fingerprint "$restore_db")" ]] || {
-  echo "FAIL: constraints or index definitions differ after restore." >&2; exit 1;
-}
+source_schema="$(schema_fingerprint "$source_db")"
+restored_schema="$(schema_fingerprint "$restore_db")"
+if [[ "$source_schema" != "$restored_schema" ]]; then
+  echo "FAIL: constraint/index metadata differs after restore. Synthetic CI diff:" >&2
+  diff -u <(printf '%s\n' "$source_schema") \
+          <(printf '%s\n' "$restored_schema") | head -100 >&2 || true
+  exit 1
+fi
 [[ "$(data_fingerprint "$source_db")" == "$(data_fingerprint "$restore_db")" ]] || {
   echo "FAIL: staff, game, menu, audit or Flyway content differs." >&2; exit 1;
 }
