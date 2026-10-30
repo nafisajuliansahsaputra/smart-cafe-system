@@ -30,3 +30,11 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
+
+# Digital checkout is intentionally disabled in all normal deployments.
+# Both environment=sandbox AND explicit sandbox-digital-checkout-enabled=true
+# are required to create QRIS/VA pending orders. No real payment adapter.
+scs:
+  payments:
+    sandbox-digital-checkout-enabled: ${SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED:false}
+    environment: ${SCS_PAYMENT_ENVIRONMENT:disabled}
