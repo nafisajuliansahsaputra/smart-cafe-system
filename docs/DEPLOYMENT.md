@@ -193,3 +193,22 @@ Do not apply this unreviewed Compose topology to public hosting.
 Image CVE scanning, supply-chain attestation, resource-pressure
 testing, DB rootless hardening and real operations recovery are
 still required before production.
+
+
+## 14. Built runtime image CVE scanning (draft PR #37)
+
+The PR image-security workflow `.github/workflows/container-images.yml`
+builds two local Docker images (Spring Boot API and Next.js web)
+from the production Dockerfile final stages and scans each with
+Trivy for OS and library HIGH/CRITICAL CVEs. Scanner outputs SARIF
+to GitHub Code Scanning; only package/CVE/fix metadata appears
+in CI summary. The pipeline fails for fixable high/critical items
+and on scanner errors, never silently assuming an unavailable
+advisory database means zero vulnerabilities. A weekly mainline
+scan is configured to catch newly published vendor advisories.
+
+Even passing results require review of any still-unfixed advisories,
+the other upstream service images (PostgreSQL and HTTPS edge),
+image origin/digest pinning, SBOM, container registry access,
+image signing, staged rollback and operator approval. This
+workflow does not publish Docker images or deploy an application.

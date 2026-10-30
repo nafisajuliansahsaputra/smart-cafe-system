@@ -443,3 +443,31 @@ to its temporary directory but **cannot** create a file under
 clean-start and two-replica CI jobs run these checks against real
 containers, while the remaining HTTP/HTTPS browser and Java tests
 exercise normal application behavior.
+
+
+## M6 runtime Docker image CVE triage and automated gate (stacked draft PR #37)
+
+A dedicated GitHub Actions workflow now **builds the actual API and
+web production runtime images** from their Dockerfiles on every PR,
+main-branch push and weekly schedule. Trivy v0.76.1 examines
+**OS + application-library** packages, reporting HIGH/CRITICAL
+advisories, including those from the base images and transitive
+runtime packages. Each image uploads SARIF to GitHub Code Scanning
+under its own runtime category; findings remain discoverable even
+when the pipeline fails.
+
+The checked-in `scripts/inspect-image-vulnerabilities.mjs`
+requires valid Trivy JSON and **fails CI** when HIGH/CRITICAL
+vulnerabilities have a published `FixedVersion`. Five synthetic
+tests assert both OS and library detections, report failures, and
+the treatment of still-unfixed advisories. Entries without a
+published fixed version **are not automatically waived**: they
+stay in SARIF and need manual exploitability, exposure, mitigation
+and acceptance review. Zero *fixable* findings is not proof
+of zero vulnerabilities or production deployment readiness.
+
+No registry push, public port exposure, credential provisioning,
+production image rebuild or production database operation is
+introduced. Build-stage dependencies, PostgreSQL/Nginx vendor
+images, base-image digest pinning, SBOM retention, signed
+provenance and supply-chain signing remain separate work.
