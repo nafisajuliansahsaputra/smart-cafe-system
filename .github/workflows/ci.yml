@@ -23,11 +23,6 @@ jobs:
         run: node --test scripts/security-preflight.test.mjs
       - name: Reject high-confidence exposed secrets in the tracked tree
         run: node scripts/security-preflight.mjs
-      - name: Produce reproducible patched lockfile for security remediation
-        working-directory: apps/web
-        run: |
-          npm install --package-lock-only --save-exact --ignore-scripts --no-audit --no-fund next@16.4.3
-          python3 -c 'import base64,pathlib; [(print("SCS_FILE_BEGIN:"+n),[(print("SCS_B64:"+base64.b64encode(pathlib.Path(n).read_bytes()).decode()[i:i+1000])) for i in range(0,len(base64.b64encode(pathlib.Path(n).read_bytes()).decode()),1000)],print("SCS_FILE_END:"+n)) for n in ["package.json","package-lock.json"]]'
       - name: Audit production JavaScript dependencies via npm advisory database
         working-directory: apps/web
         run: npm audit --omit=dev --audit-level=high --no-fund
