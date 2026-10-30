@@ -441,3 +441,10 @@ GAME_LOSS_CONFIRMED. Report/review notes remain manager-only within
 incident; no guest ID, contact, payment or unrestricted audit diff.
 401 unauthenticated/guest bearer, 403 waiter/cashier/kitchen,
 404 missing incident, 400 invalid UUID. Read-only, no side effects.
+
+
+## M5 managed staff status (draft PR #40)
+
+- GET /api/v1/admin/staff?page=0: MANAGER/ADMIN, returns {page,hasNext,items[{id,login,enabled,roles,createdAt}]} with no-store; limit 25, page cap 2000.
+- POST /api/v1/admin/staff/{id}/status: MANAGER/ADMIN, JSON {enabled,expectedEnabled,reason} where reason is 5-300 printable chars. Only non-manager/non-admin targets, never self. Transactions lock target row, enforce expected enabled state, revoke all live sessions on disable and write immutable staff audit. Replaying a state-change returns 409; disabled sessions remain revoked when later enabled.
+- Role assignment, account provisioning and privileged recovery are intentionally out of scope pending a separate security policy.

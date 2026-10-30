@@ -362,3 +362,39 @@ export async function dailyCashReport(date: string): Promise<LoadResult<DailyCas
   const data = dataFromEnvelope(response.payload);
   return isDailyCashReport(data) ? { ok: true, data } : { ok: false, status: 502 };
 }
+
+
+export type ManagedStaff = {
+  id: string;
+  login: string;
+  enabled: boolean;
+  roles: string[];
+  createdAt: string;
+};
+export type StaffDirectory = {
+  page: number;
+  hasNext: boolean;
+  items: ManagedStaff[];
+};
+
+export async function staffDirectory(page: number): Promise<LoadResult<StaffDirectory>> {
+  if (!Number.isSafeInteger(page) || page < 0 || page > 2000)
+    return { ok: false, status: 400 };
+  const token=await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const response=await staffApi("/api/v1/admin/staff?page="+page,"GET",token);
+  if (response.status!==200) return { ok: false, status: response.status };
+  const data=dataFromEnvelope(response.payload);
+  if (!record(data) || data.page!==page || typeof data.hasNext!=="boolean" ||
+    !Array.isArray(data.items) || data.items.length>25 ||
+    !data.items.every((item:unknown)=>record(item) &&
+      typeof item.id==="string" &&
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(item.id) &&
+      typeof item.login==="string" && typeof item.enabled==="boolean" &&
+      typeof item.createdAt==="string" &&
+      Array.isArray(item.roles) &&
+      item.roles.every((role:unknown)=>typeof role==="string"))) {
+    return {ok:false,status:502};
+  }
+  return {ok:true,data:data as StaffDirectory};
+}
