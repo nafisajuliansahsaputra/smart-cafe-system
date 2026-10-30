@@ -26,7 +26,8 @@ public class CashCheckoutController {
         this.checkout=checkout;
         this.details=details;
     }
-    public record OrderRequest(List<CashCheckoutService.Line> lines,Long cartVersion) {}
+    public record OrderRequest(List<CashCheckoutService.Line> lines,Long cartVersion,
+                               String paymentMethod) {}
 
     @PostMapping("/orders")
     public ResponseEntity<ApiEnvelope<CashCheckoutService.Checkout>> submit(
@@ -38,8 +39,8 @@ public class CashCheckoutController {
                 org.springframework.http.HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
                 "Provide either lines or cartVersion, not both");
         var result=body.cartVersion()==null
-            ?checkout.checkout(guest,body.lines(),key)
-            :checkout.checkoutFromCart(guest,body.cartVersion(),key);
+            ?checkout.checkout(guest,body.lines(),key,body.paymentMethod())
+            :checkout.checkoutFromCart(guest,body.cartVersion(),key,body.paymentMethod());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(result,RequestIdFilter.get(request)));
     }
