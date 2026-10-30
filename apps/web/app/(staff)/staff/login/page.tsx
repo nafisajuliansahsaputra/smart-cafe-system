@@ -10,6 +10,7 @@ const messages: Record<string, string> = {
   offline: "Layanan autentikasi belum tersedia. Coba lagi setelah API pulih.",
   expired: "Sesi sudah berakhir. Silakan login kembali.",
   "signed-out": "Sesi telah diakhiri dari perangkat ini.",
+  "password-changed": "Kata sandi berhasil diganti. Semua sesi lama dicabut. Login dengan kata sandi baru.",
   "revocation-unconfirmed":
     "Sesi di browser dihapus, tetapi pencabutan di server belum terkonfirmasi. Hubungi administrator bila perangkat tidak aman.",
 };
