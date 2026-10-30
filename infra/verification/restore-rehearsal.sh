@@ -95,7 +95,7 @@ schema_fingerprint() {
 -- text[] AST forms. Compare constraint identity/type/validation/keys; prove
 -- two critical CHECK/FK behaviors with actual rejected writes below.
 SELECT 'constraint|' || conrelid::regclass::text || '|' || conname ||
-       '|' || contype || '|' || convalidated || '|' ||
+       '|' || contype::text || '|' || convalidated::text || '|' ||
        coalesce(conkey::text,'') || '|' ||
        CASE WHEN contype='c' THEN 'CHECK_VALIDATED'
             ELSE pg_get_constraintdef(oid) END
