@@ -95,22 +95,22 @@ class SchemaIntegrationTest {
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
                 amount_idr,expires_at)
             VALUES (?,'VA','SANDBOX_FAKE',?,?,25000,now()+interval '15 minutes')
-            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-"),
-            "wrongmethod_"+UUID.randomUUID().toString().replace("-")));
+            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-",""),
+            "wrongmethod_"+UUID.randomUUID().toString().replace("-","")));
         assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
             INSERT INTO digital_payment_attempts(
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
                 amount_idr,expires_at)
             VALUES (?,'QRIS','SANDBOX_FAKE',?,?,25001,now()+interval '15 minutes')
-            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-"),
-            "wrongamount_"+UUID.randomUUID().toString().replace("-")));
+            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-",""),
+            "wrongamount_"+UUID.randomUUID().toString().replace("-","")));
         assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
             INSERT INTO digital_payment_attempts(
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
                 amount_idr,expires_at)
             VALUES (?,'QRIS','SANDBOX_FAKE',?,?,25000,now()+interval '15 minutes')
-            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-"),
-            "secondactive_"+UUID.randomUUID().toString().replace("-")));
+            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-",""),
+            "secondactive_"+UUID.randomUUID().toString().replace("-","")));
         assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
             UPDATE digital_payment_attempts SET amount_idr=26000
             WHERE payment_intent_id=?
@@ -138,8 +138,8 @@ class SchemaIntegrationTest {
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
                 amount_idr,expires_at)
             VALUES (?,'QRIS','SANDBOX_FAKE',?,?,25000,now()+interval '15 minutes')
-            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-"),
-            "retry_valid_"+UUID.randomUUID().toString().replace("-")));
+            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-",""),
+            "retry_valid_"+UUID.randomUUID().toString().replace("-","")));
     }
 
     @Test void fakeDigitalAttemptCannotAttachToCashIntent() {
@@ -168,8 +168,8 @@ class SchemaIntegrationTest {
                 payment_intent_id,method,provider_key,provider_reference,idempotency_key,
                 amount_idr,expires_at)
             VALUES (?,'QRIS','SANDBOX_FAKE',?,?,12000,now()+interval '15 minutes')
-            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-"),
-            "cash_reject_"+UUID.randomUUID().toString().replace("-")));
+            """,intent,"FAKE_"+UUID.randomUUID().toString().replace("-",""),
+            "cash_reject_"+UUID.randomUUID().toString().replace("-","")));
         assertEquals(0,jdbc.queryForObject("""
             SELECT count(*) FROM digital_payment_attempts WHERE payment_intent_id=?
             """,Integer.class,intent));
