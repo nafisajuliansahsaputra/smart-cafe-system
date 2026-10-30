@@ -352,5 +352,5 @@ verification DB this invocation created. Running the CI command
 outside isolated CI or against merchant records is prohibited.
 A real backup, even encrypted, is sensitive; production credentials,
 billing records and customer PII must never be copied into this test.
-The content hashes here are deterministic integrity smoke checks,
+The content hashes here are deterministic integrity smoke checks, supplemented by active CHECK/FK rejection tests in the restored database,
 not a substitute for authenticated encrypted backups.

@@ -382,9 +382,10 @@ disposable database. The script runs transactional `pg_dump -Fc`,
 confirms physical inventory TABLE DATA is present, restores into an
 absent destination DB and verifies:
 - all public table counts, including migration and audit tables;
-- all public PostgreSQL constraints and index definitions;
+- public constraint identity/type/validation and non-CHECK definitions, plus full index definitions;
 - deterministic content MD5 comparisons for staff, roles, copies,
   menu, audit events and the Flyway schema history;
+- rejection of invalid copy condition and orphaned game foreign key after restore;
 - integrity of the linked synthetic audit actor and serialized unit.
 
 The script removes only its own temporary archive and verification DB
