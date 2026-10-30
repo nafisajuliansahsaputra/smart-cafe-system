@@ -483,3 +483,15 @@ provenance and supply-chain signing remain separate work.
 ## M5: staff onboarding restrictions (draft PR #41)
 
 Only ADMIN may provision disabled WAITER/KITCHEN/CASHIER accounts. Managers may view and change enabled status of ordinary staff but cannot create new identities. This authority is validated by the backend service, not merely by hiding a form. Credentials use BCrypt and an ASCII byte limit to avoid bcrypt truncation. New users start disabled with no sessions and require a separate audited enable action; the plaintext password and digest are absent from JSON responses, log statements, audit diffs and redirects. Duplicate normalized login cannot overwrite an existing user. **This is development-only onboarding:** secure invitation or credential handoff, first-login password rotation, MFA, reset and privileged recovery require a separately approved policy before pilot.
+
+## Staff password self-rotation (draft PR #42)
+
+Self-service password changes require a valid staff bearer plus the existing
+password. They enforce the same BCrypt-safe printable-ASCII 16–72 character
+policy as provisioning, persistent per-account failed-current throttling and
+single-transaction password update, all-session revocation and secret-free
+audit. Login and rotation serialize on the staff row so a concurrent old
+password login cannot survive a completed rotation. Browser secrets are
+submitted only through same-origin Next.js Server Actions; no password or
+token is placed in URLs, client storage or audit records. Initial-password
+rotation is not yet mandatory and privileged recovery/MFA remain release gates.

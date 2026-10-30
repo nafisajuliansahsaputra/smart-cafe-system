@@ -417,3 +417,18 @@ Manager/admin read-only staff directory and safely audited enable/disable of ord
 ### M5: admin-only ordinary staff provisioning (draft PR #41)
 
 The ADMIN role can provision a **disabled** WAITER/KITCHEN/CASHIER with normalized login, BCrypt password and audit reason, without granting manager/admin roles. Enabling remains a separate audited step. Synthetic PostgreSQL tests cover 401/403, rejected escalated roles, weak password, duplicate/login case, disabled authentication, first activation and audit integrity; Chromium acceptance covers manager exclusion and admin creation/activation. This is a **partial** M5 increment, not a complete staff lifecycle: password reset/rotation, invitation delivery, operator recovery, MFA and authorization policy remain open. Await PR-head CI; no main merge, external secrets or production activity.
+
+### M5: staff self-service password rotation (stacked draft PR #42)
+
+Authenticated WAITER/KITCHEN/CASHIER/MANAGER/ADMIN can replace their own
+password after verifying the current password. The new password follows the
+16–72 printable-ASCII BCrypt-safe policy. V23 persists a five-failure/15-minute
+per-account throttle; successful rotation atomically updates the password,
+revokes **all** staff sessions and records a secret-free audit event. Login
+serializes on the staff row to prevent an in-flight old-password login from
+creating a surviving token. The protected /staff/account browser form clears
+the HttpOnly cookie on success and requires a fresh login. PostgreSQL negative,
+revocation, throttle and race tests plus isolated Chromium browser acceptance
+are proposed; verify exact-head CI before marking this increment accepted.
+**Still open:** enforced first-login rotation, password reset/recovery, secure
+credential distribution, MFA, operational account policy and production review.

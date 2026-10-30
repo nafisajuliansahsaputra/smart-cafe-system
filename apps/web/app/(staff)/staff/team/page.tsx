@@ -125,7 +125,7 @@ export default async function TeamPage({searchParams}:{
     <p className="staff-footnote">
       Menonaktifkan staf langsung mencabut sesi aktif, tetapi tidak menghapus transaksi,
       log audit atau kepemilikan kunjungan. Admin dapat membuat akun nonaktif,
-      tetapi perubahan peran dan penggantian kata sandi belum tersedia.
+      tetapi perubahan peran dan reset kata sandi oleh admin belum tersedia. Staf dapat mengganti kata sandi sendiri dari ruang operasional.
       Konfirmasi status terbaru sebelum membuat perubahan berikutnya.
     </p>
   </main>;

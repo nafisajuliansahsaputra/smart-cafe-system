@@ -61,7 +61,7 @@ public class StaffAuthService {
         }
 
         List<StaffRow> users = jdbc.query(
-            "SELECT id, login, password_hash, enabled FROM staff_users WHERE lower(login)=?",
+            "SELECT id, login, password_hash, enabled FROM staff_users WHERE lower(login)=? FOR UPDATE",
             (rs, row) -> new StaffRow(rs.getObject("id", UUID.class), rs.getString("login"),
                 rs.getString("password_hash"), rs.getBoolean("enabled")),
             login);

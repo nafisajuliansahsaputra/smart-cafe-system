@@ -452,3 +452,20 @@ incident; no guest ID, contact, payment or unrestricted audit diff.
 ## M5: admin-provisioned ordinary staff (draft PR #41)
 
 `POST /api/v1/admin/staff` accepts `{login,password,role,reason}` **only with an existing ADMIN role**. Login is 3–40 ASCII letters, digits, dot, dash or underscore (must start with a letter) and is normalized to lowercase. The initial password must be 16–72 printable ASCII characters to avoid BCrypt silent truncation. It is hashed server-side and never returned. Only WAITER, KITCHEN and CASHIER may be created; manager/admin creation and privilege assignment are not implemented. An explicit 5–300 printable-character reason is mandatory. New accounts default `enabled=false` and cannot authenticate until separately enabled via the audited staff-status endpoint. Successful response: 201 with `{id,login,role,enabled:false}`, no-store. Duplicate canonical login: 409, malformed input/role: 400, non-admin: 403. Password rotation, recovery, secure credential distribution and privileged-account enrollment are not implemented.
+
+## M5: self-service staff password rotation (stacked draft PR #42)
+
+POST `/api/v1/staff/auth/password/change` requires a currently valid staff
+Bearer token (WAITER, KITCHEN, CASHIER, MANAGER or ADMIN) and JSON
+`{currentPassword:string,newPassword:string}`. New passwords must be 16–72
+printable ASCII characters without whitespace, different from the existing
+password. The server checks the current password under a staff row lock,
+rate-limits wrong current-password attempts at five per 15 minutes using
+persistent V23 counters, then atomically updates the BCrypt hash, revokes
+**every** staff session and appends `STAFF_PASSWORD_CHANGED` audit evidence
+without passwords or hashes. Success: 200 no-store
+`ApiEnvelope.data="PASSWORD_CHANGED_SESSIONS_REVOKED"`. Missing/expired/
+revoked auth: 401; wrong current: 403; invalid input: 400; reused: 409;
+rate limit: 429. On success, the Next.js server action at `/staff/account`
+clears the path-scoped HttpOnly cookie and redirects to login. This does not
+implement privileged password reset, first-login enforcement or MFA.

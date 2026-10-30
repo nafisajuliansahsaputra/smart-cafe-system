@@ -43,7 +43,8 @@ public class SecurityConfiguration {
                     "/api/v1/menu/*/variants", "/api/v1/menu/*/variant-groups").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/orders").hasAuthority("GUEST")
                 .requestMatchers("/api/v1/me/**").hasAuthority("GUEST")
-                .requestMatchers("/api/v1/staff/auth/me", "/api/v1/staff/auth/logout")
+                .requestMatchers("/api/v1/staff/auth/me", "/api/v1/staff/auth/logout",
+                    "/api/v1/staff/auth/password/change")
                     .hasAnyRole("WAITER", "CASHIER", "KITCHEN", "MANAGER", "ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/v1/ops/payments/*/cash-tenders")
                     .hasAnyRole("WAITER", "CASHIER", "MANAGER", "ADMIN")
