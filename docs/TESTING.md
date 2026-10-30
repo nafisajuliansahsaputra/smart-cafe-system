@@ -430,3 +430,20 @@ Review the workflow conclusions **and Code Scanning alerts** before
 sign-off. Passing CodeQL means analysis and SARIF upload succeeded,
 not that zero findings exist. Existing eight CI jobs stay unchanged.
 No production database, keys or payment integrations are accessed.
+
+
+## M6 runtime Docker sandbox acceptance (draft PR #36)
+
+The clean-start Docker Compose CI job now calls
+`bash scripts/verify-container-sandbox.sh api` and
+`bash scripts/verify-container-sandbox.sh web`. The two-replica
+live catch-up job independently checks both `api` and
+`api_replica`. These are **effective container checks**, using
+`docker inspect` and an unprivileged `docker compose exec`
+runtime probe for no writable `/app` file and valid, volatile
+temporary writes. They assert read-only root, `CapDrop=ALL`,
+no-new-privileges, `PidsLimit=512`, nonroot image user, bounded
+tmpfs `/tmp` and writable Next.js cache mount. Existing backend,
+stock, live-event, browser HTTP/HTTPS, and PostgreSQL backup/restore
+CI jobs remain unchanged and must pass on the new image profile.
+CI is not a memory exhaustion or persistent-cache correctness test.
