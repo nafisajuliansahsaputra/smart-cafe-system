@@ -371,3 +371,23 @@ and no overflow around long audit IDs, before resuming desktop
 operations. Runs on both HTTP and trusted HTTPS proxy jobs.
 No production or device-specific behavior is inferred from a
 headless Chromium-only result; physical phone testing remains needed.
+
+
+## M6 PostgreSQL isolated restore acceptance (draft PR #33)
+
+The existing clean-start GitHub Actions job first confirms the restore
+script **refuses missing opt-in**. It then loads synthetic E2E staff,
+serialized UNO, menu, table and a known manager audit event into its
+disposable database. The script runs transactional `pg_dump -Fc`,
+confirms physical inventory TABLE DATA is present, restores into an
+absent destination DB and verifies:
+- all public table counts, including migration and audit tables;
+- all public PostgreSQL constraints and index definitions;
+- deterministic content MD5 comparisons for staff, roles, copies,
+  menu, audit events and the Flyway schema history;
+- integrity of the linked synthetic audit actor and serialized unit.
+
+The script removes only its own temporary archive and verification DB
+under an EXIT trap; normal CI destroys the entire disposable Compose
+environment afterward. No production database or external payment
+account is involved. This does not establish backup schedules or RPO/RTO.

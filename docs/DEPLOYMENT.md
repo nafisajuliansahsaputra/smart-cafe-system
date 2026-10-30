@@ -110,3 +110,32 @@ Without these, market the project as an engineering demo using sandbox data, not
 ## 9. Local-only HTTPS edge acceptance (draft PR #10)
 
 The repository now contains an **opt-in, loopback-only** HTTPS Nginx Compose overlay for CI/browser security verification: [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](M2-HTTPS-EDGE-ACCEPTANCE.md). It validates the trusted-Host, forwarded-header and POST rate-limit boundary on a disposable `https://localhost:8443` using a self-signed cert. This is **not** a production-ready reverse proxy. A public deployment would require owned DNS, trusted certificate issuance/renewal, real upstream proxy/CDN trust and rate limiting, CSP/HSTS, backups and authenticated staging sign-off. Nothing is deployed by this PR.
+
+
+## 10. Gated PostgreSQL backup and restore rehearsal (stacked draft PR #33)
+
+The clean-start Docker CI job now seeds a **disposable, synthetic**
+staff/game/menu/audit fixture and performs a real PostgreSQL custom
+archive `pg_dump -Fc` while the API is online. It verifies the dump
+contains physical inventory data, creates a **new separate** PostgreSQL
+database, restores using `pg_restore --exit-on-error`, then checks
+all public-table counts, index and constraint definitions, selected
+deterministic content fingerprints for staff, roles, game copies,
+menu items, audit records and Flyway migration history. It separately
+verifies the synthetic manager audit event still links to the correct
+physical game unit and actor.
+
+`infra/verification/restore-rehearsal.sh` is explicitly gated:
+`CI=true`, `SCS_RESTORE_TEST_ISOLATED=yes`, original DB name exactly
+`smart_cafe` and recognized disposable fixtures are all required.
+It **refuses an existing destination DB**, never drops the source
+and removes only the temporary dump and the destination database it
+created. The synthetic fixture is inserted by CI independently,
+*after* smoke tests pass, never by the backup/restore script itself.
+
+This is a **single controlled CI restore rehearsal**, not an approved
+production backup solution. Outstanding pilot gates: encrypted offsite
+storage, access-controlled backup retention, staging restore on
+production-like hosting, PITR/WAL planning, measured recovery time and
+data loss windows, incident response, and real payment reconciliation.
+Never apply the disposable E2E fixtures to a real cafe database.
