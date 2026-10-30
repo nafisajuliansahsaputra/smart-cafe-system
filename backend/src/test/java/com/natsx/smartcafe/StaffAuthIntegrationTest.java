@@ -284,6 +284,107 @@ class StaffAuthIntegrationTest {
         assertFalse(me.getContentAsString().contains("ADMIN"));
     }
 
+
+    @Test void staffPasswordRotationInvalidatesEveryExistingSession() throws Exception {
+        var member=staff("WAITER");
+        String first=loginToken(member),second=loginToken(member);
+        String oldPassword="safe-test-password-123";
+        String newPassword="new-unique-password-2026!";
+        String path="/api/v1/staff/auth/change-password";
+        String wrong="{\"currentPassword\":\"wrong-current-password\",\"newPassword\":\""+newPassword+"\"}";
+        String change="{\"currentPassword\":\""+oldPassword+"\",\"newPassword\":\""+newPassword+"\"}";
+        assertEquals(401,mvc.perform(post(path)
+            .contentType(MediaType.APPLICATION_JSON).content(change))
+            .andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(post(path)
+            .header("Authorization","Bearer "+"a".repeat(43))
+            .contentType(MediaType.APPLICATION_JSON).content(change))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(post(path)
+            .header("Authorization","Bearer "+first).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"currentPassword\":\""+oldPassword+"\",\"newPassword\":\"short\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post(path)
+            .header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"currentPassword\":\""+oldPassword+"\",\"newPassword\":\""+oldPassword+"\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(post(path)
+            .header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON).content(wrong))
+            .andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+first)).andReturn().getResponse().getStatus());
+        var changed=mvc.perform(post(path)
+            .header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON).content(change))
+            .andReturn().getResponse();
+        assertEquals(200,changed.getStatus(),changed.getContentAsString());
+        assertTrue(changed.getHeader("Cache-Control").contains("no-store"));
+        assertFalse(changed.getContentAsString().contains(newPassword));
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+first)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+second)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(post(path)
+            .header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON).content(change))
+            .andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(member.login(),oldPassword)))
+            .andReturn().getResponse().getStatus());
+        var renewed=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(member.login(),newPassword)))
+            .andReturn().getResponse();
+        assertEquals(200,renewed.getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_id=? AND operation='STAFF_PASSWORD_CHANGED'
+            """,Integer.class,member.id()));
+        var audit=jdbc.queryForObject("""
+            SELECT safe_before_after_diff::text FROM audit_logs
+            WHERE resource_id=? AND operation='STAFF_PASSWORD_CHANGED'
+            """,String.class,member.id());
+        assertFalse(audit.contains(oldPassword));
+        assertFalse(audit.contains(newPassword));
+    }
+
+    @Test void wrongCurrentPasswordsThrottleAcrossSessions() throws Exception {
+        var person=staff("KITCHEN");
+        String one=loginToken(person),other=loginToken(person);
+        String path="/api/v1/staff/auth/change-password";
+        String wrong="{\"currentPassword\":\"wrong-old-password\",\"newPassword\":\""+
+            "brand-new-password-2026!\"}";
+        for(int i=0;i<4;i++) {
+            assertEquals(401,mvc.perform(post(path)
+                .header("Authorization","Bearer "+(i%2==0?one:other))
+                .contentType(MediaType.APPLICATION_JSON).content(wrong))
+                .andReturn().getResponse().getStatus());
+        }
+        assertEquals(429,mvc.perform(post(path)
+            .header("Authorization","Bearer "+one)
+            .contentType(MediaType.APPLICATION_JSON).content(wrong))
+            .andReturn().getResponse().getStatus());
+        String correct="{\"currentPassword\":\"safe-test-password-123\",\"newPassword\":\""+
+            "brand-new-password-2026!\"}";
+        assertEquals(429,mvc.perform(post(path)
+            .header("Authorization","Bearer "+other)
+            .contentType(MediaType.APPLICATION_JSON).content(correct))
+            .andReturn().getResponse().getStatus());
+        assertEquals(5,jdbc.queryForObject("""
+            SELECT failed_attempts FROM staff_password_change_throttles
+            WHERE staff_user_id=?
+            """,Integer.class,person.id()));
+        assertEquals(200,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+one)).andReturn().getResponse().getStatus());
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_id=? AND operation='STAFF_PASSWORD_CHANGED'
+            """,Integer.class,person.id()));
+    }
+
     @Test void unauthenticatedAndUnknownBearerAreRejected() throws Exception {
         assertEquals(401, mvc.perform(get("/api/v1/staff/auth/me"))
             .andReturn().getResponse().getStatus());
