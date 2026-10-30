@@ -408,3 +408,8 @@ A guest-scoped PAID receipt HTML detail and browser print/Save as PDF action are
 ### M5: first daily cash report (draft PR #39)
 
 A WIB daily cash gross report and top-ten item summary are implemented on a stacked development branch with a role-protected /staff/reports screen for cashiers/managers/admins. The source is finalized immutable CASH receipts, not unpaid orders. Date validation, no-store, access denial and synthetic PostgreSQL/Chromium coverage are added. This is **partial** daily operations reporting: no bank/drawer reconciliation, QRIS/VA, refunds, reporting exports, receipt messaging or production pilot. Await exact-head CI; keep the original M5 checkbox open until complete.
+
+
+### M5 staff account lifecycle (draft PR #40)
+
+Manager/admin read-only staff directory and safely audited enable/disable of ordinary staff (WAITER, CASHIER, KITCHEN, or no role) are implemented on a stacked branch. Disabling instantly invalidates existing sessions and revokes their tokens. Manager/admin targets and self-disablement are forbidden by the backend to avoid lockout; password reset, user creation, role assignment, privileged-account recovery and MFA remain unimplemented. Synthetic PostgreSQL/Chromium authorization and replay-conflict tests are included; not production-ready until exact-head CI passes.

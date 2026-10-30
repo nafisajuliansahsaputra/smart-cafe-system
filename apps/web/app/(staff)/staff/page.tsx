@@ -31,6 +31,11 @@ export default async function StaffPage() {
         </div>
         <form action={logoutStaff}><button type="submit" className="staff-secondary">Keluar</button></form>
       </header>
+      {isManager && <section className="staff-panel">
+        <h2>Manajemen staf</h2>
+        <p>Lihat akun, nonaktifkan akses staf biasa dan lihat perubahan lewat audit. Akun admin/manager dilindungi.</p>
+        <Link className="staff-link-button" href="/staff/team">Kelola staf</Link>
+      </section>}
       {isManager && <section className="staff-panel" aria-labelledby="manager-loss-alert-title">
         <h2 id="manager-loss-alert-title">Pemeriksaan laporan kehilangan</h2>
         <p className="staff-muted">

@@ -331,6 +331,16 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       name:"Pemeriksaan laporan kehilangan",
     })).toHaveCount(0);
     await waiterHome.close();
+    // Staff directory is available to a manager, never to a cashier.
+    const teamTab=await manager.context().newPage();
+    await teamTab.goto("/staff/team");
+    await expect(teamTab.getByRole("heading",{name:"Manajemen staf"})).toBeVisible();
+    await expect(teamTab.getByText("e2e-waiter",{exact:true})).toBeVisible();
+    const cashierTeam=await cashier.context().newPage();
+    const deniedTeam=await cashierTeam.goto("/staff/team");
+    expect(deniedTeam?.status()).toBe(404);
+    await cashierTeam.close();
+    await teamTab.close();
     await manager.goto("/staff/games");
     const quarantinedUnit=manager.locator("article").filter({
       has: manager.getByRole("heading", { name: "UNO Demo · UNO-E2E-001" }),

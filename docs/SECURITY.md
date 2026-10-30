@@ -471,3 +471,11 @@ production image rebuild or production database operation is
 introduced. Build-stage dependencies, PostgreSQL/Nginx vendor
 images, base-image digest pinning, SBOM retention, signed
 provenance and supply-chain signing remain separate work.
+
+
+## M5 staff access management increment (draft PR #40)
+
+- GET /api/v1/admin/staff?page=N: manager/admin authorization, paginated at 25, no-store and no credential, phone, session or password data.
+- POST /api/v1/admin/staff/{id}/status: reason-required optimistic before-state validation under row lock. Only ordinary non-privileged staff may be enabled/disabled. Neither manager nor admin can disable a manager/admin or self through this screen, preventing accidental privileged lockout. Invalid/replayed/stale transitions fail without audit duplication.
+- Disable changes enabled to false, revokes all currently active sessions and writes an append-only audit operation with actor, resource, reason and state-only diff. Re-enable never unrevokes old tokens; fresh authentication is required.
+- Backend denial and state tests, Chromium permission checks. Does not provision new staff, assign roles, handle password recovery or establish production MFA. Never use for public live operations before owner review.

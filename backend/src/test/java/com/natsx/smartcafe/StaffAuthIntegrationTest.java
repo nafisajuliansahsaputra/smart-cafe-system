@@ -113,6 +113,92 @@ class StaffAuthIntegrationTest {
             .content(loginJson(cashier.login(), "safe-test-password-123"))).andReturn().getResponse().getStatus());
     }
 
+
+    @Test void managerStaffDirectoryAndRevocableStatusChanges() throws Exception {
+        var manager=staff("MANAGER");
+        var admin=staff("ADMIN");
+        var cashier=staff("CASHIER");
+        var waiter=staff("WAITER");
+        String managerToken=loginToken(manager);
+        String adminToken=loginToken(admin);
+        String cashierToken=loginToken(cashier);
+        String waiterToken=loginToken(waiter);
+        var directory=mvc.perform(get("/api/v1/admin/staff?page=0")
+            .header("Authorization","Bearer "+managerToken)).andReturn().getResponse();
+        assertEquals(200,directory.getStatus());
+        assertTrue(directory.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(directory.getContentAsString().contains(waiter.login()));
+        assertFalse(directory.getContentAsString().contains("password_hash"));
+        assertFalse(directory.getContentAsString().contains("token_hash"));
+        assertFalse(directory.getContentAsString().contains("safe-test-password"));
+        assertEquals(401,mvc.perform(get("/api/v1/admin/staff"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+cashierToken))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(get("/api/v1/admin/staff?page=2001")
+            .header("Authorization","Bearer "+managerToken))
+            .andReturn().getResponse().getStatus());
+
+        String disable="{\"enabled\":false,\"expectedEnabled\":true,\"reason\":\"End of shift\"}";
+        String enable="{\"enabled\":true,\"expectedEnabled\":false,\"reason\":\"Access reapproved\"}";
+        String path="/api/v1/admin/staff/"+waiter.id()+"/status";
+        assertEquals(403,mvc.perform(post(path)
+            .header("Authorization","Bearer "+cashierToken)
+            .contentType(MediaType.APPLICATION_JSON).content(disable))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(post(path)
+            .header("Authorization","Bearer "+managerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"enabled\":false,\"expectedEnabled\":true,\"reason\":\"No\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post(path)
+            .header("Authorization","Bearer "+managerToken)
+            .contentType(MediaType.APPLICATION_JSON).content(disable))
+            .andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+waiterToken)).andReturn().getResponse().getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM staff_sessions WHERE staff_user_id=? AND revoked_at IS NOT NULL
+            """,Integer.class,waiter.id()));
+        assertEquals(409,mvc.perform(post(path)
+            .header("Authorization","Bearer "+managerToken)
+            .contentType(MediaType.APPLICATION_JSON).content(disable))
+            .andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post(path)
+            .header("Authorization","Bearer "+adminToken)
+            .contentType(MediaType.APPLICATION_JSON).content(enable))
+            .andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+waiterToken)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(waiter.login(),"safe-test-password-123")))
+            .andReturn().getResponse().getStatus());
+        for(var privileged : new SyntheticStaff[]{admin,manager}) {
+            assertEquals(403,mvc.perform(post("/api/v1/admin/staff/"+privileged.id()+"/status")
+                .header("Authorization","Bearer "+adminToken)
+                .contentType(MediaType.APPLICATION_JSON).content(disable))
+                .andReturn().getResponse().getStatus());
+        }
+        assertEquals(404,mvc.perform(post("/api/v1/admin/staff/"+UUID.randomUUID()+"/status")
+            .header("Authorization","Bearer "+managerToken)
+            .contentType(MediaType.APPLICATION_JSON).content(disable))
+            .andReturn().getResponse().getStatus());
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE resource_type='STAFF_USER' AND resource_id=?
+            """,Integer.class,waiter.id()));
+    }
+
+    private String loginToken(SyntheticStaff person) throws Exception {
+        var r=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(person.login(),"safe-test-password-123")))
+            .andReturn().getResponse();
+        assertEquals(200,r.getStatus(),r.getContentAsString());
+        return token(r.getContentAsString());
+    }
+
     @Test void unauthenticatedAndUnknownBearerAreRejected() throws Exception {
         assertEquals(401, mvc.perform(get("/api/v1/staff/auth/me"))
             .andReturn().getResponse().getStatus());
