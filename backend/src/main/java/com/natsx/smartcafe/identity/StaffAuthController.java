@@ -24,8 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/staff/auth")
 public class StaffAuthController {
     private final StaffAuthService service;
+    private final StaffPasswordChangeService passwordChanges;
 
-    public StaffAuthController(StaffAuthService service) { this.service = service; }
+    public StaffAuthController(StaffAuthService service,
+                               StaffPasswordChangeService passwordChanges) {
+        this.service=service;
+        this.passwordChanges=passwordChanges;
+    }
 
     public record LoginRequest(@NotBlank @Size(max=120) String login,
                                @NotBlank @Size(min=8,max=128) String password) {}
@@ -53,6 +58,37 @@ public class StaffAuthController {
                                     HttpServletRequest request) {
         return ApiEnvelope.of(new StaffData(principal.staffId(), principal.login(), principal.roles()),
             RequestIdFilter.get(request));
+    }
+
+    public record PasswordChangeRequest(
+        @NotBlank @Size(max=128) String currentPassword,
+        @NotBlank @Size(min=16,max=72) String newPassword) {}
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiEnvelope<String>> changePassword(
+        @AuthenticationPrincipal StaffPrincipal principal,
+        @Valid @RequestBody PasswordChangeRequest payload,
+        HttpServletRequest request) {
+        if(payload.newPassword().chars().anyMatch(c->c<33||c>126)) {
+            throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "New password must contain 16-72 printable ASCII characters");
+        }
+        var result=passwordChanges.change(principal,payload.currentPassword(),
+            payload.newPassword(),RequestIdFilter.get(request));
+        if(result==StaffPasswordChangeService.Result.INVALID_CREDENTIALS) {
+            throw new ApiFailureException(HttpStatus.UNAUTHORIZED,"UNAUTHENTICATED",
+                "Current password is incorrect");
+        }
+        if(result==StaffPasswordChangeService.Result.RATE_LIMITED) {
+            throw new ApiFailureException(HttpStatus.TOO_MANY_REQUESTS,"RATE_LIMITED",
+                "Too many attempts. Try again later.");
+        }
+        if(result==StaffPasswordChangeService.Result.SAME_PASSWORD) {
+            throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",
+                "New password must differ from current password");
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of("PASSWORD_CHANGED",RequestIdFilter.get(request)));
     }
 
     @PostMapping("/logout")
