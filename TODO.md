@@ -387,3 +387,15 @@ startup untouched. Still open for production: image CVE scanning,
 deployment topology hardening, DB/edge least privilege, egress
 control, cache policy, secrets delivery, memory/CPU stress and
 real restore/incident drills.
+
+
+### M6 container image vulnerability review (stacked draft PR #37)
+
+Added a separate Trivy image scan workflow for actual API and web
+runtime images, with OS + library HIGH/CRITICAL SARIF output,
+five tests of the scanner result policy and CI failure for
+fixable high/critical advisories. Weekly/main scanning is included
+to discover new vendor advisories. Unfixed alerts stay visible
+for mandatory manual triage; registry provenance, signatures,
+digest pinning, PostgreSQL/Nginx image scans and production
+security approval remain open.

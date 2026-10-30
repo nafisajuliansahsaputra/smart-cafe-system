@@ -1,0 +1,71 @@
+name: Docker runtime image CVE scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "18 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-image:
+    name: Trivy runtime / ${{ matrix.component }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: api
+            context: backend
+          - component: web
+            context: apps/web
+    steps:
+      - name: Checkout source without persisting a credential
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build actual application runtime image locally
+        run: docker build --pull --tag "scs-ci-${{ matrix.component }}:${{ github.sha }}" "${{ matrix.context }}"
+      - name: Scan OS and application library vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "scs-ci-${{ matrix.component }}:${{ github.sha }}"
+          version: v0.76.1
+          scanners: vuln
+          vuln-type: os,library
+          ignore-unfixed: "false"
+          severity: HIGH,CRITICAL
+          format: json
+          output: trivy-results.json
+          exit-code: "0"
+      - name: Confirm scanner policy catches synthetic fixable findings
+        run: node --test scripts/inspect-image-vulnerabilities.test.mjs
+      - name: Generate SARIF for repository security alerts
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "scs-ci-${{ matrix.component }}:${{ github.sha }}"
+          version: v0.76.1
+          skip-setup-trivy: "true"
+          scanners: vuln
+          vuln-type: os,library
+          ignore-unfixed: "false"
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"
+      - name: Publish current image advisories for triage
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: "runtime-${{ matrix.component }}"
+      - name: Enforce fixable HIGH/CRITICAL CVE gate on runtime packages
+        env:
+          SCS_IMAGE_COMPONENT: ${{ matrix.component }}
+        run: node scripts/inspect-image-vulnerabilities.mjs trivy-results.json

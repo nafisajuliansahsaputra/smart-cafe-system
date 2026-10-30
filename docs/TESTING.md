@@ -447,3 +447,23 @@ tmpfs `/tmp` and writable Next.js cache mount. Existing backend,
 stock, live-event, browser HTTP/HTTPS, and PostgreSQL backup/restore
 CI jobs remain unchanged and must pass on the new image profile.
 CI is not a memory exhaustion or persistent-cache correctness test.
+
+
+## M6 built runtime container image scanning (draft PR #37)
+
+Two matrix jobs in `.github/workflows/container-images.yml`
+build the actual API/web image Dockerfiles, run Trivy v0.76.1
+with OS + library vulnerability scanning restricted to
+HIGH/CRITICAL severity, and upload full SARIF findings to GitHub
+Code Scanning. The scanner's JSON is checked by
+`scripts/inspect-image-vulnerabilities.mjs`; malformed/unavailable
+results fail closed and any vulnerability with an explicit
+published `FixedVersion` fails the job. Five synthetic Node
+tests cover positive and negative cases, severity boundaries,
+missing reports and safe summaries. Vulnerabilities without
+a published patch still appear in the SARIF and require triage;
+they are not counted as fully remediated by a green job.
+
+This workflow is separate from the existing main CI eight jobs,
+CodeQL (Java/TS) and Maven OSV checks. It runs on PRs, main
+pushes and a weekly schedule, using only local CI-built images.
