@@ -353,3 +353,21 @@ manager-only evidence link and verifies report/staff attribution
 and pending decision, denies cashier/waiter page access, then reviews
 and reopens timeline to verify final manager decision and staff
 attribution while the existing full cash/game lifecycle remains intact.
+
+
+## M4 mobile/tablet waiter and manager UI checks (stacked draft PR #32)
+
+Chromium tests now include a separate mobile/touch-context suite at
+320, 375, 390 and 768 CSS pixels. The waiter dashboard, waiter/cash
+task view and physical-game page, plus manager dashboard/game review
+at the same widths, are checked for document-level and panel-level
+horizontal overflow and undersized link/button/confirmation tap
+targets. The suite checks keyboard focus visibility, accessible
+incident section labeling and direct hash-anchored search, reset and
+filter navigation. The full synthetic cash/game/incident E2E also
+switches the manager's attributed audit evidence page to 320px,
+verifying the chronological event timeline, machine-readable time
+and no overflow around long audit IDs, before resuming desktop
+operations. Runs on both HTTP and trusted HTTPS proxy jobs.
+No production or device-specific behavior is inferred from a
+headless Chromium-only result; physical phone testing remains needed.

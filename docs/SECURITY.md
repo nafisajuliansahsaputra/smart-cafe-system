@@ -324,3 +324,17 @@ reporter/reviewer/actor usernames, not guest, phone, payment or
 cross this role gate. No delete/repair/update endpoints are added,
 and the timeline is evidence of staff activity, **not proof of guest
 fault**. Unavailable backend fails closed and never fabricates history.
+
+
+## M4 mobile incident review usability (draft PR #32)
+
+Responsive adjustments remain scoped under `.staff-shell`; no
+guest token storage, authorization, action confirmation, backend
+write path or public route is changed. Tap-safe confirm labels and
+separated manager decision forms reduce accidental physical
+status changes. Deep links only target existing role-gated
+server-rendered sections, never elevate a waiter or cashier into
+manager incident access. URLs keep only pre-existing query and
+filter state; no raw report content or private audit references
+are inserted into a new link. Mobile tests do not connect to
+customer data or external cafe endpoints.
