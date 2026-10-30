@@ -199,6 +199,91 @@ class StaffAuthIntegrationTest {
         return token(r.getContentAsString());
     }
 
+
+    @Test void onlyAdminCanProvisionDisabledOrdinaryStaff() throws Exception {
+        var admin=staff("ADMIN");
+        var manager=staff("MANAGER");
+        var cashier=staff("CASHIER");
+        String adminBearer=loginToken(admin),managerBearer=loginToken(manager),
+            cashierBearer=loginToken(cashier);
+        String createdLogin="newstaff-"+UUID.randomUUID().toString().substring(0,8);
+        String secret="synthetic-Provision-Password-2026";
+        String payload="{\"login\":\""+createdLogin+"\",\"password\":\""+secret+
+            "\",\"role\":\"WAITER\",\"reason\":\"New member approved\"}";
+        assertEquals(401,mvc.perform(post("/api/v1/admin/staff")
+            .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+managerBearer)
+            .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+cashierBearer)
+            .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse().getStatus());
+        for(String deniedRole: java.util.List.of("ADMIN","MANAGER","SUPERADMIN","")) {
+            String forged=payload.replace("\"WAITER\"","\""+deniedRole+"\"");
+            assertEquals(400,mvc.perform(post("/api/v1/admin/staff")
+                .header("Authorization","Bearer "+adminBearer)
+                .contentType(MediaType.APPLICATION_JSON).content(forged))
+                .andReturn().getResponse().getStatus());
+        }
+        String weak=payload.replace(secret,"short");
+        assertEquals(400,mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+adminBearer)
+            .contentType(MediaType.APPLICATION_JSON).content(weak))
+            .andReturn().getResponse().getStatus());
+        var created=mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+adminBearer)
+            .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse();
+        assertEquals(201,created.getStatus(),created.getContentAsString());
+        assertTrue(created.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(created.getContentAsString().contains("\"enabled\":false"));
+        assertTrue(created.getContentAsString().contains("\"role\":\"WAITER\""));
+        assertFalse(created.getContentAsString().contains(secret));
+        assertFalse(created.getContentAsString().contains("password_hash"));
+        var id=jdbc.queryForObject("SELECT id FROM staff_users WHERE login=?",
+            UUID.class,createdLogin);
+        assertTrue(passwords.matches(secret,jdbc.queryForObject(
+            "SELECT password_hash FROM staff_users WHERE id=?",String.class,id)));
+        assertEquals(1,jdbc.queryForObject(
+            "SELECT count(*) FROM staff_role_assignments WHERE staff_user_id=? AND role_key='WAITER'",
+            Integer.class,id));
+        assertEquals(401,mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(createdLogin,secret)))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+adminBearer)
+            .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post("/api/v1/admin/staff")
+            .header("Authorization","Bearer "+adminBearer)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(payload.replace(createdLogin,createdLogin.toUpperCase())))
+            .andReturn().getResponse().getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE resource_type='STAFF_USER' AND resource_id=? AND operation='STAFF_PROVISIONED'
+            """,Integer.class,id));
+        assertEquals(200,mvc.perform(post("/api/v1/admin/staff/"+id+"/status")
+            .header("Authorization","Bearer "+adminBearer)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"enabled\":true,\"expectedEnabled\":false,\"reason\":\"Ready for work\"}"))
+            .andReturn().getResponse().getStatus());
+        var login=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(createdLogin,secret))).andReturn().getResponse();
+        assertEquals(200,login.getStatus());
+        var me=mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+token(login.getContentAsString())))
+            .andReturn().getResponse();
+        assertEquals(200,me.getStatus());
+        assertTrue(me.getContentAsString().contains("WAITER"));
+        assertFalse(me.getContentAsString().contains("ADMIN"));
+    }
+
     @Test void unauthenticatedAndUnknownBearerAreRejected() throws Exception {
         assertEquals(401, mvc.perform(get("/api/v1/staff/auth/me"))
             .andReturn().getResponse().getStatus());
