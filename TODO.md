@@ -360,3 +360,16 @@ high/critical production frontend advisories. Original seven
 integration/browser jobs remain; full Java dependency/SAST,
 historical secret scanning, runtime image scanning, real security
 incident drill and branch protection remain release blockers.
+
+
+### M6 CodeQL and Java/Maven vulnerability scanning (stacked draft PR #35)
+
+Added CodeQL `java-kotlin` and `javascript-typescript` extended
+security scans with Java 21 Maven instrumentation, and OSV Maven
+`pom.xml` advisory scanning for **new PR vulnerabilities** plus
+full weekly/main scans. Scanners upload Code Scanning results and
+do not receive deployment credentials. Passing CodeQL job is not
+proof of zero alerts; an OSV PR pass cannot clear inherited
+vulnerabilities. Still required: triage all findings, security
+release policy, dependency update SLAs, container scanning,
+privileged auth review, real pilot testing and branch protection.

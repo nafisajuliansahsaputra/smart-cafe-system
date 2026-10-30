@@ -1,0 +1,37 @@
+name: Maven OSV vulnerability scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "39 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  scan-pr:
+    name: Maven OSV / new PR vulnerabilities
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.7.0
+    with:
+      scan-args: |-
+        --lockfile=./backend/pom.xml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+  scan-all:
+    name: Maven OSV / full main baseline
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.7.0
+    with:
+      scan-args: |-
+        --lockfile=./backend/pom.xml
+      fail-on-vuln: true
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
