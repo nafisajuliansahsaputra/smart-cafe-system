@@ -119,7 +119,7 @@ staff/game/menu/audit fixture and performs a real PostgreSQL custom
 archive `pg_dump -Fc` while the API is online. It verifies the dump
 contains physical inventory data, creates a **new separate** PostgreSQL
 database, restores using `pg_restore --exit-on-error`, then checks
-all public-table counts, full index definitions, constraint identities/types/validation (PostgreSQL may rewrite equivalent CHECK expressions), and selected
+all public-table counts, index structure and partial-filter literals (PostgreSQL may rewrite equivalent partial WHERE expressions), plus constraint identities/types/validation, and selected
 deterministic content fingerprints for staff, roles, game copies,
 menu items, audit records and Flyway migration history. It separately
 verifies invalid game-copy conditions and orphan foreign keys are rejected after restore, and the synthetic manager audit event still links to the correct

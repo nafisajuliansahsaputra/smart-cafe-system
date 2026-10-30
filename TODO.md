@@ -340,7 +340,7 @@ technology testing on real Android/iOS before a cafe field pilot.
 The clean-start Docker CI job now exercises a **guarded** `pg_dump -Fc`
 and `pg_restore --exit-on-error` on a second, newly created DB with
 synthetic staff/game/audit data. Tests compare table counts, schema
-constraint identity/type/validation and full index definitions,
+constraint identity/type/validation, index structure/partial filter values,
 restored CHECK/FK rejection, six representative content fingerprints,
 Flyway migrations and the audit actor-to-unit relationship. Unsafe
 invocation or existing destination is refused; the source is never
