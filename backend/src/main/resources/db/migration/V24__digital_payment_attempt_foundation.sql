@@ -42,7 +42,7 @@ BEGIN
      NEW.method IS DISTINCT FROM i.method_selected OR
      NEW.amount_idr IS DISTINCT FROM i.amount_due_idr OR
      NEW.currency IS DISTINCT FROM i.currency THEN
-    RAISE EXCEPTION 'Digital attempt must match authorized payment intent';
+    RAISE EXCEPTION 'Digital attempt must match authorized payment intent' USING ERRCODE='23514';
   END IF;
   IF TG_OP='UPDATE' AND (
     OLD.payment_intent_id,OLD.method,OLD.provider_key,
@@ -53,7 +53,7 @@ BEGIN
     NEW.provider_reference,NEW.idempotency_key,NEW.amount_idr,NEW.currency,
     NEW.created_at,NEW.expires_at
   ) THEN
-    RAISE EXCEPTION 'Digital attempt identity and financial snapshot immutable';
+    RAISE EXCEPTION 'Digital attempt identity and financial snapshot immutable' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
 END;
