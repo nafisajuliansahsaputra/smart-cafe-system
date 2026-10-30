@@ -52,8 +52,9 @@ export default async function WaiterPage({
       {result.ok && (
         <div className="staff-task-grid">
           {result.data.map((task) => (
-            <article className="staff-panel staff-task-card" key={task.orderId}>
-              <div className="staff-task-head"><h2>Meja {task.tableCode}</h2>
+            <article className="staff-panel staff-task-card" key={task.orderId}
+              aria-labelledby={`waiter-task-${task.orderId}`}>
+              <div className="staff-task-head"><h2 id={`waiter-task-${task.orderId}`}>Meja {task.tableCode}</h2>
                 <div><span className="staff-status">{task.orderStatus}</span> / <strong className={task.paymentStatus === "PAID" ? "staff-paid" : "staff-unpaid"}>{task.paymentStatus}</strong></div>
               </div>
               <p className="staff-muted">Dibuat {localTime(task.createdAt)} WIB</p>

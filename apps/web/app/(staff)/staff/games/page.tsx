@@ -63,7 +63,7 @@ export default async function StaffGamesPage({searchParams}:{
     })}`;
   const incidentLink=(index:number,search=incidentQuery,state=incidentStatus)=>
     urlFor(pageIndex,historyPage,query,condition,historyQuery,historyChange,
-      index,search,state);
+      index,search,state)+"#loss-incidents";
   const [loans,catalog,copies,history,incidents]=await Promise.all([
     staffGameLoans(),staffGames(),
     isManager ? searchAdminGameCopies(query,condition,pageIndex) : Promise.resolve(null),
@@ -90,8 +90,9 @@ export default async function StaffGamesPage({searchParams}:{
       <h2>Belum ada pinjaman aktif</h2><p>Permintaan baru akan tampil otomatis jika koneksi live tersedia.</p>
     </section>}
     {loans.ok && <div className="staff-task-grid">{loans.data.map(l=>(
-      <article className="staff-panel staff-task-card" key={l.id}>
-        <div className="staff-task-head"><h2>Meja {l.tableCode} · {l.gameName}</h2>
+      <article className="staff-panel staff-task-card" key={l.id}
+        aria-labelledby={`loan-heading-${l.id}`}>
+        <div className="staff-task-head"><h2 id={`loan-heading-${l.id}`}>Meja {l.tableCode} · {l.gameName}</h2>
           <strong className="staff-status">{l.status}</strong></div>
         {l.copyCode && <p>Unit: <strong>{l.copyCode}</strong></p>}
         {l.status==="RETURN_PENDING" &&
@@ -170,12 +171,13 @@ export default async function StaffGamesPage({searchParams}:{
           </form>}
         </li>)}</ul>}
     </section>
-    {isManager && <section className="staff-panel">
-      <h2>Laporan unit belum ditemukan</h2>
+    {isManager && <section className="staff-panel" id="loss-incidents"
+      aria-labelledby="loss-incidents-title">
+      <h2 id="loss-incidents-title">Laporan unit belum ditemukan</h2>
       <p className="staff-muted">Verifikasi fisik dan kondisi unit sebelum memutuskan.
         Konfirmasi kehilangan tidak menagih pelanggan. Unit berstatus LOST tidak
         boleh dipinjamkan kembali.</p>
-      <form method="GET" action="/staff/games" className="staff-form" role="search">
+      <form method="GET" action="/staff/games#loss-incidents" className="staff-form" role="search">
         <input type="hidden" name="q" value={query}/>
         <input type="hidden" name="condition" value={condition}/>
         <input type="hidden" name="page" value={pageIndex}/>
@@ -211,8 +213,8 @@ export default async function StaffGamesPage({searchParams}:{
       </p>}
       {incidents?.ok && <div className="staff-task-grid">
         {incidents.data.items.map(incident=><article className="staff-panel staff-task-card"
-          key={incident.id}>
-          <h3>Meja {incident.tableCode} · {incident.gameName}</h3>
+          key={incident.id} aria-labelledby={`incident-heading-${incident.id}`}>
+          <h3 id={`incident-heading-${incident.id}`}>Meja {incident.tableCode} · {incident.gameName}</h3>
           <p>Unit: <strong>{incident.copyCode}</strong></p>
           <p>Status laporan: <strong>{incident.status}</strong></p>
           <p><Link href={`/staff/games/incidents/${incident.id}`}>
@@ -265,13 +267,14 @@ export default async function StaffGamesPage({searchParams}:{
         </Link>}
       </nav>}
     </section>}
-    {isManager && <section className="staff-panel">
-      <h2>Kondisi unit fisik</h2>
+    {isManager && <section className="staff-panel" id="copy-inventory"
+      aria-labelledby="copy-inventory-title">
+      <h2 id="copy-inventory-title">Kondisi unit fisik</h2>
       <p className="staff-muted">Hanya unit AVAILABLE tanpa pinjaman aktif yang boleh dikarantina.
         Unit DAMAGED harus diperiksa ulang sebelum diaktifkan. Unit LOST yang ditemukan
         wajib dikarantina sebagai DAMAGED lebih dahulu, bukan langsung tersedia.
         Tidak ada denda otomatis.</p>
-      <form method="GET" action="/staff/games" className="staff-form" role="search">
+      <form method="GET" action="/staff/games#copy-inventory" className="staff-form" role="search">
         <input type="hidden" name="iq" value={incidentQuery}/>
         <input type="hidden" name="istatus" value={incidentStatus}/>
         <input type="hidden" name="ipage" value={incidentPage}/>
@@ -290,7 +293,7 @@ export default async function StaffGamesPage({searchParams}:{
           <option value="RETIRED">RETIRED</option>
         </select>
         <button className="staff-secondary" type="submit">Cari unit</button>
-        <Link href={urlFor(0,historyPage,"","")}>Reset pencarian</Link>
+        <Link href={urlFor(0,historyPage,"","")+"#copy-inventory"}>Reset pencarian</Link>
       </form>
       {copies && !copies.ok && <p role="alert">Inventaris unit tidak tersedia.
         Tidak ada tindakan yang dapat dikonfirmasi.</p>}
@@ -347,19 +350,20 @@ export default async function StaffGamesPage({searchParams}:{
       </div>}
       {copies?.ok && <nav aria-label="Navigasi halaman inventaris"
         className="staff-breadcrumb">
-        {copies.data.page>0 && <Link href={urlFor(copies.data.page-1,historyPage)}>
+        {copies.data.page>0 && <Link href={urlFor(copies.data.page-1,historyPage)+"#copy-inventory"}>
           Halaman sebelumnya
         </Link>}
-        {copies.data.hasNext && <Link href={urlFor(copies.data.page+1,historyPage)}>
+        {copies.data.hasNext && <Link href={urlFor(copies.data.page+1,historyPage)+"#copy-inventory"}>
           Halaman berikutnya
         </Link>}
       </nav>}
     </section>}
-    {isManager && <section className="staff-panel">
-      <h2>Riwayat pemeriksaan unit</h2>
+    {isManager && <section className="staff-panel" id="condition-history"
+      aria-labelledby="condition-history-title">
+      <h2 id="condition-history-title">Riwayat pemeriksaan unit</h2>
       <p className="staff-muted">Cari catatan perubahan kondisi lama di seluruh database.
         Catatan hanya untuk operasional, bukan penetapan tanggung jawab atau denda pelanggan.</p>
-      <form method="GET" action="/staff/games" className="staff-form" role="search">
+      <form method="GET" action="/staff/games#condition-history" className="staff-form" role="search">
         <input type="hidden" name="iq" value={incidentQuery}/>
         <input type="hidden" name="istatus" value={incidentStatus}/>
         <input type="hidden" name="ipage" value={incidentPage}/>
@@ -376,7 +380,7 @@ export default async function StaffGamesPage({searchParams}:{
           <option value="AVAILABLE">Menjadi AVAILABLE</option>
         </select>
         <button type="submit" className="staff-secondary">Cari riwayat</button>
-        <Link href={urlFor(pageIndex,0,query,condition,"","")}>Reset riwayat</Link>
+        <Link href={urlFor(pageIndex,0,query,condition,"","")+"#condition-history"}>Reset riwayat</Link>
       </form>
       {history && !history.ok && <p role="alert">Riwayat pemeriksaan belum bisa dimuat.
         Periksa koneksi sebelum mengambil keputusan.</p>}
@@ -393,10 +397,10 @@ export default async function StaffGamesPage({searchParams}:{
       </li>)}</ul>}
       {history?.ok && <nav aria-label="Navigasi halaman riwayat pemeriksaan"
         className="staff-breadcrumb">
-        {history.data.page>0 && <Link href={urlFor(pageIndex,history.data.page-1)}>
+        {history.data.page>0 && <Link href={urlFor(pageIndex,history.data.page-1)+"#condition-history"}>
           Riwayat sebelumnya
         </Link>}
-        {history.data.hasNext && <Link href={urlFor(pageIndex,history.data.page+1)}>
+        {history.data.hasNext && <Link href={urlFor(pageIndex,history.data.page+1)+"#condition-history"}>
           Riwayat berikutnya
         </Link>}
       </nav>}

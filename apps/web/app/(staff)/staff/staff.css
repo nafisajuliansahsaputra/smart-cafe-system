@@ -79,3 +79,43 @@
 
 .staff-live-line { margin: 10px 0 16px; }
 .staff-live-indicator { display: inline-block; font-size: .8rem; font-weight: 600; letter-spacing: .015em; padding: 6px 12px; border: 1px solid currentColor; border-radius: 999px; }
+
+/* Mobile staff workflow accessibility. No guest styles are changed.
+ * Long serials, manager notes and audit correlation IDs wrap in cards. */
+.staff-shell, .staff-panel, .staff-task-card, .staff-form, .staff-task-head > * {
+  min-width: 0;
+}
+.staff-shell .staff-panel, .staff-shell .staff-task-card { overflow-wrap: anywhere; }
+.staff-shell code { overflow-wrap: anywhere; }
+.staff-panel ol { padding-inline-start: 1.5rem; }
+.staff-panel li { overflow-wrap: anywhere; }
+.staff-panel .staff-form + .staff-form {
+  border-top: 1px solid #d8dfe3;
+  padding-top: 18px;
+}
+.staff-shell .staff-check { min-height: 44px; align-items: center; cursor: pointer; }
+.staff-shell .staff-check input { accent-color: #163c48; }
+.staff-shell .staff-breadcrumb a,
+.staff-shell .staff-panel a:not(.staff-link-button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.staff-shell :is(a,button,input,select,textarea):focus-visible {
+  outline: 3px solid #095978;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px #fff;
+}
+.staff-shell .staff-panel:target { scroll-margin-top: 16px; }
+@media (max-width: 640px) {
+  .staff-shell { padding: 22px 12px 56px; }
+  .staff-shell h1 { font-size: clamp(1.8rem, 8vw, 2.5rem); }
+  .staff-panel { padding: 16px; margin: 16px 0; }
+  .staff-task-grid { gap: 12px; margin: 16px 0; }
+  .staff-form { gap: 10px; }
+  .staff-form button, .staff-link-button { width: 100%; }
+  .staff-header > form { width: 100%; }
+  .staff-header > form > button { width: 100%; }
+  .staff-shell input:not([type="checkbox"]), .staff-shell select,
+  .staff-shell textarea { font-size: 16px; }
+}

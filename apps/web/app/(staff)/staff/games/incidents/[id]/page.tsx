@@ -55,10 +55,12 @@ export default async function LossEvidencePage({params}:{
       <h2>Meja {incident.tableCode} · {incident.gameName}</h2>
       <p>Unit fisik: <strong>{incident.copyCode}</strong></p>
       <p>Status: <strong>{stateLabels[incident.status]??incident.status}</strong></p>
-      <p>Dilaporkan oleh: <strong>{reporterLogin}</strong> · {localTime(incident.reportedAt)}</p>
+      <p>Dilaporkan oleh: <strong>{reporterLogin}</strong> · <time dateTime={incident.reportedAt}>
+        {localTime(incident.reportedAt)}</time></p>
       <p>Catatan laporan: {incident.reason}</p>
       {reviewerLogin && reviewedAt && <>
-        <p>Diperiksa oleh: <strong>{reviewerLogin}</strong> · {localTime(reviewedAt)}</p>
+        <p>Diperiksa oleh: <strong>{reviewerLogin}</strong> · <time dateTime={reviewedAt}>
+          {localTime(reviewedAt)}</time></p>
         <p>Hasil pemeriksaan: {incident.reviewReason}</p>
       </>}
       {!reviewerLogin && <p>Belum ada keputusan manager untuk laporan ini.</p>}
@@ -69,14 +71,16 @@ export default async function LossEvidencePage({params}:{
         Setiap tindakan memiliki ID korelasi untuk penelusuran internal.</p>
       {activity.length===0 && <p role="alert">
         Jejak audit belum tersedia. Verifikasi kembali dengan administrator.</p>}
-      {activity.length>0 && <ol>{activity.map(event=><li key={event.id}>
+      {activity.length>0 && <ol className="staff-audit-timeline"
+        aria-label="Urutan aktivitas staf">{activity.map(event=><li key={event.id}>
         <p><strong>{eventLabels[event.operation]??event.operation}</strong></p>
-        <p>Staf: {event.actorLogin} · {localTime(event.occurredAt)}</p>
+        <p>Staf: {event.actorLogin} · <time dateTime={event.occurredAt}>
+          {localTime(event.occurredAt)}</time></p>
         <p>Referensi audit: <code>{event.correlationId}</code></p>
       </li>)}</ol>}
     </section>
     <Link className="staff-link-button"
-      href={`/staff/games?istatus=${incident.status}`}>
+      href={`/staff/games?istatus=${incident.status}#loss-incidents`}>
       Kembali ke daftar laporan
     </Link>
   </main>;
