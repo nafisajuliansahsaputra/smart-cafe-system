@@ -284,6 +284,113 @@ class StaffAuthIntegrationTest {
         assertFalse(me.getContentAsString().contains("ADMIN"));
     }
 
+
+    @Test void selfServiceRotationRevokesAllSessionsAndAuditsWithoutSecrets() throws Exception {
+        var waiter=staff("WAITER");
+        String first=loginToken(waiter);
+        String second=loginToken(waiter);
+        String changed="synthetic-rotated-Password-2026";
+        String path="/api/v1/staff/auth/password/change";
+        String body="{\\"currentPassword\\":\\"safe-test-password-123\\",\\"newPassword\\":\\""+changed+"\\"}";
+        assertEquals(401,mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+            .content(body)).andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(post(path).header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body.replace(changed,"short"))).andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post(path).header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body.replace(changed,"safe-test-password-123")))
+            .andReturn().getResponse().getStatus());
+        var changedResponse=mvc.perform(post(path).header("Authorization","Bearer "+first)
+            .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+        assertEquals(200,changedResponse.getStatus(),changedResponse.getContentAsString());
+        assertTrue(changedResponse.getHeader("Cache-Control").contains("no-store"));
+        assertFalse(changedResponse.getContentAsString().contains(changed));
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+first)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+second)).andReturn().getResponse().getStatus());
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM staff_sessions WHERE staff_user_id=? AND revoked_at IS NOT NULL
+            """,Integer.class,waiter.id()));
+        assertEquals(401,mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(waiter.login(),"safe-test-password-123")))
+            .andReturn().getResponse().getStatus());
+        var login=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(waiter.login(),changed))).andReturn().getResponse();
+        assertEquals(200,login.getStatus());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE actor_id=? AND resource_id=?
+              AND operation='STAFF_PASSWORD_CHANGED'
+            """,Integer.class,waiter.id(),waiter.id()));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE actor_id=?
+              AND (reason LIKE ? OR safe_before_after_diff::text LIKE ?)
+            """,Integer.class,waiter.id(),"%"+changed+"%","%"+changed+"%"));
+    }
+
+    @Test void wrongCurrentPasswordIsRateLimitedAndDoesNotRevokeSessions() throws Exception {
+        var cashier=staff("CASHIER");
+        String bearer=loginToken(cashier);
+        String path="/api/v1/staff/auth/password/change";
+        String body="{\\"currentPassword\\":\\"incorrect-current-password\\",\\"newPassword\\":\\"new-synthetic-password-2026\\"}";
+        for(int i=0;i<4;i++) {
+            assertEquals(403,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andReturn().getResponse().getStatus());
+        }
+        assertEquals(429,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+        assertEquals(429,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body.replace("incorrect-current-password","safe-test-password-123")))
+            .andReturn().getResponse().getStatus());
+        assertEquals(5,jdbc.queryForObject("""
+            SELECT failed_attempts FROM staff_password_change_throttles WHERE staff_user_id=?
+            """,Integer.class,cashier.id()));
+        assertEquals(200,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+bearer)).andReturn().getResponse().getStatus());
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE actor_id=? AND operation='STAFF_PASSWORD_CHANGED'
+            """,Integer.class,cashier.id()));
+    }
+
+    @Test void concurrentRotationCannotLeaveAnOldPasswordSessionAlive() throws Exception {
+        var kitchen=staff("KITCHEN");
+        String bearer=loginToken(kitchen);
+        String path="/api/v1/staff/auth/password/change";
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.List<java.util.concurrent.Future<Integer>> tasks=new java.util.ArrayList<>();
+            for(String next:java.util.List.of("synthetic-new-first-2026","synthetic-new-second-2026")) {
+                tasks.add(pool.submit(()->{
+                    start.await();
+                    String body="{\\"currentPassword\\":\\"safe-test-password-123\\",\\"newPassword\\":\\""+next+"\\"}";
+                    return mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andReturn().getResponse().getStatus();
+                }));
+            }
+            start.countDown();
+            var results=java.util.List.of(
+                tasks.get(0).get(30,java.util.concurrent.TimeUnit.SECONDS),
+                tasks.get(1).get(30,java.util.concurrent.TimeUnit.SECONDS));
+            assertTrue(results.contains(200),results.toString());
+            assertTrue(results.contains(401),results.toString());
+            assertEquals(1,jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs WHERE actor_id=? AND operation='STAFF_PASSWORD_CHANGED'
+                """,Integer.class,kitchen.id()));
+            assertEquals(401,mvc.perform(get("/api/v1/staff/auth/me")
+                .header("Authorization","Bearer "+bearer)).andReturn().getResponse().getStatus());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     @Test void unauthenticatedAndUnknownBearerAreRejected() throws Exception {
         assertEquals(401, mvc.perform(get("/api/v1/staff/auth/me"))
             .andReturn().getResponse().getStatus());

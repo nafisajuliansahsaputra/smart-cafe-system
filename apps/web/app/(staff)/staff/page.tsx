@@ -31,6 +31,11 @@ export default async function StaffPage() {
         </div>
         <form action={logoutStaff}><button type="submit" className="staff-secondary">Keluar</button></form>
       </header>
+      <section className="staff-panel">
+        <h2>Keamanan akun</h2>
+        <p>Ganti kata sandi sendiri. Setelah berhasil, semua sesi pada perangkat lain akan dicabut.</p>
+        <Link className="staff-link-button" href="/staff/account">Ganti kata sandi</Link>
+      </section>
       {isManager && <section className="staff-panel">
         <h2>Manajemen staf</h2>
         <p>Lihat akun, nonaktifkan akses staf biasa dan lihat perubahan lewat audit. Akun admin/manager dilindungi.</p>

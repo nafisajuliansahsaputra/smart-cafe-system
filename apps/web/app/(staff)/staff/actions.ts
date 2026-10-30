@@ -137,3 +137,38 @@ export async function approveCash(form: FormData): Promise<void> {
 export async function rejectCash(form: FormData): Promise<void> {
   await command(form, "reject");
 }
+
+/**
+ * Server-only password rotation. Never return credentials or session tokens to
+ * the browser. The backend revokes all staff sessions after a successful change.
+ */
+export async function changeStaffPassword(form: FormData): Promise<void> {
+  const current = form.get("currentPassword");
+  const next = form.get("newPassword");
+  const repeat = form.get("confirmPassword");
+  if (typeof current !== "string" || current.length < 8 || current.length > 128 ||
+      typeof next !== "string" || next.length < 16 || next.length > 72 ||
+      /[^\x21-\x7e]/.test(next) || typeof repeat !== "string") {
+    redirect("/staff/account?notice=invalid");
+  }
+  if (next !== repeat) redirect("/staff/account?notice=mismatch");
+  if (current === next) redirect("/staff/account?notice=reused");
+  const token = await staffToken();
+  if (!token) redirect("/staff/login?status=expired");
+  const result = await staffApi("/api/v1/staff/auth/password/change", "POST", token, {
+    currentPassword: current, newPassword: next,
+  });
+  if (result.status === 401) {
+    await clearStaffCookie();
+    redirect("/staff/login?status=expired");
+  }
+  if (result.status !== 200) {
+    const notice = result.status === 403 ? "incorrect" :
+      result.status === 409 ? "reused" :
+      result.status === 429 ? "limited" :
+      result.status === 0 || result.status >= 500 ? "offline" : "invalid";
+    redirect("/staff/account?notice=" + notice);
+  }
+  await clearStaffCookie();
+  redirect("/staff/login?status=password-changed");
+}
