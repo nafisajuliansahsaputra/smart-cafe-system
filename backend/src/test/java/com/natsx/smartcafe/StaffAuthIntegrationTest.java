@@ -334,17 +334,19 @@ class StaffAuthIntegrationTest {
     @Test void wrongCurrentPasswordIsRateLimitedAndDoesNotRevokeSessions() throws Exception {
         var cashier=staff("CASHIER");
         String bearer=loginToken(cashier);
+        String alternateBearer=loginToken(cashier);
         String path="/api/v1/staff/auth/password/change";
         String body="{\"currentPassword\":\"incorrect-current-password\",\"newPassword\":\"new-synthetic-password-2026\"}";
         for(int i=0;i<4;i++) {
-            assertEquals(403,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+            assertEquals(403,mvc.perform(post(path).header("Authorization","Bearer "+
+                (i%2==0?bearer:alternateBearer))
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andReturn().getResponse().getStatus());
         }
         assertEquals(429,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
             .contentType(MediaType.APPLICATION_JSON).content(body))
             .andReturn().getResponse().getStatus());
-        assertEquals(429,mvc.perform(post(path).header("Authorization","Bearer "+bearer)
+        assertEquals(429,mvc.perform(post(path).header("Authorization","Bearer "+alternateBearer)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body.replace("incorrect-current-password","safe-test-password-123")))
             .andReturn().getResponse().getStatus());
@@ -353,6 +355,9 @@ class StaffAuthIntegrationTest {
             """,Integer.class,cashier.id()));
         assertEquals(200,mvc.perform(get("/api/v1/staff/auth/me")
             .header("Authorization","Bearer "+bearer)).andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization","Bearer "+alternateBearer))
+            .andReturn().getResponse().getStatus());
         assertEquals(0,jdbc.queryForObject("""
             SELECT count(*) FROM audit_logs WHERE actor_id=? AND operation='STAFF_PASSWORD_CHANGED'
             """,Integer.class,cashier.id()));
