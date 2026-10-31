@@ -426,6 +426,9 @@ export type SandboxEvidence = {
   attemptId: string | null;
   currentAttemptState: string | null;
   currentPaymentState: string | null;
+  latestTriageAction: "INVESTIGATE" | "REQUEST_PROVIDER_REVIEW" | "ESCALATE" | null;
+  latestTriageAt: string | null;
+  latestTriageActor: string | null;
 };
 export type SandboxReviewPage = {
   page: number;
@@ -451,7 +454,12 @@ function sandboxEvidence(item: unknown): item is SandboxEvidence {
     (item.attemptId === null ||
       (typeof item.attemptId === "string" && staffUuid.test(item.attemptId))) &&
     (item.currentAttemptState === null || typeof item.currentAttemptState === "string") &&
-    (item.currentPaymentState === null || typeof item.currentPaymentState === "string");
+    (item.currentPaymentState === null || typeof item.currentPaymentState === "string") &&
+    (item.latestTriageAction === null ||
+      ["INVESTIGATE","REQUEST_PROVIDER_REVIEW","ESCALATE"].includes(String(item.latestTriageAction))) &&
+    (item.latestTriageAt === null || typeof item.latestTriageAt === "string") &&
+    (item.latestTriageActor === null ||
+      (typeof item.latestTriageActor === "string" && staffUuid.test(item.latestTriageActor)));
 }
 
 export async function sandboxReconciliationPage(page: number,
