@@ -496,3 +496,7 @@ This acceptance establishes ONLY non-payable fake UI and state behavior. It is n
 ### Replay stability discovered by Chromium
 
 The sandbox attempt button originally used a freshly generated key per server render. A live SSE refresh could replace the hidden key before form submission, causing the supposed replay to be treated as a distinct pending attempt (409). The order-detail page now derives a **stable key** from its order UUID and latest attempt UUID (or `initial` when none exists). The key survives router refresh and browser reload for the same attempt, while a terminal attempt permits a different retry key. The browser acceptance asserts this initial key and replays it through the backend, without relaxing the one-active-attempt guard.
+
+## M3 event observation quarantine (draft PR #49)
+
+New Testcontainers/PostgreSQL tests insert entirely synthetic QRIS payment intents and FAKE attempts, then exercise identical SUCCEEDED event replay, conflicting same-event-ID reference/amount/state 409, wrong amount/currency/method/environment and unknown references, success-after-EXPIRED and success-after-FAILED, 10 parallel replays, invalid field rejection and immutable evidence UPDATE/DELETE protection. Every test explicitly checks the payment intent remains PENDING with 0 paid, order stays SUBMITTED and no receipt or kitchen ticket exists. No live provider signing key, payment URL, personal account or external call is used. Independent CI checks must pass exact PR HEAD. These tests do NOT represent valid real-world provider signature verification.
