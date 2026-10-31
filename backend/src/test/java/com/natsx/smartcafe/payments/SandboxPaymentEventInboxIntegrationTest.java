@@ -371,6 +371,90 @@ class SandboxPaymentEventInboxIntegrationTest {
         assertNoSettlement(fixture);
     }
 
+
+    @Test void unresolvedAttemptReviewDistinguishesOverdueFromProviderTruth() {
+        var fixture=seed();
+        var clock=java.time.Clock.systemUTC();
+        var review=new SandboxUnresolvedAttemptReview(jdbc,clock);
+        var first=review.list(0,"NO_EVIDENCE");
+        assertTrue(first.items().stream().anyMatch(a->
+            a.id().equals(fixture.attemptId())&&a.evidenceCount()==0&&
+            !a.overdue()&&"PENDING".equals(a.paymentState())));
+        assertEquals(0,review.list(0,"SUCCESS_CLAIM").items().stream()
+            .filter(a->a.id().equals(fixture.attemptId())).count());
+
+        var observation=inbox().record(observation(freshEvent(),fixture.reference(),
+            37000,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
+        assertEquals("QUARANTINED",observation.classification());
+        var flagged=inbox().record(observation(freshEvent(),fixture.reference(),
+            37001,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
+        assertEquals("FINANCIAL_MISMATCH",flagged.classification());
+        var successes=review.list(0,"SUCCESS_CLAIM").items().stream()
+            .filter(a->a.id().equals(fixture.attemptId())).toList();
+        assertEquals(1,successes.size());
+        assertEquals(2L,successes.getFirst().successClaims());
+        assertEquals(2L,successes.getFirst().evidenceCount());
+        assertEquals(1L,successes.getFirst().flaggedClaims());
+        assertFalse(successes.getFirst().overdue());
+        assertNotNull(successes.getFirst().lastEvidenceAt());
+        assertTrue(review.list(0,"FLAGGED_CLAIM").items().stream()
+            .anyMatch(a->a.id().equals(fixture.attemptId())));
+
+        // Overdue is a wall-clock warning, NEVER a provider-confirmed failure.
+        var futureClock=java.time.Clock.offset(clock,java.time.Duration.ofDays(1));
+        var overdue=new SandboxUnresolvedAttemptReview(jdbc,futureClock);
+        var late=overdue.list(0,"OVERDUE").items().stream()
+            .filter(a->a.id().equals(fixture.attemptId())).toList();
+        assertEquals(1,late.size());
+        assertTrue(late.getFirst().overdue());
+        assertEquals("PENDING",late.getFirst().attemptState());
+        assertEquals("PENDING",late.getFirst().paymentState());
+        for(String filter:List.of("UNKNOWN","overdue","PAID"))
+            assertEquals(400,assertThrows(ApiFailureException.class,
+                ()->review.list(0,filter)).status().value());
+        for(int page:List.of(-1,1001))
+            assertEquals(400,assertThrows(ApiFailureException.class,
+                ()->review.list(page,"ALL")).status().value());
+        assertNoSettlement(fixture);
+    }
+
+    @Test void pendingAttemptApiIsAdminOnlyAndNeverAllowsWrite() throws Exception {
+        var fixture=seed();
+        String endpoint="/api/v1/admin/payments/sandbox-events/attempts";
+        String admin=bearer("ADMIN"),manager=bearer("MANAGER");
+        assertEquals(401,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint)
+                .header("Authorization","Bearer "+manager))
+            .andReturn().getResponse().getStatus());
+        var page=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint)
+                .header("Authorization","Bearer "+admin)).andReturn().getResponse();
+        assertEquals(200,page.getStatus(),page.getContentAsString());
+        assertTrue(page.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(page.getContentAsString().contains(fixture.reference()));
+        assertTrue(page.getContentAsString().contains("\"filter\":\"ALL\""));
+        assertFalse(page.getContentAsString().contains("idempotencyKey"));
+        assertFalse(page.getContentAsString().contains("tokenHash"));
+        for(String query:List.of("?page=-1","?page=1001",
+            "?filter=PAID","?filter=all")) {
+            assertEquals(400,mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .get(endpoint+query).header("Authorization","Bearer "+admin))
+                .andReturn().getResponse().getStatus(),query);
+        }
+        assertEquals(405,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post(endpoint)
+                .header("Authorization","Bearer "+admin)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"state\":\"SUCCEEDED\"}"))
+            .andReturn().getResponse().getStatus());
+        assertNoSettlement(fixture);
+    }
+
     @Test void successClaimIsQuarantinedAndExactReplayIsIdempotent() {
         var f=seed();
         var inbox=inbox();

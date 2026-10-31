@@ -483,3 +483,75 @@ export async function sandboxReconciliationPage(page: number,
     return { ok: false, status: 502 };
   return { ok: true, data: data as SandboxReviewPage };
 }
+
+
+export const sandboxPendingAttemptFilters=[
+  "ALL","OVERDUE","SUCCESS_CLAIM","FLAGGED_CLAIM","NO_EVIDENCE",
+] as const;
+export type SandboxPendingAttemptFilter=(typeof sandboxPendingAttemptFilters)[number];
+
+export type SandboxPendingAttempt={
+  id:string;
+  orderId:string;
+  method:"QRIS"|"VA";
+  amountIdr:number;
+  providerReference:string;
+  attemptState:"CREATED"|"PENDING";
+  paymentState:string;
+  expiresAt:string;
+  overdue:boolean;
+  evidenceCount:number;
+  successClaims:number;
+  flaggedClaims:number;
+  lastEvidenceAt:string|null;
+};
+export type SandboxPendingAttemptPage={
+  page:number;
+  filter:SandboxPendingAttemptFilter;
+  checkedAt:string;
+  hasNext:boolean;
+  items:SandboxPendingAttempt[];
+};
+
+function validSandboxPendingAttempt(value:unknown):value is SandboxPendingAttempt {
+  return record(value) && typeof value.id==="string" && staffUuid.test(value.id) &&
+    typeof value.orderId==="string" && staffUuid.test(value.orderId) &&
+    (value.method==="QRIS"||value.method==="VA") &&
+    safeCashNumber(value.amountIdr) && value.amountIdr>0 &&
+    typeof value.providerReference==="string" &&
+    /^FAKE_[a-f0-9]{32}$/.test(value.providerReference) &&
+    (value.attemptState==="CREATED"||value.attemptState==="PENDING") &&
+    typeof value.paymentState==="string" &&
+    typeof value.expiresAt==="string" &&
+    !Number.isNaN(Date.parse(value.expiresAt)) &&
+    typeof value.overdue==="boolean" &&
+    safeCashNumber(value.evidenceCount) &&
+    safeCashNumber(value.successClaims) &&
+    safeCashNumber(value.flaggedClaims) &&
+    value.successClaims<=value.evidenceCount &&
+    value.flaggedClaims<=value.evidenceCount &&
+    (value.lastEvidenceAt===null||
+      (typeof value.lastEvidenceAt==="string" &&
+        !Number.isNaN(Date.parse(value.lastEvidenceAt))));
+}
+
+export async function sandboxPendingAttemptPage(page:number,
+  filter:SandboxPendingAttemptFilter):Promise<LoadResult<SandboxPendingAttemptPage>> {
+  if(!sandboxReviewEnabled())return {ok:false,status:404};
+  if(!Number.isInteger(page)||page<0||page>1000||
+    !sandboxPendingAttemptFilters.includes(filter))return {ok:false,status:400};
+  const token=await staffToken();
+  if(!token)return {ok:false,status:401};
+  const response=await staffApi(
+    "/api/v1/admin/payments/sandbox-events/attempts?page="+page+
+      "&filter="+encodeURIComponent(filter),"GET",token);
+  if(response.status!==200)return {ok:false,status:response.status};
+  const data=dataFromEnvelope(response.payload);
+  if(!record(data)||data.page!==page||data.filter!==filter||
+    typeof data.checkedAt!=="string"||Number.isNaN(Date.parse(data.checkedAt))||
+    typeof data.hasNext!=="boolean"||
+    !Array.isArray(data.items)||data.items.length>20||
+    !data.items.every(validSandboxPendingAttempt))
+    return {ok:false,status:502};
+  return {ok:true,data:data as SandboxPendingAttemptPage};
+}

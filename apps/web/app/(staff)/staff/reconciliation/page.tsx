@@ -44,6 +44,14 @@ export default async function SandboxReconciliationPage({
     <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link>
       <span>/</span><strong>Rekonsiliasi simulasi</strong></nav>
     <section className="staff-panel">
+      <h2>Payment attempt belum selesai</h2>
+      <p>Periksa referensi FAKE yang melewati waktu, memiliki klaim sukses
+        tidak terverifikasi, atau belum mempunyai bukti event.</p>
+      <Link className="staff-link-button" href="/staff/reconciliation/attempts">
+        Lihat antrean pending sandbox
+      </Link>
+    </section>
+    <section className="staff-panel">
       <h2>Bukti pembayaran hanya baca</h2>
       <p className="staff-notice" role="status">
         Event SUCCEEDED di layar ini hanya klaim palsu dari simulator.
