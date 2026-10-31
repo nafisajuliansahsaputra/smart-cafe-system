@@ -13,6 +13,7 @@ const messages: Record<string, string> = {
   offline: "Server tidak memberi konfirmasi. Periksa pesanan sebelum checkout ulang.",
   expired: "Sesi telah berakhir. Bergabung kembali melalui QR meja.",
   failed: "Perubahan gagal diproses.",
+  "sandbox-unavailable": "Simulasi pembayaran digital tidak aktif pada server. Tidak ada pembayaran yang diproses.",
 };
 
 export default async function CartPage({ searchParams }: {
