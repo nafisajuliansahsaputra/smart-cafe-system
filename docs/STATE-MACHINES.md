@@ -146,3 +146,7 @@ fee, override or loss handling is introduced by this change.
 ## M3 attempt schema guardrail (draft PR #44)
 
 V24 adds `digital_payment_attempts` for future QRIS/VA workflows. Only CREATED -> PENDING/FAILED/EXPIRED/CANCELLED and PENDING -> SUCCEEDED/FAILED/EXPIRED/CANCELLED are valid state changes; a terminal status cannot transition back to PENDING or SUCCEEDED. Only one unresolved attempt per payment intent may exist at a time. Late confirmed success after EXPIRED is not silently applied: the future event processor must record and reconcile it as an exception. No existing cash status or fulfillment path changes. There is no implemented digital checkout, callback or payment settlement in this increment.
+
+## M3 quarantined fake event evidence (draft PR #49)
+
+Observation of a synthetic provider event does not transition either the digital payment attempt or payment aggregate. The immutable event inbox records QUARANTINED for an otherwise matching claim and classifies UNKNOWN_REFERENCE, FINANCIAL_MISMATCH, ENVIRONMENT_MISMATCH, LATE_SUCCESS, CONTRADICTORY_STATE or ALREADY_SETTLED without ever changing PAID status, receipts or fulfillment. Duplicate same-event ID + exact canonical fields is a no-op with the original evidence ID; conflicting same-event ID fails 409. The inbox cannot process real provider notifications and has no public callback. Authenticating a real provider, handling late success as payable money, resolving discrepancies and issuing receipts remain separate security-reviewed milestones.
