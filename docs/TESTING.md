@@ -476,3 +476,10 @@ pushes and a weekly schedule, using only local CI-built images.
 - Snapshot item sales aggregate a bounded top-ten selection from order_lines without customer names, phone numbers, session tokens or unit serials.
 - PostgreSQL integration checks actual reporting values after physical cash tender, zero days, anonymous/guest/waiter/kitchen denials, malformed date rejection and cache policy. Chromium HTTP/HTTPS verifies cashier dashboard values and waiter/kitchen route denial.
 - This is not cash drawer reconciliation, refunded net revenue, cost accounting, tax calculation or QRIS/VA reporting. All tests are synthetic.
+
+## M3 sandbox payment attempt acceptance (draft PR #47)
+
+- Sandbox-enabled Testcontainers+MockMvc: QRIS checkout PENDING, owner list initially empty, POST creates a durable FAKE attempt, replay keeps identical provider reference, competing key 409, VA-on-QRIS 409, no idempotency header 400, unknown method 400, cross-guest GET/POST 404, anonymous POST 401. Assert exact paid amount stays 0 with no receipt or kitchen ticket.
+- Default cash environment (no sandbox property): GET and POST sandbox-attempt route return 404 to authenticated guests and create no attempts. Existing Chromium cash lifecycle remains enabled in CI unchanged.
+- Next.js lint/types/build validates guarded sandbox checkout and order details. A true sandbox browser end-to-end with explicit flags remains to be added before any staging pilot.
+- Do not use a real QRIS code, VA number, provider account, phone number, merchant, payment or customer information in these tests.
