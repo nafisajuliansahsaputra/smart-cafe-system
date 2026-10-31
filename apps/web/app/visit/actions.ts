@@ -214,6 +214,7 @@ export async function checkoutSandbox(form: FormData): Promise<void> {
   const response=await guestApi("/api/v1/orders","POST",token,{
     cartVersion:Number(version),paymentMethod:method,
   },key);
+  if (response.status===403) redirect("/visit/cart?notice=sandbox-unavailable");
   if (response.status!==200) redirect("/visit/cart?notice="+notice(response.status));
   const order=envelopeData(response.payload);
   if (!isRecord(order) || typeof order.id!=="string" ||
@@ -243,6 +244,7 @@ export async function createSandboxAttempt(form: FormData): Promise<void> {
   const result=await guestApi("/api/v1/me/orders/"+orderId+"/sandbox-attempts",
     "POST",token,{method},key);
   if (result.status!==200) {
+    if (result.status===403) redirect("/visit/orders/"+orderId+"?notice=sandbox-unavailable");
     redirect("/visit/orders/"+orderId+"?notice="+notice(result.status));
   }
   const attempt=envelopeData(result.payload);
