@@ -26,6 +26,7 @@ export type CartLine = {
 export type Cart = { version: number; estimatedSubtotalIdr: number; lines: CartLine[] };
 export type GuestOrder = { id: string; status: string; paymentStatus: string; totalIdr: number };
 export type OrderDetail = GuestOrder & {
+  paymentMethod: "CASH" | "QRIS" | "VA";
   createdAt: string;
   lines: {
     name: string; quantity: number; unitPriceIdr: number;
@@ -180,7 +181,8 @@ export async function getOrder(id: string): Promise<Result<OrderDetail>> {
   return token ? getData(`/api/v1/me/orders/${id}`, (data): data is OrderDetail => {
     if (!isGuestOrder(data)) return false;
     const detail: Record<string, unknown> = data as unknown as Record<string, unknown>;
-    return typeof detail.createdAt === "string" &&
+    return ["CASH", "QRIS", "VA"].includes(String(detail.paymentMethod)) &&
+      typeof detail.createdAt === "string" &&
       Array.isArray(detail.lines) && detail.lines.every(isOrderLine);
   }, token)
     : { ok: false, status: 401 };
@@ -212,4 +214,48 @@ export function timeWib(value: string): string {
     new Intl.DateTimeFormat("id-ID", {
       timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short",
     }).format(dt);
+}
+
+
+export function sandboxCheckoutEnabled(): boolean {
+  // Display controls only; backend authorization is independent.
+  return process.env.SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED === "true" &&
+    process.env.SCS_PAYMENT_ENVIRONMENT === "sandbox";
+}
+
+export type SandboxPaymentAttempt = {
+  id: string;
+  orderId: string;
+  method: "QRIS" | "VA";
+  amountIdr: number;
+  providerReference: string;
+  state: string;
+  expiresAt: string;
+  nonPayableDisplayHint: "FAKE_QRIS_NOT_PAYABLE" | "FAKE_VA_NOT_PAYABLE";
+  environment: "SANDBOX_FAKE_NOT_MONEY";
+};
+
+function isSandboxPaymentAttempt(value: unknown): value is SandboxPaymentAttempt {
+  return isRecord(value) && isId(value.id) && isId(value.orderId) &&
+    (value.method === "QRIS" || value.method === "VA") &&
+    isNonnegativeMoney(value.amountIdr) && value.amountIdr > 0 &&
+    typeof value.providerReference === "string" &&
+    /^FAKE_[a-f0-9]{32}$/.test(value.providerReference) &&
+    ["CREATED", "PENDING", "FAILED", "EXPIRED", "CANCELLED"].includes(String(value.state)) &&
+    typeof value.expiresAt === "string" &&
+    (value.nonPayableDisplayHint === "FAKE_QRIS_NOT_PAYABLE" ||
+     value.nonPayableDisplayHint === "FAKE_VA_NOT_PAYABLE") &&
+    value.environment === "SANDBOX_FAKE_NOT_MONEY";
+}
+
+export async function getSandboxPaymentAttempts(orderId: string):
+  Promise<Result<SandboxPaymentAttempt[]>> {
+  if (!sandboxCheckoutEnabled()) return { ok: false, status: 404 };
+  if (!UUID_PATTERN.test(orderId)) return { ok: false, status: 400 };
+  const token = await guestToken();
+  return token ? getData("/api/v1/me/orders/" + orderId + "/sandbox-attempts",
+    (data): data is SandboxPaymentAttempt[] =>
+      Array.isArray(data) && data.length <= 20 &&
+      data.every((item) => isSandboxPaymentAttempt(item) && item.orderId === orderId),
+    token) : { ok: false, status: 401 };
 }
