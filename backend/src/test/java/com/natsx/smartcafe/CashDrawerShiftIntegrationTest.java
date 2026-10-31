@@ -42,6 +42,7 @@ class CashDrawerShiftIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired StaffAuthService auth;
     @Autowired CashDrawerShiftService shifts;
+    @Autowired com.natsx.smartcafe.ops.CashVarianceReviewService reviews;
     @Autowired com.natsx.smartcafe.orders.CashWorkflowService cashWorkflow;
 
     private record Actor(StaffPrincipal principal,String token) {}
@@ -179,6 +180,69 @@ class CashDrawerShiftIntegrationTest {
         assertThrows(DataAccessException.class,()->jdbc.update(
             "DELETE FROM cash_drawer_shifts WHERE id=?",first.id()));
 
+        // Manager-only append-only review does NOT alter the immutable -1000 till.
+        var cases=reviews.cases(manager.principal(),0);
+        assertEquals(1,cases.items().size());
+        assertEquals(first.id(),cases.items().getFirst().shiftId());
+        assertEquals(-1000,cases.items().getFirst().differenceIdr());
+        assertNull(cases.items().getFirst().latestAction());
+        assertEquals(403,assertThrows(ApiFailureException.class,()->
+            reviews.cases(cashier.principal(),0)).status().value());
+        assertEquals(403,assertThrows(ApiFailureException.class,()->
+            reviews.add(waiter.principal(),first.id(),"REQUEST_RECOUNT",
+                "Count drawer together with supervisor","waiter-"+UUID.randomUUID(),"test")
+            ).status().value());
+        assertEquals(400,assertThrows(ApiFailureException.class,()->
+            reviews.add(manager.principal(),first.id(),"MARK_REPAID",
+                "This action is deliberately not available","invalid-"+UUID.randomUUID(),"test")
+            ).status().value());
+        String reviewKey="investigate-"+UUID.randomUUID();
+        var action=reviews.add(manager.principal(),first.id(),"REQUEST_RECOUNT",
+            "Recount the physical drawer with second supervisor",reviewKey,"case-open");
+        assertEquals("REQUEST_RECOUNT",action.actionCode());
+        assertEquals(action,reviews.add(manager.principal(),first.id(),"REQUEST_RECOUNT",
+            "Recount the physical drawer with second supervisor",reviewKey,"safe-retry"));
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            reviews.add(manager.principal(),first.id(),"ESCALATE",
+                "Request manager to review missing cash",reviewKey,"key-reuse")
+            ).status().value());
+        assertEquals(1,reviews.history(manager.principal(),first.id()).size());
+        assertEquals("REQUEST_RECOUNT",reviews.cases(manager.principal(),0)
+            .items().getFirst().latestAction());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs
+            WHERE operation='CASH_VARIANCE_REVIEW' AND resource_id=?
+            """,Integer.class,first.id()));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE cash_variance_review_actions SET action_code='ESCALATE'
+            WHERE id=?
+            """,action.id()));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            DELETE FROM cash_variance_review_actions WHERE id=?
+            """,action.id()));
+        assertEquals(-1000L,jdbc.queryForObject("""
+            SELECT difference_idr FROM cash_drawer_shifts WHERE id=?
+            """,Long.class,first.id()));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM receipts WHERE order_id=?
+            """,Integer.class,order));
+        String route="/api/v1/ops/cash-variance-reviews";
+        assertEquals(401,mvc.perform(get(route)).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get(route)
+            .header("Authorization","Bearer "+waiter.token()))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get(route)
+            .header("Authorization","Bearer "+cashier.token()))
+            .andReturn().getResponse().getStatus());
+        var authorizedReviews=mvc.perform(get(route)
+            .header("Authorization","Bearer "+manager.token())).andReturn().getResponse();
+        assertEquals(200,authorizedReviews.getStatus());
+        assertTrue(authorizedReviews.getHeader("Cache-Control").contains("no-store"));
+        assertFalse(authorizedReviews.getContentAsString().contains("Private synthetic guest"));
+        assertEquals(400,mvc.perform(get(route).param("page","1001")
+            .header("Authorization","Bearer "+manager.token()))
+            .andReturn().getResponse().getStatus());
+
         // After the first tracked shift, accepting unassigned cash while closed
         // must fail instead of silently omitting money from drawer accounting.
         UUID postCloseOrder=UUID.randomUUID(),postCloseIntent=UUID.randomUUID();
@@ -203,7 +267,16 @@ class CashDrawerShiftIntegrationTest {
 
         var next=shifts.open(otherCashier.principal(),0,"next-"+UUID.randomUUID(),"test-next");
         assertEquals("OPEN",next.state());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            reviews.add(manager.principal(),next.id(),"REQUEST_RECOUNT",
+                "Cannot investigate a shift before it closes",
+                "open-"+UUID.randomUUID(),"test")).status().value());
         assertEquals("CLOSED",shifts.close(next.id(),manager.principal(),0,
             "manager-"+UUID.randomUUID(),"Supervisor verified empty till","test").state());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            reviews.add(manager.principal(),next.id(),"ESCALATE",
+                "No zero discrepancy should create a case",
+                "zero-"+UUID.randomUUID(),"test")).status().value());
+        assertEquals(1,reviews.cases(manager.principal(),0).items().size());
     }
 }
