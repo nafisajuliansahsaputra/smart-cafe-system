@@ -61,6 +61,15 @@ class StaffAuthIntegrationTest {
         return match.group(1);
     }
 
+    @Test void sandboxSignedWebhookDoesNotExistOnDefaultDeployment() throws Exception {
+        var denied=mvc.perform(post("/api/v1/integrations/payments/sandbox/events")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("X-Sandbox-Timestamp","1782900000")
+            .header("X-Sandbox-Signature","sha256="+"0".repeat(64))
+            .content("{}")).andReturn().getResponse();
+        assertEquals(404,denied.getStatus());
+    }
+
     @Test void reconciliationReviewRouteIsAbsentInDefaultCashEnvironment() throws Exception {
         var admin=staff("ADMIN");
         var loginResponse=mvc.perform(post("/api/v1/staff/auth/login")

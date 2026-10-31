@@ -38,6 +38,10 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/system/status").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                     "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                // Only a sandbox-registered controller can handle this route.
+                // The local HMAC verifier is mandatory; no bearer is used by a fake sender.
+                .requestMatchers(HttpMethod.POST,
+                    "/api/v1/integrations/payments/sandbox/events").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/staff/auth/login", "/api/v1/table-visits/join").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/tables/*/entry", "/api/v1/menu",
                     "/api/v1/menu/*/variants", "/api/v1/menu/*/variant-groups").permitAll()

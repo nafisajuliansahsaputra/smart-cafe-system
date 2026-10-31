@@ -38,3 +38,6 @@ scs:
   payments:
     sandbox-digital-checkout-enabled: ${SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED:false}
     environment: ${SCS_PAYMENT_ENVIRONMENT:disabled}
+    # Demo signing key only; NEVER copy to production or treat as a real
+    # provider token. Unset by default: callback intake returns 503.
+    sandbox-webhook-secret: ${SCS_SANDBOX_WEBHOOK_SECRET:}
