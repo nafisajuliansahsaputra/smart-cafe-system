@@ -220,10 +220,39 @@ public class CashWorkflowService {
         } catch(IllegalArgumentException ex) {
             throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Cash amount insufficient");
         }
-        jdbc.update("""
-            INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,change_given_idr,idempotency_key)
-            VALUES (?,?,?,?,?)
-            """,intentId,staff,quote.amountReceivedIdr(),quote.changeGivenIdr(),key);
+        // The advisory fence is also held by close-shift and cashier handoff.
+        // New tender commits cannot slip into a shift after its closing snapshot.
+        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs,n)->0);
+        UUID shiftId = jdbc.query("""
+            SELECT id FROM cash_drawer_shifts WHERE closed_at IS NULL LIMIT 1
+            """, rs -> rs.next() ? rs.getObject(1,UUID.class) : null);
+        if (shiftId == null) {
+            Integer prior = jdbc.queryForObject("SELECT count(*) FROM cash_drawer_shifts",
+                Integer.class);
+            if (prior != null && prior > 0) {
+                throw conflict("Open a cash drawer shift before capturing another cash payment");
+            }
+        }
+        UUID tenderId = jdbc.queryForObject("""
+            INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,
+                change_given_idr,idempotency_key,cash_shift_id,recorded_at)
+            VALUES (?,?,?,?,?,?,clock_timestamp()) RETURNING id
+            """, UUID.class, intentId,staff,quote.amountReceivedIdr(),
+            quote.changeGivenIdr(),key,shiftId);
+        if (shiftId != null) {
+            Boolean waiterOnly = jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM staff_role_assignments
+                    WHERE staff_user_id=? AND role_key='WAITER')
+                  AND NOT EXISTS(SELECT 1 FROM staff_role_assignments
+                    WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
+                """,Boolean.class,staff,staff);
+            if (Boolean.TRUE.equals(waiterOnly)) {
+                jdbc.update("""
+                    INSERT INTO cash_tender_handoffs(tender_id,cash_shift_id,waiter_staff_id)
+                    VALUES (?,?,?)
+                    """,tenderId,shiftId,staff);
+            }
+        }
         jdbc.update("""
             UPDATE payment_intents SET amount_paid_idr=?,aggregate_status='PAID',version=version+1
             WHERE id=?
