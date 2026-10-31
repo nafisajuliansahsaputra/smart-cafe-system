@@ -86,6 +86,7 @@ export default async function StaffPage() {
           <p>Antrean pesanan aktual dari database, bukan data simulasi. Persetujuan cash tidak berarti sudah dibayar.</p>
           <Link className="staff-link-button" href="/staff/orders">Buka antrean pesanan</Link>
           <p><Link href="/staff/reports">Lihat laporan cash harian</Link></p>
+          <p><Link href="/staff/cash-shifts">Kelola shift dan hitung selisih kas</Link></p>
         </section>
       ) : null}
       {canUseKitchen(current.staff.roles) && (
