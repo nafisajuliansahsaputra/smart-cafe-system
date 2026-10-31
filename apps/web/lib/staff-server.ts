@@ -398,3 +398,80 @@ export async function staffDirectory(page: number): Promise<LoadResult<StaffDire
   }
   return {ok:true,data:data as StaffDirectory};
 }
+
+
+// Strictly synthetic and read-only. Never interpret fake success as funds.
+export function sandboxReviewEnabled(): boolean {
+  return process.env.SCS_PAYMENT_ENVIRONMENT === "sandbox" &&
+    process.env.SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED === "true";
+}
+
+export const sandboxReviewClassifications = [
+  "ALL", "QUARANTINED", "UNKNOWN_REFERENCE", "FINANCIAL_MISMATCH",
+  "ENVIRONMENT_MISMATCH", "LATE_SUCCESS", "CONTRADICTORY_STATE", "ALREADY_SETTLED",
+] as const;
+export type SandboxClassification = (typeof sandboxReviewClassifications)[number];
+
+export type SandboxEvidence = {
+  id: string;
+  eventId: string;
+  reference: string;
+  classification: Exclude<SandboxClassification, "ALL">;
+  claimedState: "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED";
+  method: "QRIS" | "VA";
+  reportedAmountIdr: number;
+  currency: string;
+  environment: string;
+  receivedAt: string;
+  attemptId: string | null;
+  currentAttemptState: string | null;
+  currentPaymentState: string | null;
+};
+export type SandboxReviewPage = {
+  page: number;
+  classification: SandboxClassification;
+  hasNext: boolean;
+  items: SandboxEvidence[];
+  totalEvidence: number;
+  successClaims: number;
+  flaggedEvidence: number;
+};
+
+function sandboxEvidence(item: unknown): item is SandboxEvidence {
+  return record(item) && typeof item.id === "string" && staffUuid.test(item.id) &&
+    typeof item.eventId === "string" && typeof item.reference === "string" &&
+    /^FAKE_[0-9a-f]{32}$/.test(item.reference) &&
+    sandboxReviewClassifications.some((v) => v !== "ALL" && v === item.classification) &&
+    ["PENDING","SUCCEEDED","FAILED","EXPIRED"].includes(String(item.claimedState)) &&
+    ["QRIS","VA"].includes(String(item.method)) &&
+    safeCashNumber(item.reportedAmountIdr) &&
+    typeof item.currency === "string" &&
+    typeof item.environment === "string" &&
+    typeof item.receivedAt === "string" &&
+    (item.attemptId === null ||
+      (typeof item.attemptId === "string" && staffUuid.test(item.attemptId))) &&
+    (item.currentAttemptState === null || typeof item.currentAttemptState === "string") &&
+    (item.currentPaymentState === null || typeof item.currentPaymentState === "string");
+}
+
+export async function sandboxReconciliationPage(page: number,
+  classification: SandboxClassification): Promise<LoadResult<SandboxReviewPage>> {
+  if (!sandboxReviewEnabled()) return { ok: false, status: 404 };
+  if (!Number.isInteger(page) || page < 0 || page > 1000 ||
+    !sandboxReviewClassifications.includes(classification))
+    return { ok: false, status: 400 };
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const response = await staffApi("/api/v1/admin/payments/sandbox-events?page=" +
+    page + "&classification=" + encodeURIComponent(classification), "GET", token);
+  if (response.status !== 200) return { ok: false, status: response.status };
+  const data = dataFromEnvelope(response.payload);
+  if (!record(data) || data.page !== page || data.classification !== classification ||
+    typeof data.hasNext !== "boolean" || !Array.isArray(data.items) ||
+    data.items.length > 20 || !data.items.every(sandboxEvidence) ||
+    !safeCashNumber(data.totalEvidence) || !safeCashNumber(data.successClaims) ||
+    !safeCashNumber(data.flaggedEvidence) ||
+    data.successClaims > data.totalEvidence || data.flaggedEvidence > data.totalEvidence)
+    return { ok: false, status: 502 };
+  return { ok: true, data: data as SandboxReviewPage };
+}
