@@ -70,6 +70,20 @@ class StaffAuthIntegrationTest {
         assertEquals(404,denied.getStatus());
     }
 
+    @Test void fakeUnresolvedPaymentQueueIsAbsentInDefaultEnvironment() throws Exception {
+        var admin=staff("ADMIN");
+        var logged=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(admin.login(),"safe-test-password-123")))
+            .andReturn().getResponse();
+        assertEquals(200,logged.getStatus());
+        String bearer=token(logged.getContentAsString());
+        var absent=mvc.perform(get("/api/v1/admin/payments/sandbox-events/attempts")
+            .header("Authorization","Bearer "+bearer))
+            .andReturn().getResponse();
+        assertEquals(404,absent.getStatus());
+    }
+
     @Test void reconciliationReviewRouteIsAbsentInDefaultCashEnvironment() throws Exception {
         var admin=staff("ADMIN");
         var loginResponse=mvc.perform(post("/api/v1/staff/auth/login")
