@@ -36,6 +36,30 @@ test("sandbox reconciliation evidence is read-only and hidden from non-admin rol
       await expect(admin.page.getByText(
         /Event SUCCEEDED di layar ini hanya klaim palsu/
       )).toBeVisible();
+      // Two synthetic guest QRIS/VA orders ran earlier in the same
+      // disposable job; both remain PENDING without trusted status evidence.
+      await admin.page.getByRole("link", {
+        name:"Lihat antrean pending sandbox",
+      }).click();
+      await expect(admin.page).toHaveURL(/\/staff\/reconciliation\/attempts$/);
+      await expect(admin.page.getByRole("heading",{
+        name:"Payment attempt belum selesai",
+      })).toBeVisible();
+      await expect(admin.page.locator("tbody tr")).toHaveCount(2);
+      await expect(admin.page.locator("tbody tr").first()).toContainText("PENDING");
+      await expect(admin.page.getByText(
+        /Lewat tanggal kedaluwarsa bukan bukti pembayaran gagal/
+      )).toBeVisible();
+      await expect(admin.page.getByRole("button",{
+        name:/setujui|lunas|refund|approve|expire/i,
+      })).toHaveCount(0);
+      await admin.page.goto("/staff/reconciliation/attempts?filter=NO_EVIDENCE");
+      await expect(admin.page.locator("tbody tr")).toHaveCount(2);
+      await admin.page.goto("/staff/reconciliation/attempts?filter=OVERDUE");
+      await expect(admin.page.getByText(
+        /Tidak ada percobaan belum selesai untuk filter ini/
+      )).toBeVisible();
+      await admin.page.goto("/staff/reconciliation");
       const rows=admin.page.locator("tbody tr");
       await expect(rows).toHaveCount(1);
       await expect(rows.first()).toContainText("UNKNOWN_REFERENCE");
