@@ -14,7 +14,12 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 class SandboxWebhookAuthenticatorTest {
-    private static final String SECRET="local-test-only-callback-key-unique-2026-abcdefgh";
+    private static final String SECRET=uniqueTestKey();
+    private static String uniqueTestKey() {
+        byte[] key=new byte[48];
+        new java.security.SecureRandom().nextBytes(key);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key);
+    }
     private static final Instant NOW=Instant.parse("2026-10-31T12:00:00Z");
     private final SandboxWebhookAuthenticator verifier=new SandboxWebhookAuthenticator(
         Clock.fixed(NOW,ZoneOffset.UTC),SECRET);
