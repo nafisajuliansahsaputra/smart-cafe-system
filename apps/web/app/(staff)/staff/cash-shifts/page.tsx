@@ -45,6 +45,16 @@ export default async function CashShiftsPage({
               query.notice === "offline" ? "Server tidak tersedia, jangan mengulangi pencatatan tanpa memeriksa status." :
                 "Input tidak valid. Periksa nominal dan konfirmasi."}
     </p>}
+    {identity.staff.roles.some(r=>r==="MANAGER" || r==="ADMIN") &&
+      <section className="staff-panel">
+        <h2>Investigasi selisih kas</h2>
+        <p>Manager dapat menindaklanjuti shift yang memiliki selisih
+          tanpa mengubah nominal kas atau struk final.</p>
+        <Link className="staff-link-button"
+          href="/staff/cash-shifts/investigations">
+          Periksa selisih shift
+        </Link>
+      </section>}
     {!result.ok && <section className="staff-panel" role="alert">
       Status kas tidak dapat dibaca dari database. Tidak boleh menganggap saldo nol.
     </section>}
