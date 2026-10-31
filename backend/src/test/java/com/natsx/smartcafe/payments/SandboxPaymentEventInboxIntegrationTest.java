@@ -143,6 +143,20 @@ class SandboxPaymentEventInboxIntegrationTest {
 
     @Test void sandboxEvidenceReviewIsAdminOnlyPaginatedReadOnlyAndFiltered()
         throws Exception {
+        long beforeTotal=jdbc.queryForObject(
+            "SELECT count(*) FROM sandbox_payment_event_inbox",Long.class);
+        long beforeSuccess=jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_event_inbox
+            WHERE observed_state='SUCCEEDED'
+            """,Long.class);
+        long beforeFlagged=jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_event_inbox
+            WHERE classification<>'QUARANTINED'
+            """,Long.class);
+        long beforeMismatch=jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_event_inbox
+            WHERE classification='FINANCIAL_MISMATCH'
+            """,Long.class);
         var f=seed();
         var evidence=inbox();
         for(int i=0;i<24;i++) {
@@ -173,9 +187,9 @@ class SandboxPaymentEventInboxIntegrationTest {
         String json=first.getContentAsString();
         assertTrue(json.contains("\"classification\":\"ALL\""),json);
         assertTrue(json.contains("\"hasNext\":true"),json);
-        assertTrue(json.contains("\"totalEvidence\":24"),json);
-        assertTrue(json.contains("\"successClaims\":24"),json);
-        assertTrue(json.contains("\"flaggedEvidence\":1"),json);
+        assertTrue(json.contains("\"totalEvidence\":"+(beforeTotal+24)),json);
+        assertTrue(json.contains("\"successClaims\":"+(beforeSuccess+24)),json);
+        assertTrue(json.contains("\"flaggedEvidence\":"+(beforeFlagged+1)),json);
         assertEquals(20,occurrences(json,"\"eventId\":"));
         assertFalse(json.contains("safe-test-password"));
         assertFalse(json.contains("payloadFingerprint"));
@@ -186,15 +200,18 @@ class SandboxPaymentEventInboxIntegrationTest {
                 .header("Authorization","Bearer "+admin))
             .andReturn().getResponse();
         assertEquals(200,second.getStatus());
-        assertTrue(second.getContentAsString().contains("\"hasNext\":false"));
-        assertEquals(4,occurrences(second.getContentAsString(),"\"eventId\":"));
+        assertEquals(beforeTotal+24<=40,
+            second.getContentAsString().contains("\"hasNext\":false"));
+        assertEquals(Math.min(20,Math.max(0,beforeTotal+24-20)),
+            occurrences(second.getContentAsString(),"\"eventId\":"));
         var flagged=mvc.perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                 .get(endpoint+"?classification=FINANCIAL_MISMATCH")
                 .header("Authorization","Bearer "+admin))
             .andReturn().getResponse();
         assertEquals(200,flagged.getStatus());
-        assertEquals(1,occurrences(flagged.getContentAsString(),"\"eventId\":"));
+        assertEquals(Math.min(20,beforeMismatch+1),
+            occurrences(flagged.getContentAsString(),"\"eventId\":"));
         assertTrue(flagged.getContentAsString().contains("FINANCIAL_MISMATCH"));
         for(String query:List.of("?page=-1","?page=1001",
             "?classification=INVALID","?classification=all")) {
