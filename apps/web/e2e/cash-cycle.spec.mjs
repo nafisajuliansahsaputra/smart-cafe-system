@@ -289,6 +289,21 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     const till = cashier.getByLabel("Shift kasir aktif");
     await expect(till).toContainText("35.000");
     await expect(till).toContainText("45.000");
+    // Cash already PAID but remains in the waiter's physical custody.
+    const custody = cashier.getByLabel("Serah terima uang waiter");
+    await expect(custody).toContainText("1 serah-terima belum dikonfirmasi");
+    await expect(custody).toContainText("e2e-waiter");
+    await expect(cashier.getByRole("button", { name: "Tutup shift & catat selisih" }))
+      .toHaveCount(0);
+    await cashier.getByLabel("Uang neto yang dihitung (IDR)").fill("35000");
+    await cashier.getByRole("checkbox", {
+      name: "Saya sudah menerima dan menghitung uang fisik dari waiter ini",
+    }).check();
+    await cashier.getByRole("button", { name: "Konfirmasi terima uang" }).click();
+    await expect(cashier.getByLabel("Serah terima uang waiter"))
+      .toContainText("0 serah-terima belum dikonfirmasi");
+    await expect(cashier.getByRole("button", { name: "Tutup shift & catat selisih" }))
+      .toBeVisible();
     await cashier.getByLabel("Uang fisik yang dihitung (IDR)").fill("44000");
     await cashier.getByLabel("Catatan pemeriksaan").fill(
       "Synthetic closing count, all waiter cash handed over",
