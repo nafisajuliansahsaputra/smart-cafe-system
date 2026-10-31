@@ -480,6 +480,7 @@ pushes and a weekly schedule, using only local CI-built images.
 ## M3 sandbox payment attempt acceptance (draft PR #47)
 
 - Sandbox-enabled Testcontainers+MockMvc: QRIS checkout PENDING, owner list initially empty, POST creates a durable FAKE attempt, replay keeps identical provider reference, competing key 409, VA-on-QRIS 409, no idempotency header 400, unknown method 400, cross-guest GET/POST 404, anonymous POST 401. Assert exact paid amount stays 0 with no receipt or kitchen ticket.
-- Default cash environment (no sandbox property): GET and POST sandbox-attempt route return 404 to authenticated guests and create no attempts. Existing Chromium cash lifecycle remains enabled in CI unchanged.
+- Default cash environment (no sandbox property): GET and POST sandbox-attempt route return 404 to authenticated guests and create no attempts.
+- Sandbox environment with sandbox-digital-checkout-enabled=false: authenticated GET and POST return 403 and no attempt is saved. This separately verifies the second backend gate. Existing Chromium cash lifecycle remains enabled in CI unchanged.
 - Next.js lint/types/build validates guarded sandbox checkout and order details. A true sandbox browser end-to-end with explicit flags remains to be added before any staging pilot.
 - Do not use a real QRIS code, VA number, provider account, phone number, merchant, payment or customer information in these tests.
