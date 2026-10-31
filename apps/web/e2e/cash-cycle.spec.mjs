@@ -275,7 +275,15 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await cashier.goto("/staff/reports");
     await expect(cashier.getByRole("heading", { name: "Laporan cash harian" })).toBeVisible();
     await expect(cashier.getByLabel("Ringkasan penerimaan cash")).toContainText("35.000");
-    await expect(cashier.getByRole("table")).toContainText("E2E Latte");
+    await expect(cashier.getByRole("table").first()).toContainText("E2E Latte");
+    const ledgerTable = cashier.getByRole("table", { name: "Transaksi cash lunas" });
+    await expect(ledgerTable).toBeVisible();
+    await expect(ledgerTable).toContainText("35.000");
+    await expect(ledgerTable.getByRole("link", { name: "Lihat pesanan" })).toHaveAttribute(
+      "href", "/staff/orders/" + orderId,
+    );
+    expect(await ledgerTable.innerText()).not.toContain("E2E Visitor");
+    await expect(cashier.getByText("Rincian struk cash lunas")).toBeVisible();
 
     // Restricted report download reuses PAID CASH receipt totals.
     const csvLink = cashier.getByRole("link", { name: "Unduh CSV laporan" });
