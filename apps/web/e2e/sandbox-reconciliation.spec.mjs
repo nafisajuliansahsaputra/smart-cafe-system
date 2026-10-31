@@ -66,7 +66,12 @@ test("sandbox reconciliation evidence is read-only and hidden from non-admin rol
       await expect(admin.page).toHaveURL(/notice=recorded/);
       await expect(admin.page.locator("tbody tr").first()).toContainText("ESCALATE");
 
-      await admin.page.getByLabel("Filter klasifikasi").selectOption("FINANCIAL_MISMATCH");
+      // Let the server-action redirect/hydration settle before a native GET filter form.
+      await admin.page.reload();
+      const filter=admin.page.getByLabel("Filter klasifikasi");
+      await expect(filter).toHaveValue("ALL");
+      await filter.selectOption("FINANCIAL_MISMATCH");
+      await expect(filter).toHaveValue("FINANCIAL_MISMATCH");
       await admin.page.getByRole("button",{name:"Tampilkan bukti"}).click();
       await expect(admin.page).toHaveURL(/classification=FINANCIAL_MISMATCH/);
       await expect(admin.page.getByText(
