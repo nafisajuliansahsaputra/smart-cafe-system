@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
-  idr, localTime, sandboxReconciliationPage, sandboxReviewClassifications,
+  localTime, sandboxReconciliationPage, sandboxReviewClassifications,
   sandboxReviewEnabled, staffIdentity, type SandboxClassification,
 } from "@/lib/staff-server";
 
@@ -90,7 +90,7 @@ export default async function SandboxReconciliationPage({
               <td>{localTime(event.receivedAt)}</td>
               <td><strong>{event.classification}</strong></td>
               <td>{event.method} · {event.claimedState}</td>
-              <td>{idr(event.reportedAmountIdr)} ({event.currency})</td>
+              <td>{event.reportedAmountIdr.toLocaleString("id-ID")} {event.currency}</td>
               <td><code>{event.reference}</code></td>
               <td>{event.currentPaymentState??"Tidak diketahui"}</td>
             </tr>)}</tbody>
