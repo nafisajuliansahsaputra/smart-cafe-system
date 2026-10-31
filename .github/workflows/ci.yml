@@ -204,6 +204,77 @@ jobs:
         if: always()
         run: docker compose down --volumes --remove-orphans
 
+  sandbox-browser-e2e:
+    name: Chromium / isolated QRIS-VA fake sandbox and money invariants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prepare disposable non-merchant sandbox
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=disposable-sandbox-ci-only/' .env
+          sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=sandbox-browser-ci-only-not-a-real-hmac-secret-2026/' .env
+          docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml config -q
+      - name: Build and start fake-only checkout services
+        run: docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml up --build --detach
+      - name: Wait for clean migration and seed synthetic browser fixtures
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/system/status > /tmp/scs-fake-sandbox-health.json &&
+              curl --fail --silent http://127.0.0.1:3000/staff/login > /tmp/scs-fake-sandbox-login.html; then
+              break
+            fi
+            sleep 3
+          done
+          grep -q '"database":"connected"' /tmp/scs-fake-sandbox-health.json
+          grep -q 'Masuk sebagai staf' /tmp/scs-fake-sandbox-login.html
+          docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml \
+            exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+            < infra/fixtures/e2e-browser.sql
+      - name: Install disposable Chromium
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Exercise guest QRIS and VA fake creation through browser and API
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_SANDBOX_PAYMENTS: "true"
+        run: npx playwright test --config e2e/playwright.config.mjs e2e/sandbox-payments.spec.mjs
+      - name: Assert PostgreSQL never records fake money or fake kitchen release
+        run: |
+          set -euo pipefail
+          query() {
+            docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml \
+              exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tAc "$1"' sh "$1"
+          }
+          test "$(query "SELECT COUNT(*) FROM digital_payment_attempts WHERE provider_key='SANDBOX_FAKE' AND state='PENDING'")" = "2"
+          test "$(query "SELECT COUNT(*) FROM payment_intents WHERE method_selected IN ('QRIS','VA') AND (aggregate_status<>'PENDING' OR amount_paid_idr<>0)")" = "0"
+          test "$(query "SELECT COUNT(*) FROM receipts r JOIN payment_intents p ON p.order_id=r.order_id WHERE p.method_selected IN ('QRIS','VA')")" = "0"
+          test "$(query "SELECT COUNT(*) FROM kitchen_tickets k JOIN payment_intents p ON p.order_id=k.order_id WHERE p.method_selected IN ('QRIS','VA')")" = "0"
+      - name: Upload fake-payment browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-fake-payments-failure
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Diagnose disposable services when sandbox acceptance fails
+        if: failure()
+        run: docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml logs --no-color --tail=120
+      - name: Destroy fake-payment CI containers and data
+        if: always()
+        run: docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml down --volumes --remove-orphans
+
   edge-https-e2e:
     name: HTTPS edge / trusted headers / Chromium acceptance
     runs-on: ubuntu-24.04

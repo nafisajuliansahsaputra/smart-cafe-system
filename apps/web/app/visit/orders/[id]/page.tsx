@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { LiveRefresh } from "@/components/live-refresh";
 import { notFound, redirect } from "next/navigation";
@@ -92,7 +91,12 @@ export default async function OrderDetailPage({ params, searchParams }: {
                   className="guest-form">
                   <input type="hidden" name="orderId" value={id}/>
                   <input type="hidden" name="paymentMethod" value={order.data.paymentMethod}/>
-                  <input type="hidden" name="idempotencyKey" value={randomUUID()}/>
+                  {/* Stable across live SSE router.refresh and browser reloads. A new
+                      terminal attempt changes the latest attempt id, allowing a
+                      deliberate NEW retry key without replaying the old key. */}
+                  <input type="hidden" name="idempotencyKey"
+                    value={"sandbox_"+id.replaceAll("-","")+"_"+
+                      (attempts.data[0]?.id.replaceAll("-","") ?? "initial")}/>
                   <label className="guest-check">
                     <input name="confirm" type="checkbox" value="yes" required/>
                     Saya paham referensi ini hanya simulasi dan tidak menerima pembayaran

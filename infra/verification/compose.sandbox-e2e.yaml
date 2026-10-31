@@ -1,0 +1,11 @@
+# CI-ONLY override. Do NOT use with a real cafe, shared DB, or merchant account.
+# It enables fake QRIS/VA attempts with deliberately non-payable identifiers.
+services:
+  api:
+    environment:
+      SCS_PAYMENT_ENVIRONMENT: sandbox
+      SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED: "true"
+  web:
+    environment:
+      SCS_PAYMENT_ENVIRONMENT: sandbox
+      SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED: "true"
