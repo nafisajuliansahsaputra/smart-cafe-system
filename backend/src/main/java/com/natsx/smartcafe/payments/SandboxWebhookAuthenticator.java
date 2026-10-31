@@ -49,15 +49,14 @@ public final class SandboxWebhookAuthenticator {
         Instant now=clock.instant();
         if(issued.isBefore(now.minus(MAX_SKEW))||issued.isAfter(now.plus(MAX_SKEW)))
             throw unauthorized();
-        byte[] prefix=(timestamp+".").getBytes(StandardCharsets.US_ASCII);
-        byte[] signed=new byte[prefix.length+raw.length];
-        System.arraycopy(prefix,0,signed,0,prefix.length);
-        System.arraycopy(raw,0,signed,prefix.length,raw.length);
+        // Authenticate the original byte stream incrementally. Never allocate
+        // an input-sized combined buffer from an untrusted HTTP body.
         byte[] actual;
         try {
             Mac mac=Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret,"HmacSHA256"));
-            actual=mac.doFinal(signed);
+            mac.update((timestamp+".").getBytes(StandardCharsets.US_ASCII));
+            actual=mac.doFinal(raw);
         }catch(java.security.GeneralSecurityException ex) {
             throw new IllegalStateException("HMAC-SHA256 unavailable",ex);
         }
