@@ -17,7 +17,20 @@ export type Shift = {
   differenceIdr: number | null;
   closingReason: string | null;
 };
-export type ShiftDashboard = { active: Shift | null; recent: Shift[] };
+export type PendingHandoff = {
+  tenderId: string;
+  waiterStaffId: string;
+  waiterLogin: string;
+  tableCode: string;
+  netCashIdr: number;
+  collectedAt: string;
+};
+export type ShiftDashboard = {
+  active: Shift | null;
+  recent: Shift[];
+  pendingHandoffCount: number;
+  pendingHandoffs: PendingHandoff[];
+};
 
 function record(x: unknown): x is Record<string, unknown> {
   return x !== null && typeof x === "object" && !Array.isArray(x);
@@ -50,6 +63,14 @@ function shift(x: unknown): x is Shift {
     typeof x.closingReason === "string";
 }
 
+function handoff(x: unknown): x is PendingHandoff {
+  return record(x) && uuid(x.tenderId) && uuid(x.waiterStaffId) &&
+    typeof x.waiterLogin === "string" && x.waiterLogin.length <= 120 &&
+    typeof x.tableCode === "string" && x.tableCode.length <= 40 &&
+    integer(x.netCashIdr) && x.netCashIdr >= 0 &&
+    time(x.collectedAt);
+}
+
 export async function cashShiftDashboard(): Promise<LoadResult<ShiftDashboard>> {
   const token = await staffToken();
   if (!token) return { ok: false, status: 401 };
@@ -58,9 +79,16 @@ export async function cashShiftDashboard(): Promise<LoadResult<ShiftDashboard>> 
   const payload = dataFromEnvelope(response.payload);
   if (!record(payload) || (payload.active !== null && !shift(payload.active)) ||
       !Array.isArray(payload.recent) || payload.recent.length > 10 ||
-      !payload.recent.every((item: unknown) => shift(item) && item.state === "CLOSED")) {
+      !payload.recent.every((item: unknown) => shift(item) && item.state === "CLOSED") ||
+      !integer(payload.pendingHandoffCount) || payload.pendingHandoffCount < 0 ||
+      !Array.isArray(payload.pendingHandoffs) || payload.pendingHandoffs.length > 50 ||
+      payload.pendingHandoffs.length > payload.pendingHandoffCount ||
+      !payload.pendingHandoffs.every(handoff) ||
+      (payload.active === null && payload.pendingHandoffCount !== 0)) {
     return { ok: false, status: 502 };
   }
   return { ok: true, data: { active: payload.active as Shift | null,
-    recent: payload.recent as Shift[] } };
+    recent: payload.recent as Shift[],
+    pendingHandoffCount: payload.pendingHandoffCount as number,
+    pendingHandoffs: payload.pendingHandoffs as PendingHandoff[] } };
 }

@@ -42,6 +42,25 @@ public class CashDrawerShiftController {
                 key,RequestIdFilter.get(request)),RequestIdFilter.get(request)));
     }
 
+    public record ReceiveCash(@Min(0) @Max(1000000000000L) long countedNetIdr,
+                              boolean confirmedPhysicalReceipt) {}
+
+    @PostMapping("/{id}/handoffs/{tenderId}/receive")
+    public ResponseEntity<ApiEnvelope<CashDrawerShiftService.ReceivedHandoff>> receive(
+        @PathVariable UUID id, @PathVariable UUID tenderId,
+        @AuthenticationPrincipal StaffPrincipal actor,
+        @RequestHeader(value="Idempotency-Key",required=false) String key,
+        @Valid @RequestBody ReceiveCash payload, HttpServletRequest request) {
+        if (!payload.confirmedPhysicalReceipt()) {
+            throw new com.natsx.smartcafe.common.api.ApiFailureException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
+                "Physical cash receipt must be explicitly confirmed");
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(shifts.receive(id,tenderId,actor,payload.countedNetIdr(),
+                key,RequestIdFilter.get(request)),RequestIdFilter.get(request)));
+    }
+
     @PostMapping("/{id}/close")
     public ResponseEntity<ApiEnvelope<CashDrawerShiftService.Shift>> close(
         @PathVariable UUID id, @AuthenticationPrincipal StaffPrincipal actor,

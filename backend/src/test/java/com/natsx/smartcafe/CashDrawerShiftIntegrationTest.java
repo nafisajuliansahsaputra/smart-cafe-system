@@ -42,6 +42,7 @@ class CashDrawerShiftIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired StaffAuthService auth;
     @Autowired CashDrawerShiftService shifts;
+    @Autowired com.natsx.smartcafe.orders.CashWorkflowService cashWorkflow;
 
     private record Actor(StaffPrincipal principal,String token) {}
     private Actor staff(String role) {
@@ -95,11 +96,15 @@ class CashDrawerShiftIntegrationTest {
                 amount_paid_idr,aggregate_status)
             VALUES (?,?,'CASH',35000,35000,'PAID')
             """,intent,order);
-        jdbc.update("""
+        UUID tender=jdbc.queryForObject("""
             INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,
-                change_given_idr,idempotency_key)
-            VALUES (?,?,50000,15000,?)
-            """,intent,cashier.principal().staffId(),"tender-"+UUID.randomUUID());
+                change_given_idr,idempotency_key,cash_shift_id)
+            VALUES (?,?,50000,15000,?,?) RETURNING id
+            """,UUID.class,intent,waiter.principal().staffId(),"tender-"+UUID.randomUUID(),first.id());
+        jdbc.update("""
+            INSERT INTO cash_tender_handoffs(tender_id,cash_shift_id,waiter_staff_id)
+            VALUES (?,?,?)
+            """,tender,first.id(),waiter.principal().staffId());
         jdbc.update("""
             INSERT INTO receipts(payment_intent_id,order_id,total_idr,document_json)
             VALUES (?,?,35000,'{}'::jsonb)
@@ -117,6 +122,35 @@ class CashDrawerShiftIntegrationTest {
         assertEquals(200,authorized.getStatus());
         assertTrue(authorized.getHeader("Cache-Control").contains("no-store"));
         assertFalse(authorized.getContentAsString().contains("Private synthetic guest"));
+
+        assertEquals(1,shifts.dashboard().pendingHandoffCount());
+        assertEquals(tender,shifts.dashboard().pendingHandoffs().getFirst().tenderId());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.close(first.id(),cashier.principal(),44000,"premature-"+UUID.randomUUID(),
+                "Count not yet handed over","test")).status().value());
+        assertEquals(403,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,waiter.principal(),35000,
+                "denied-"+UUID.randomUUID(),"test")).status().value());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,cashier.principal(),34000,
+                "wrong-"+UUID.randomUUID(),"test")).status().value());
+        String receivedKey="receive-"+UUID.randomUUID();
+        var handoff=shifts.receive(first.id(),tender,cashier.principal(),35000,
+            receivedKey,"handoff-confirmed");
+        assertEquals("RECEIVED",handoff.state());
+        assertEquals(handoff,shifts.receive(first.id(),tender,cashier.principal(),35000,
+            receivedKey,"handoff-replayed"));
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,cashier.principal(),35000,
+                "different-"+UUID.randomUUID(),"test")).status().value());
+        assertEquals(0,shifts.dashboard().pendingHandoffCount());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE operation='CASH_HANDOFF_RECEIVED'
+              AND resource_id=?
+            """,Integer.class,tender));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE cash_tender_handoffs SET received_at=NULL WHERE tender_id=?
+            """,tender));
 
         var closeKey="close-"+first.id();
         var closed=shifts.close(first.id(),cashier.principal(),44000,closeKey,
@@ -144,6 +178,28 @@ class CashDrawerShiftIntegrationTest {
             "UPDATE cash_drawer_shifts SET counted_cash_idr=1 WHERE id=?",first.id()));
         assertThrows(DataAccessException.class,()->jdbc.update(
             "DELETE FROM cash_drawer_shifts WHERE id=?",first.id()));
+
+        // After the first tracked shift, accepting unassigned cash while closed
+        // must fail instead of silently omitting money from drawer accounting.
+        UUID postCloseOrder=UUID.randomUUID(),postCloseIntent=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO orders(id,visit_id,guest_id,status,subtotal_idr,total_idr,pricing_policy_version)
+            VALUES (?,?,?,'SERVED',9000,9000,'SYNTHETIC-NO-OPEN-TILL')
+            """,postCloseOrder,visit,guest);
+        jdbc.update("""
+            INSERT INTO payment_intents(id,order_id,method_selected,amount_due_idr,
+                aggregate_status)
+            VALUES (?,?,'CASH',9000,'AWAITING_CASH')
+            """,postCloseIntent,postCloseOrder);
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            cashWorkflow.capture(postCloseIntent,10000,"closed-"+UUID.randomUUID(),
+                cashier.principal().staffId(),"no-open-shift")).status().value());
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM cash_tenders WHERE payment_intent_id=?
+            """,Integer.class,postCloseIntent));
+        assertEquals("AWAITING_CASH",jdbc.queryForObject("""
+            SELECT aggregate_status FROM payment_intents WHERE id=?
+            """,String.class,postCloseIntent));
 
         var next=shifts.open(otherCashier.principal(),0,"next-"+UUID.randomUUID(),"test-next");
         assertEquals("OPEN",next.state());

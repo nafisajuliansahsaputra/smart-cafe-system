@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { canUseOcc, idr, localTime, staffIdentity } from "@/lib/staff-server";
 import { cashShiftDashboard } from "@/lib/cash-shifts-server";
-import { closeCashShift, openCashShift } from "./actions";
+import { closeCashShift, openCashShift, receiveWaiterCash } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +36,10 @@ export default async function CashShiftsPage({
     <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link>
       <span>/</span><strong>Shift kasir</strong></nav>
     {query.notice && <p className="staff-notice" role={query.notice === "opened" ||
-        query.notice === "closed" ? "status" : "alert"}>
+        query.notice === "closed" || query.notice === "received" ? "status" : "alert"}>
       {query.notice === "opened" ? "Shift berhasil dibuka." :
         query.notice === "closed" ? "Shift ditutup dan selisih dicatat sebagai audit." :
+        query.notice === "received" ? "Uang waiter diterima dan dicatat dalam audit." :
           query.notice === "conflict" ? "Status shift telah berubah. Periksa kembali." :
             query.notice === "forbidden" ? "Akses tindakan ditolak." :
               query.notice === "offline" ? "Server tidak tersedia, jangan mengulangi pencatatan tanpa memeriksa status." :
@@ -70,10 +71,43 @@ export default async function CashShiftsPage({
         <div><small>Cash tercatat selama shift</small><strong>{idr(active.recordedCashIdr)}</strong></div>
         <div><small>Perkiraan uang laci</small><strong>{idr(active.expectedDrawerIdr)}</strong></div>
       </div>
-      <p className="staff-muted">Perkiraan dihitung dari catatan cash dikurangi kembalian.
-        Jika waiter belum menyerahkan uang, nominal fisik dapat berbeda.
-        Angka dapat berubah selama pesanan cash dicatat.</p>
-      {closeAllowed ? <form action={closeCashShift} className="staff-form">
+      <p className="staff-muted">Total transaksi cash dalam shift ini sudah dicatat
+        setelah kembalian. Uang yang masih dipegang waiter wajib diserahkan
+        dan dikonfirmasi kasir sebelum shift boleh ditutup.</p>
+      <section aria-label="Serah terima uang waiter">
+        <h3>Serah terima uang waiter</h3>
+        <p role="status">{result.data.pendingHandoffCount} serah-terima belum dikonfirmasi.</p>
+        {result.data.pendingHandoffCount === 0 &&
+          <p>Semua serah-terima waiter untuk shift ini sudah dikonfirmasi.</p>}
+        {result.data.pendingHandoffs.map((handoff) => (
+          <article className="staff-panel" key={handoff.tenderId}>
+            <p><strong>{handoff.waiterLogin}</strong> · Meja {handoff.tableCode}</p>
+            <p>Dicatat {localTime(handoff.collectedAt)}</p>
+            <p>Uang neto yang harus diserahkan: <strong>{idr(handoff.netCashIdr)}</strong></p>
+            <form action={receiveWaiterCash} className="staff-form">
+              <input type="hidden" name="shiftId" value={active.id}/>
+              <input type="hidden" name="tenderId" value={handoff.tenderId}/>
+              <input type="hidden" name="idempotencyKey" value={"handoff-" + handoff.tenderId}/>
+              <label htmlFor={`counted-${handoff.tenderId}`}>Uang neto yang dihitung (IDR)</label>
+              <input id={`counted-${handoff.tenderId}`} name="countedNetIdr"
+                type="number" min="0" max="1000000000000" step="1" required/>
+              <label className="staff-check">
+                <input type="checkbox" name="confirm" value="yes" required/>
+                Saya sudah menerima dan menghitung uang fisik dari waiter ini
+              </label>
+              <button className="staff-secondary" type="submit">Konfirmasi terima uang</button>
+            </form>
+          </article>
+        ))}
+        {result.data.pendingHandoffCount > result.data.pendingHandoffs.length &&
+          <p role="alert">Masih ada serah-terima lainnya. Konfirmasi yang tampil,
+            lalu segarkan daftar sebelum menutup shift.</p>}
+      </section>
+      {closeAllowed && result.data.pendingHandoffCount > 0 &&
+        <p className="staff-notice" role="alert">
+          Shift belum boleh ditutup: selesaikan semua serah-terima waiter.
+        </p>}
+      {closeAllowed && result.data.pendingHandoffCount === 0 ? <form action={closeCashShift} className="staff-form">
         <h3>Tutup dan hitung shift</h3>
         <input type="hidden" name="shiftId" value={active.id}/>
         <input type="hidden" name="idempotencyKey" value={"close-" + active.id}/>
@@ -108,10 +142,12 @@ export default async function CashShiftsPage({
         </table>
       </div>}
     </section>}
-    <p className="staff-footnote">Rekonsiliasi ini hanya catatan operasional sementara
-      untuk satu laci kas dalam satu kafe. Tidak memverifikasi uang di bank,
-      perpindahan kas antar staf, refund, ataupun saldo riil. Menutup shift
-      tidak mengubah pesanan, status PAID, atau struk yang sudah terbit.
+    <p className="staff-footnote">Rekonsiliasi ini hanya untuk satu laci kas
+      dalam satu kafe. Tender waiter ditandai menunggu serah-terima dan
+      shift tidak dapat ditutup sebelum uang diterima kasir. Seluruh penerimaan
+      diikat ke shift oleh transaksi PostgreSQL. Shift tidak mengubah status PAID,
+      struk, refund ataupun saldo bank. Pembayaran tanpa shift aktif sebelum
+      penggunaan sistem shift pertama tetap tidak termasuk laporan shift.
     </p>
   </main>;
 }

@@ -26,7 +26,14 @@ public class CashDrawerShiftService {
         long openingFloatIdr, long recordedCashIdr, long expectedDrawerIdr,
         Instant closedAt, UUID closedBy, Long countedCashIdr, Long differenceIdr,
         String closingReason) {}
-    public record Dashboard(Shift active, List<Shift> recent) {}
+    public record PendingHandoff(UUID tenderId, UUID waiterStaffId, String waiterLogin,
+        String tableCode, long netCashIdr, Instant collectedAt) {}
+    public record Dashboard(Shift active, List<Shift> recent,
+        long pendingHandoffCount, List<PendingHandoff> pendingHandoffs) {}
+    public record ReceivedHandoff(UUID tenderId, UUID shiftId, long netCashIdr,
+        String state) {}
+    private record HandoffRow(UUID shiftId, UUID waiterId, UUID receivedBy,
+        Instant receivedAt, String key, long net) {}
     private record Stored(UUID id, UUID openedBy, Instant openedAt, long opening,
         Instant closedAt, UUID closedBy, Long recorded, Long expected,
         Long counted, Long difference, String reason, String openKey, String closeKey) {}
@@ -40,8 +47,36 @@ public class CashDrawerShiftService {
             SELECT * FROM cash_drawer_shifts WHERE closed_at IS NOT NULL
             ORDER BY opened_at DESC,id DESC LIMIT 10
             """, this::map);
-        return new Dashboard(active.isEmpty() ? null : present(active.getFirst()),
-            closed.stream().map(this::present).toList());
+        if (active.isEmpty()) {
+            return new Dashboard(null, closed.stream().map(this::present).toList(),
+                0, List.of());
+        }
+        UUID shiftId = active.getFirst().id();
+        Long total = jdbc.queryForObject("""
+            SELECT count(*) FROM cash_tender_handoffs
+            WHERE cash_shift_id=? AND received_at IS NULL
+            """,Long.class,shiftId);
+        var pending = jdbc.query("""
+            SELECT h.tender_id,h.waiter_staff_id,u.login,t.amount_received_idr,
+                   t.change_given_idr,t.recorded_at,ct.table_code
+            FROM cash_tender_handoffs h
+            JOIN cash_tenders t ON t.id=h.tender_id
+            JOIN staff_users u ON u.id=h.waiter_staff_id
+            JOIN payment_intents p ON p.id=t.payment_intent_id
+            JOIN orders o ON o.id=p.order_id
+            JOIN table_visits v ON v.id=o.visit_id
+            JOIN cafe_tables ct ON ct.id=v.table_id
+            WHERE h.cash_shift_id=? AND h.received_at IS NULL
+            ORDER BY t.recorded_at,h.tender_id LIMIT 50
+            """,(rs,n)->new PendingHandoff(
+                rs.getObject("tender_id",UUID.class),
+                rs.getObject("waiter_staff_id",UUID.class),
+                rs.getString("login"),rs.getString("table_code"),
+                Math.subtractExact(rs.getLong("amount_received_idr"),
+                    rs.getLong("change_given_idr")),
+                rs.getTimestamp("recorded_at").toInstant()),shiftId);
+        return new Dashboard(present(active.getFirst()),
+            closed.stream().map(this::present).toList(),total == null ? 0 : total,pending);
     }
 
     @Transactional
@@ -99,9 +134,16 @@ public class CashDrawerShiftService {
             }
             throw conflict("This shift has already closed");
         }
+        Long pending = jdbc.queryForObject("""
+            SELECT count(*) FROM cash_tender_handoffs
+            WHERE cash_shift_id=? AND received_at IS NULL
+            """,Long.class,id);
+        if (pending == null || pending > 0) {
+            throw conflict("Unconfirmed waiter cash handoffs must be received before closing");
+        }
         Instant cutoff = jdbc.queryForObject("SELECT clock_timestamp()",
             (rs, n) -> rs.getTimestamp(1).toInstant());
-        long gross = cashCollected(old.openedAt(), cutoff);
+        long gross = cashCollected(id);
         long expected;
         try { expected = Math.addExact(old.opening(), gross); }
         catch (ArithmeticException e) { throw conflict("Cash total exceeds supported bound"); }
@@ -121,18 +163,69 @@ public class CashDrawerShiftService {
         return present(load(id, false));
     }
 
-    private long cashCollected(Instant from, Instant to) {
+    private long cashCollected(UUID shiftId) {
         Long amount = jdbc.queryForObject("""
             SELECT COALESCE(SUM(t.amount_received_idr - t.change_given_idr),0)
             FROM cash_tenders t
             JOIN payment_intents p ON p.id=t.payment_intent_id
-            WHERE p.method_selected='CASH' AND t.recorded_at>=? AND t.recorded_at<?
-            """, (rs, n) -> rs.getBigDecimal(1).longValueExact(),
-            Timestamp.from(from), Timestamp.from(to));
+            WHERE p.method_selected='CASH' AND t.cash_shift_id=?
+            """, (rs, n) -> rs.getBigDecimal(1).longValueExact(),shiftId);
         if (amount == null || amount < 0 || amount > MAX_IDR) {
             throw conflict("Cash collection exceeds supported bound");
         }
         return amount;
+    }
+
+    /** Cashier physically verifies the exact net amount and signs custody transfer. */
+    @Transactional
+    public ReceivedHandoff receive(UUID shiftId, UUID tenderId, StaffPrincipal actor,
+                                   long counted, String key, String requestId) {
+        allowed(actor);
+        checkMoney(counted);
+        checkKey(key);
+        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)",(rs,n)->0);
+        var shift = load(shiftId,true);
+        var rows = jdbc.query("""
+            SELECT h.cash_shift_id,h.waiter_staff_id,h.received_by,h.received_at,
+                   h.acknowledgment_key,t.amount_received_idr,t.change_given_idr
+            FROM cash_tender_handoffs h
+            JOIN cash_tenders t ON t.id=h.tender_id
+            WHERE h.tender_id=? AND h.cash_shift_id=? FOR UPDATE OF h
+            """,(rs,n)->new HandoffRow(rs.getObject("cash_shift_id",UUID.class),
+                rs.getObject("waiter_staff_id",UUID.class),
+                rs.getObject("received_by",UUID.class),
+                rs.getTimestamp("received_at")==null?null:
+                    rs.getTimestamp("received_at").toInstant(),
+                rs.getString("acknowledgment_key"),
+                Math.subtractExact(rs.getLong("amount_received_idr"),
+                    rs.getLong("change_given_idr"))),tenderId,shiftId);
+        if (rows.isEmpty()) throw new ApiFailureException(HttpStatus.NOT_FOUND,
+            "NOT_FOUND","Cash handoff is not available in this shift");
+        var handoff=rows.getFirst();
+        if (handoff.receivedAt()!=null) {
+            if (key.equals(handoff.key()) && handoff.receivedBy().equals(actor.staffId())
+                && counted==handoff.net()) {
+                return new ReceivedHandoff(tenderId,shiftId,handoff.net(),"RECEIVED");
+            }
+            throw conflict("Cash handoff already confirmed");
+        }
+        if (shift.closedAt()!=null) throw conflict("Cannot receive cash into a closed shift");
+        if (counted!=handoff.net()) {
+            throw conflict("Counted cash must match recorded net amount; investigate before accepting");
+        }
+        int changed=jdbc.update("""
+            UPDATE cash_tender_handoffs
+            SET received_by=?,received_at=clock_timestamp(),acknowledgment_key=?
+            WHERE tender_id=? AND cash_shift_id=? AND received_at IS NULL
+            """,actor.staffId(),key,tenderId,shiftId);
+        if (changed!=1) throw conflict("Cash handoff was changed");
+        jdbc.update("""
+            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                resource_id,correlation_id,safe_before_after_diff)
+            VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
+                jsonb_build_object('shiftId',CAST(? AS text),'netCashIdr',CAST(? AS bigint)))
+            """,actor.staffId(),tenderId,requestId,shiftId.toString(),handoff.net());
+        return new ReceivedHandoff(tenderId,shiftId,handoff.net(),"RECEIVED");
     }
 
     private Stored load(UUID id, boolean lock) {
@@ -158,7 +251,7 @@ public class CashDrawerShiftService {
 
     private Shift present(Stored s) {
         long gross = s.closedAt() == null ?
-            cashCollected(s.openedAt(), Instant.now()) : s.recorded();
+            cashCollected(s.id()) : s.recorded();
         long expected = s.closedAt() == null ? Math.addExact(s.opening(), gross) : s.expected();
         return new Shift(s.id(), s.closedAt() == null ? "OPEN" : "CLOSED",
             s.openedBy(), s.openedAt(), s.opening(), gross, expected,
