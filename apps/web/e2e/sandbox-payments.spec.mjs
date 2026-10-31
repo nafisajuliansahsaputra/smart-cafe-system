@@ -91,6 +91,7 @@ test("guest QRIS and VA sandbox are non-payable, scoped, idempotent and never PA
       has: alice.getByRole("button", { name: "Buat referensi FAKE QRIS" }),
     });
     const createKey = await createForm.locator('input[name="idempotencyKey"]').inputValue();
+    expect(createKey).toMatch(/^sandbox_[a-f0-9]{32}_initial$/);
     await createForm.getByRole("checkbox").check();
     await createForm.getByRole("button", { name: "Buat referensi FAKE QRIS" }).click();
     await expect(alice).toHaveURL(/notice=sandbox-attempt/);
