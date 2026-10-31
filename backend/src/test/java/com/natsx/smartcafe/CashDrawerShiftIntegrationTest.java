@@ -95,11 +95,15 @@ class CashDrawerShiftIntegrationTest {
                 amount_paid_idr,aggregate_status)
             VALUES (?,?,'CASH',35000,35000,'PAID')
             """,intent,order);
-        jdbc.update("""
+        UUID tender=jdbc.queryForObject("""
             INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,
-                change_given_idr,idempotency_key)
-            VALUES (?,?,50000,15000,?)
-            """,intent,cashier.principal().staffId(),"tender-"+UUID.randomUUID());
+                change_given_idr,idempotency_key,cash_shift_id)
+            VALUES (?,?,50000,15000,?,?) RETURNING id
+            """,UUID.class,intent,waiter.principal().staffId(),"tender-"+UUID.randomUUID(),first.id());
+        jdbc.update("""
+            INSERT INTO cash_tender_handoffs(tender_id,cash_shift_id,waiter_staff_id)
+            VALUES (?,?,?)
+            """,tender,first.id(),waiter.principal().staffId());
         jdbc.update("""
             INSERT INTO receipts(payment_intent_id,order_id,total_idr,document_json)
             VALUES (?,?,35000,'{}'::jsonb)
@@ -117,6 +121,35 @@ class CashDrawerShiftIntegrationTest {
         assertEquals(200,authorized.getStatus());
         assertTrue(authorized.getHeader("Cache-Control").contains("no-store"));
         assertFalse(authorized.getContentAsString().contains("Private synthetic guest"));
+
+        assertEquals(1,shifts.dashboard().pendingHandoffCount());
+        assertEquals(tender,shifts.dashboard().pendingHandoffs().getFirst().tenderId());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.close(first.id(),cashier.principal(),44000,"premature-"+UUID.randomUUID(),
+                "Count not yet handed over","test")).status().value());
+        assertEquals(403,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,waiter.principal(),35000,
+                "denied-"+UUID.randomUUID(),"test")).status().value());
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,cashier.principal(),34000,
+                "wrong-"+UUID.randomUUID(),"test")).status().value());
+        String receivedKey="receive-"+UUID.randomUUID();
+        var handoff=shifts.receive(first.id(),tender,cashier.principal(),35000,
+            receivedKey,"handoff-confirmed");
+        assertEquals("RECEIVED",handoff.state());
+        assertEquals(handoff,shifts.receive(first.id(),tender,cashier.principal(),35000,
+            receivedKey,"handoff-replayed"));
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            shifts.receive(first.id(),tender,cashier.principal(),35000,
+                "different-"+UUID.randomUUID(),"test")).status().value());
+        assertEquals(0,shifts.dashboard().pendingHandoffCount());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM audit_logs WHERE operation='CASH_HANDOFF_RECEIVED'
+              AND resource_id=?
+            """,Integer.class,tender));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE cash_tender_handoffs SET received_at=NULL WHERE tender_id=?
+            """,tender));
 
         var closeKey="close-"+first.id();
         var closed=shifts.close(first.id(),cashier.principal(),44000,closeKey,
