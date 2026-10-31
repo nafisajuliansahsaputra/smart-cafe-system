@@ -120,7 +120,7 @@ test("guest QRIS and VA sandbox are non-payable, scoped, idempotent and never PA
       headers: { ...auth, "Idempotency-Key": createKey },
       data: { method: "QRIS" },
     });
-    expect(replay.status()).toBe(200);
+    expect(replay.status(), await replay.text()).toBe(200);
     expect((await replay.json()).data.id).toBe(stored[0].id);
     const competing = await aliceContext.request.post(ownedApi, {
       headers: { ...auth, "Idempotency-Key": "sandbox_competing_key_0001" },
