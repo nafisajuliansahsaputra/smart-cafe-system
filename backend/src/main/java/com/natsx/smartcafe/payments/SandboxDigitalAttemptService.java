@@ -14,9 +14,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Explicitly instantiated sandbox-only digital attempt coordinator.
  *
- * Not registered as a Spring bean; there is NO HTTP route, checkout change,
- * provider webhook, or production configuration. This is an internal domain
- * integration step, to be connected only after digital checkout is reviewed.
+ * Only exposed through the explicitly dual-gated, sandbox-environment HTTP
+ * controller. It has no production payment adapter or settlement capability.
  * A fake gateway is necessarily in-process: never substitute a network client
  * inside the database row lock or treat a fake result as received money.
  */
@@ -54,6 +53,47 @@ public final class SandboxDigitalAttemptService {
         }
         return transactions.execute(status->createLocked(guest,orderId,method,key));
     }
+
+
+    /**
+     * Read safe, non-payable attempts for this guest and visit only.
+     * Never treats fake expiry or a fake state as financial settlement.
+     */
+    public List<Attempt> ownAttempts(GuestPrincipal guest,UUID orderId) {
+        if(guest==null||guest.guestId()==null||guest.visitId()==null||orderId==null)
+            throw bad("Invalid guest or order");
+        return transactions.execute(tx->{
+            var ownership=jdbc.query("""
+                SELECT p.id,p.method_selected FROM payment_intents p
+                JOIN orders o ON o.id=p.order_id
+                WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
+                """,(rs,n)->new OwnedIntent(rs.getObject("id",UUID.class),
+                    rs.getString("method_selected")),
+                orderId,guest.guestId(),guest.visitId());
+            if(ownership.isEmpty())throw new ApiFailureException(
+                HttpStatus.NOT_FOUND,"NOT_FOUND","Order not found");
+            var owned=ownership.getFirst();
+            if(!"QRIS".equals(owned.method())&&!"VA".equals(owned.method()))
+                throw conflict("Order is not a digital sandbox payment");
+            return jdbc.query("""
+                SELECT id,method,amount_idr,provider_reference,state,expires_at
+                FROM digital_payment_attempts
+                WHERE payment_intent_id=? AND provider_key=?
+                ORDER BY created_at DESC,id DESC LIMIT 20
+                """,(rs,n)->{
+                    String method=rs.getString("method");
+                    String hint="QRIS".equals(method)?"FAKE_QRIS_NOT_PAYABLE":
+                        "FAKE_VA_NOT_PAYABLE";
+                    return new Attempt(rs.getObject("id",UUID.class),orderId,
+                        method,rs.getLong("amount_idr"),
+                        rs.getString("provider_reference"),rs.getString("state"),
+                        rs.getTimestamp("expires_at").toInstant(),hint,
+                        SandboxFakePaymentGateway.ENVIRONMENT);
+                },owned.id(),PROVIDER);
+        });
+    }
+
+    private record OwnedIntent(UUID id,String method) {}
 
     private Attempt createLocked(GuestPrincipal guest,UUID orderId,
                                   PaymentGateway.Method method,String key) {
