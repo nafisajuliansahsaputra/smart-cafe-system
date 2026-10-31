@@ -1,0 +1,69 @@
+name: Release stack and synthetic staging preflight
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tip_branch:
+        description: "Open PR head branch to verify (never deploys)"
+        required: true
+        default: "ci/m6-release-chain-and-staging-preflight"
+        type: string
+      verify_ancestry:
+        description: "Also compare each PR's actual git ancestry (read-only)"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  offline-rehearsal:
+    name: PR chain / isolated sandbox staging config / negative tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout PR commit without repository credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prove the release guard refuses unsafe configurations
+        run: node --test scripts/release-readiness.test.mjs
+      - name: Audit open PR stack reference topology (read-only)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SCS_RELEASE_TIP_BRANCH: ${{ github.head_ref || inputs.tip_branch }}
+        run: node scripts/release-chain.mjs
+      - name: Optionally verify every PR's actual commit ancestry
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_ancestry }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SCS_RELEASE_TIP_BRANCH: ${{ inputs.tip_branch }}
+        run: node scripts/release-chain.mjs --verify-ancestry
+      - name: Resolve synthetic sandbox Compose and reject exposed ports
+        run: |
+          set -euo pipefail
+          envfile="$(mktemp)"
+          configfile="$(mktemp)"
+          trap 'rm -f "$envfile" "$configfile"' EXIT
+          chmod 600 "$envfile"
+          cat > "$envfile" <<EOF
+          POSTGRES_DB=smart_cafe_staging_ci
+          POSTGRES_USER=scs_ci
+          POSTGRES_PASSWORD=$(openssl rand -hex 32)
+          SCS_JOIN_THROTTLE_SECRET=$(openssl rand -hex 48)
+          API_DOCS_ENABLED=false
+          EOF
+          docker compose --env-file "$envfile" \
+            -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml \
+            config --format json > "$configfile"
+          node scripts/staging-preflight.mjs "$configfile"
+      - name: Confirm no environment was deployed
+        run: echo "Read-only GitHub metadata and offline Compose checks only."
