@@ -53,8 +53,6 @@ public class CashReceiptLedgerService {
             JOIN table_visits v ON v.id = o.visit_id
             JOIN cafe_tables t ON t.id = v.table_id
             WHERE p.method_selected = 'CASH'
-              AND p.aggregate_status = 'PAID'
-              AND p.amount_paid_idr = r.total_idr
               AND r.issued_at >= ? AND r.issued_at < ?
             ORDER BY r.issued_at DESC, r.id DESC
             LIMIT 21 OFFSET ?
