@@ -17,18 +17,18 @@ public class GuestOrderDetailService {
 
     public record Line(String name,int quantity,long unitPriceIdr,long lineTotalIdr,
                        String notes,String variantLabel) {}
-    public record Detail(UUID id,String status,String paymentStatus,long totalIdr,
+    public record Detail(UUID id,String status,String paymentStatus,String paymentMethod,long totalIdr,
                          Instant createdAt,List<Line> lines) {}
-    private record Order(UUID id,String status,String paymentStatus,long total,Instant createdAt) {}
+    private record Order(UUID id,String status,String paymentStatus,String paymentMethod,long total,Instant createdAt) {}
 
     @Transactional(readOnly=true)
     public Detail ownOrder(GuestPrincipal guest,UUID orderId) {
         var found=jdbc.query("""
-            SELECT o.id,o.status,p.aggregate_status,o.total_idr,o.created_at
+            SELECT o.id,o.status,p.aggregate_status,p.method_selected,o.total_idr,o.created_at
             FROM orders o JOIN payment_intents p ON p.order_id=o.id
             WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
             """,(rs,n)->new Order(rs.getObject("id",UUID.class),rs.getString("status"),
-                rs.getString("aggregate_status"),rs.getLong("total_idr"),
+                rs.getString("aggregate_status"),rs.getString("method_selected"),rs.getLong("total_idr"),
                 rs.getTimestamp("created_at").toInstant()),
             orderId,guest.guestId(),guest.visitId());
         if(found.isEmpty())throw new ApiFailureException(
@@ -41,7 +41,7 @@ public class GuestOrderDetailService {
             """,(rs,n)->new Line(rs.getString("name_snapshot"),rs.getInt("quantity"),
                 rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),
                 rs.getString("notes"),rs.getString("variant_label")),orderId);
-        return new Detail(data.id(),data.status(),data.paymentStatus(),data.total(),
+        return new Detail(data.id(),data.status(),data.paymentStatus(),data.paymentMethod(),data.total(),
             data.createdAt(),lines);
     }
 }
