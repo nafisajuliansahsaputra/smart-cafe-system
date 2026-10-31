@@ -58,7 +58,7 @@ class CashReceiptLedgerIntegrationTest {
         jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
             staff, "ledger-" + staff, "synthetic-hash");
         jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
-            table, "LEDGER-" + table, "ledger-" + table, 4);
+            table, "L-" + table, "ledger-" + table, 4);
         jdbc.update("INSERT INTO table_visits(id,table_id,opened_by,join_secret_hash) VALUES (?,?,?,?)",
             visit, table, staff, "c".repeat(64));
         jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
