@@ -484,3 +484,11 @@ pushes and a weekly schedule, using only local CI-built images.
 - Sandbox environment with sandbox-digital-checkout-enabled=false: authenticated GET and POST return 403 and no attempt is saved. This separately verifies the second backend gate. Existing Chromium cash lifecycle remains enabled in CI unchanged.
 - Next.js lint/types/build validates guarded sandbox checkout and order details. A true sandbox browser end-to-end with explicit flags remains to be added before any staging pilot.
 - Do not use a real QRIS code, VA number, provider account, phone number, merchant, payment or customer information in these tests.
+
+## M3 Chromium sandbox QRIS/VA acceptance (draft PR #48)
+
+GitHub Actions now includes a **separate** `sandbox-browser-e2e` job with an explicitly named fake-only Docker Compose override. Only disposable local PostgreSQL/Next.js/Spring containers, CI-only staff fixture, fake gateway and Chromium run in this job; no provider merchant account, actual QR/VA, live network payment or production storage is used. Both sandbox flags are enabled **only within this job**, while existing default cash/HTTPS browser jobs retain their off-by-default behavior.
+
+The new Playwright test drives the real waiter-issued join proof and **two different guest identities** on the same synthetic table. Guest A submits a QRIS PENDING order, creates a FAKE-only reference, verifies persisted amount/method/environment, exact-key replay, different-key 409, cross-guest 404, no receipt or PAID, no second active attempt. Guest B separately submits VA, creates a FAKE reference, and cannot access A's order. A cannot access B's attempt. The waiter cannot close the visit with these unresolved simulated orders. After Chromium, SQL assertions require exactly two pending fake attempts, zero incorrectly settled QRIS/VA payment intents, zero receipts, and zero kitchen tickets for the digital orders. The sandbox test is explicitly skipped in all ordinary cash browser CI jobs.
+
+This acceptance establishes ONLY non-payable fake UI and state behavior. It is not financial provider verification, webhooks, actual settlement, late-callback reconciliation, or live release authorization.
