@@ -2,7 +2,7 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Status:** M1 executable skeleton is CI verified on a separate feature branch; draft M2 PR #2 now includes API-backed staff/table/guest/cash ordering flows with PostgreSQL integration tests. Neither PR is merged or deployed. Complete UI/operational coverage is still in progress.
+> **Current branch status (2026-11-01):** The working application has reached the stacked draft PR #58 (backend, frontend, cash/game operations, synthetic sandbox payment workflows and manager variance investigation), with exact-head CI passing. The entire feature history remains in 57 open, dependency-stacked draft PRs; the default `main` branch has **not** received these changes and no public staging or production service is deployed. Real merchant payments and receipt delivery are not enabled. For the chain audit and non-deploying staging preflight see [M6 release readiness](docs/M6-RELEASE-STAGING-READINESS.md).
 
 ## What it solves
 

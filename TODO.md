@@ -543,3 +543,21 @@ Testing includes synthetic manager recount, cashier/waiter denial, replay,
 invalid inputs and immutable-case assertions. Manual recount policy,
 financial settlement, genuine gateway integration, production authorization
 and exact-head CI remain outstanding.
+
+### M6 dependency-stack / synthetic staging release preflight (draft PR #59)
+
+Repository audit on 2026-11-01 found 57 open dependency-stacked
+draft PRs from PR #1 to PR #58, all forming one linear base/head
+chain ending at main. Features remain unmerged and undeployed.
+Added a read-only GitHub PR-chain checker with optional real Git
+commit ancestry checks; an offline Docker Compose staging-config
+safety guard requiring private DB, loopback ingress, sandbox-only
+digital payment flags, restricted API docs, no dev-bootstrap,
+read-only app containers; negative Node tests; a separate PR/manual
+release-readiness GitHub Actions workflow; and an explicit
+integration/merge runbook at docs/M6-RELEASE-STAGING-READINESS.md.
+This **does not create or deploy an actual staging server**.
+Next gates: protected integration branch decision, reviewed
+parent-first merge/rebase, synthetic upgrade rehearsal, separately
+authorized hosted staging, backup/restore with realistic RPO/RTO,
+real payment-provider review, and actual-cafe operational policy.
