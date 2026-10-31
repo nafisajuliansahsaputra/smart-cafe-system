@@ -115,6 +115,29 @@ class CashOrderFlowIntegrationTest {
     }
 
 
+
+    @Test void sandboxAttemptRoutesDoNotExistInDefaultEnvironment() throws Exception {
+        var waiter=staff("WAITER");
+        var visit=open(waiter);
+        var guest=join(visit,"Synthetic Default Sandbox Denial");
+        var item=item(12000);
+        var orderResponse=submit(guest,item,1,"default-sandbox-"+UUID.randomUUID());
+        assertEquals(200,orderResponse.getStatus(),orderResponse.getContentAsString());
+        UUID id=UUID.fromString(value(orderResponse.getContentAsString(),"id"));
+        String route="/api/v1/me/orders/"+id+"/sandbox-attempts";
+        assertEquals(404,mvc.perform(get(route)
+            .header("Authorization","Bearer "+guest.token()))
+            .andReturn().getResponse().getStatus());
+        assertEquals(404,mvc.perform(post(route)
+            .header("Authorization","Bearer "+guest.token())
+            .header("Idempotency-Key","disabled-sandbox-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"QRIS\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM digital_payment_attempts
+            """,Integer.class));
+    }
+
     @Test void qrisAndVaCheckoutAreDisabledInDefaultEnvironment() throws Exception {
         var waiter=staff("WAITER");
         var visit=open(waiter);
