@@ -83,15 +83,24 @@ export async function fetchOpenPulls(repo, token) {
  * Ahead with behind_by=0 proves each PR's base head is its ancestor.
  */
 export async function verifyGitAncestry(repo, token, chain) {
+  // Compare immutable commit SHA pairs rather than URL-encoded branch paths.
+  // This also avoids a forced branch update silently changing a comparison.
+  const mainRef = await github("/repos/" + repo + "/branches/main", token);
+  let baseSha = mainRef?.commit?.sha;
+  if (!/^[a-f0-9]{40}$/.test(baseSha ?? "")) {
+    throw new Error("Unable to resolve main commit for git ancestry validation");
+  }
   for (const item of chain) {
-    const path = "/repos/" + repo + "/compare/" +
-      encodeURIComponent(item.baseRef) + "..." +
-      encodeURIComponent(item.headRef);
-    const status = await github(path, token);
+    if (!/^[a-f0-9]{40}$/.test(item.headSha)) {
+      throw new Error("Invalid PR commit SHA at #" + item.number);
+    }
+    const status = await github(
+      "/repos/" + repo + "/compare/" + baseSha + "..." + item.headSha, token);
     if (status.status !== "ahead" || status.behind_by !== 0 ||
         !Number.isInteger(status.ahead_by) || status.ahead_by <= 0) {
       throw new Error("Git ancestry diverged at PR #" + item.number);
     }
+    baseSha = item.headSha;
   }
 }
 
