@@ -528,3 +528,18 @@ is changed by handoff. V29 adds the tender/shift association and handoff
 constraints. Existing money before the first-ever shift is unassigned
 and not part of shift reconciliation. This is still single-till,
 synthetic-only and needs exact-head CI and operational controls.
+
+### M5 closed cash variance investigation (stacked draft PR #58)
+
+Closed, nonzero discrepancy shifts may now be reviewed in the manager/admin
+dashboard at /staff/cash-shifts/investigations. Flyway V30 creates immutable
+append-only action records (REQUEST_RECOUNT / DOCUMENT_EVIDENCE / ESCALATE)
+with idempotency, staff attribution and a supporting audit_logs entry.
+Backend validates manager roles, closed/nonzero shift status and printable
+review notes; the existing payment, cash, and receipt records are never
+updated. The interface paginates 20 discrepancy cases with a 100-action
+history limit per case, secure server-only staff BFF and no-store responses.
+Testing includes synthetic manager recount, cashier/waiter denial, replay,
+invalid inputs and immutable-case assertions. Manual recount policy,
+financial settlement, genuine gateway integration, production authorization
+and exact-head CI remain outstanding.
