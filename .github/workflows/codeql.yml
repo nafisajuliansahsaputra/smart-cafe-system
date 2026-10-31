@@ -60,6 +60,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find codeql-diagnostic -type f -name '*.sarif' -print0 |
-            xargs -0 -r -n1 sh -c 'jq -r "\(.runs[]? | .results[]? | .ruleId) \(.runs[]? | .results[]? | .locations[0].physicalLocation.artifactLocation.uri // \"unknown\")" "$0"' || true
-
+          find codeql-diagnostic -type f -name '*.sarif' -exec jq -r             '.runs[]?.results[]? | [.ruleId, .locations[0].physicalLocation.artifactLocation.uri, .locations[0].physicalLocation.region.startLine] | @tsv' {} +
