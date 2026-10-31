@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SandboxReconciliationController {
     private final SandboxReconciliationReview review;
     private final SandboxTriageAudit triage;
+    private final SandboxUnresolvedAttemptReview attempts;
     private final boolean enabled;
 
     public SandboxReconciliationController(JdbcTemplate jdbc,
@@ -41,6 +42,7 @@ public class SandboxReconciliationController {
         @Value("${scs.payments.sandbox-digital-checkout-enabled:false}") boolean enabled) {
         this.review=new SandboxReconciliationReview(jdbc);
         this.triage=new SandboxTriageAudit(jdbc,new TransactionTemplate(manager));
+        this.attempts=new SandboxUnresolvedAttemptReview(jdbc,java.time.Clock.systemUTC());
         this.enabled=enabled;
     }
 
@@ -64,6 +66,17 @@ public class SandboxReconciliationController {
         var recorded=triage.append(staff,id,action==null?null:action.code(),key);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(recorded,RequestIdFilter.get(request)));
+    }
+
+    @GetMapping("/attempts")
+    public ResponseEntity<ApiEnvelope<SandboxUnresolvedAttemptReview.Page>> pendingAttempts(
+        @AuthenticationPrincipal StaffPrincipal staff,
+        @RequestParam(defaultValue="0") int page,
+        @RequestParam(defaultValue="ALL") String filter,
+        HttpServletRequest request) {
+        checkAccess(staff);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(attempts.list(page,filter),RequestIdFilter.get(request)));
     }
 
     @GetMapping
