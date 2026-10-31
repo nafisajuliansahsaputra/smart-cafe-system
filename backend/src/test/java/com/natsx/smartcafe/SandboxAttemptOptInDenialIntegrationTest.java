@@ -42,6 +42,17 @@ class SandboxAttemptOptInDenialIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
 
+    @Test void unenabledSandboxWebhookRejectsAllSignedClaimsBeforeParsing() throws Exception {
+        var result=mvc.perform(post("/api/v1/integrations/payments/sandbox/events")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("X-Sandbox-Timestamp","1793448000")
+            .header("X-Sandbox-Signature","sha256="+"0".repeat(64))
+            .content("{\"state\":\"SUCCEEDED\"}")).andReturn().getResponse();
+        assertEquals(403,result.getStatus());
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT count(*) FROM sandbox_payment_event_inbox",Integer.class));
+    }
+
     @Test void unenabledSandboxEndpointsFailClosedForAuthenticatedOwner() throws Exception {
         UUID staff=UUID.randomUUID(),table=UUID.randomUUID(),
             visit=UUID.randomUUID(),guest=UUID.randomUUID();
