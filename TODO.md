@@ -472,3 +472,15 @@ Added Flyway V26 append-only sandbox_payment_triage_actions, transaction-seriali
 ### M3 non-mutating overdue digital attempt review (draft PR #53)
 
 Created ADMIN-only sandbox unresolved FAKE attempt worklist (GET /api/v1/admin/payments/sandbox-events/attempts) with derived overdue flag, alleged-success/flagged-claim counts, no-evidence filtering, 20-row pagination and no-store response. Added /staff/reconciliation/attempts monitoring page and link from admin quarantine dashboard. This does NOT expire attempts or override paid status; an apparently expired gateway attempt may still settle late and must remain locked pending trusted reconciliation. Java/PostgreSQL, default-env denial and Chromium acceptance added. Still blocked for real QRIS/VA: official provider selection/credentials, verified merchant scope, status API lookup, independent reconciliation, late-payment exception handling and audited settlement policy.
+
+### M5 safe CSV download for daily cash reporting (stacked draft PR #54)
+
+Cashier/manager/admin may export the existing WIB daily CASH receipt
+report via a server-only CSV route with no-store headers and no bearer
+tokens in browser JavaScript. Unauthenticated and other-role requests,
+duplicate date parameters and invalid dates fail closed. UTF-8 item
+labels are quoted and spreadsheet formula prefixes neutralized.
+Synthetic browser acceptance covers paid cash totals, item names,
+missing guest PII and access denials. **M5 remains unfinished**:
+no cash drawer reconciliation, QRIS/VA settlement, refunds/net revenue,
+receipt phone messaging, or production deployment. Check exact-HEAD CI.
