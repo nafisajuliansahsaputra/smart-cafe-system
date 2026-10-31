@@ -125,7 +125,7 @@ class SandboxPaymentEventInboxIntegrationTest {
             "SELECT state FROM digital_payment_attempts WHERE id=?",
             String.class,f.attemptId()));
         assertNoSettlement(f);
-        for(var conflicting:List.of(
+        for(var conflicting : List.of(
             observation(input.eventId(),f.reference(),37001,FAKE_ENV,PaymentGateway.State.SUCCEEDED),
             observation(input.eventId(),f.reference(),37000,FAKE_ENV,PaymentGateway.State.FAILED),
             observation(input.eventId(),"FAKE_"+UUID.randomUUID().toString().replace("-",""),
