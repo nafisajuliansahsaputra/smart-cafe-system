@@ -127,7 +127,8 @@ public class CashDrawerShiftService {
             FROM cash_tenders t
             JOIN payment_intents p ON p.id=t.payment_intent_id
             WHERE p.method_selected='CASH' AND t.recorded_at>=? AND t.recorded_at<?
-            """, Long.class, Timestamp.from(from), Timestamp.from(to));
+            """, (rs, n) -> rs.getBigDecimal(1).longValueExact(),
+            Timestamp.from(from), Timestamp.from(to));
         if (amount == null || amount < 0 || amount > MAX_IDR) {
             throw conflict("Cash collection exceeds supported bound");
         }
@@ -170,8 +171,9 @@ public class CashDrawerShiftService {
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
                                    reason,correlation_id,safe_before_after_diff)
             VALUES ('STAFF',? ,?,'CASH_DRAWER_SHIFT',?,?,?,
-                    jsonb_build_object('openingFloatIdr',?,
-                        'countedCashIdr',?,'differenceIdr',?))
+                    jsonb_build_object('openingFloatIdr',CAST(? AS bigint),
+                        'countedCashIdr',CAST(? AS bigint),
+                        'differenceIdr',CAST(? AS bigint)))
             """,actor,operation,shiftId,reason,requestId,opening,counted,difference);
     }
 
