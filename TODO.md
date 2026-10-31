@@ -513,3 +513,18 @@ real bank reconciliation: waiter handoff custody, concurrent tender
 freeze/close coordination, in-person till audit and refund policy are
 still open before any pilot. No cash tender or PAID state is modified by
 closing a shift. Exact-head CI required; M5 remains unfinished.
+
+### M5 waiter-to-cashier custody and shift close fence (draft PR #57)
+
+Cash tender capture now assigns an active drawer-shift ID and shares
+the same PostgreSQL transaction advisory fence with shift closure and
+handoff receipt. After the first shift exists, captures with no active
+shift fail closed. Waiter-only tenders create pending custody records,
+which a CASHIER/MANAGER/ADMIN must explicitly acknowledge after physical
+cash verification. Closure rejects any unresolved handoff, and the
+UI hides its close form while custody remains pending. Idempotent
+confirmation and append-only audit preserve evidence, no PAID status
+is changed by handoff. V29 adds the tender/shift association and handoff
+constraints. Existing money before the first-ever shift is unassigned
+and not part of shift reconciliation. This is still single-till,
+synthetic-only and needs exact-head CI and operational controls.
