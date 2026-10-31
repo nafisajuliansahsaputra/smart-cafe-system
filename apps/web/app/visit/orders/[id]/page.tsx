@@ -37,7 +37,7 @@ export default async function OrderDetailPage({ params, searchParams }: {
       {notice === "sandbox-submitted" && <p className="guest-alert" role="status">Pesanan simulasi berhasil dicatat. Pembayaran PENDING, tidak ada uang diterima.</p>}
       {notice === "sandbox-attempt" && <p className="guest-alert" role="status">Referensi sandbox FAKE dicatat. Ini BUKAN bukti pembayaran.</p>}
       {notice === "conflict" && <p className="guest-alert" role="status">Sudah ada perubahan atau percobaan belum selesai. Periksa riwayat di bawah.</p>}
-      {notice === "offline" && <p className="guest-alert" role="alert">Status server belum terverifikasi. Jangan menganggap pembayaran sukses.</p>}}
+      {notice === "offline" && <p className="guest-alert" role="alert">Status server belum terverifikasi. Jangan menganggap pembayaran sukses.</p>}
       {!order.ok && <section className="guest-panel"><h1>Detail tidak dapat dimuat</h1>
         <p>Periksa koneksi dan coba lagi. Tidak ada status sukses yang diasumsikan.</p></section>}
       {order.ok && (
