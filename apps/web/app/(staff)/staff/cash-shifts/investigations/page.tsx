@@ -30,7 +30,7 @@ export default async function InvestigationsPage({
   const data=validPage ? await cashVarianceCases(Number(pageText)) : null;
   if (data && !data.ok && data.status===401) redirect("/staff/login?status=expired");
   const selected=params.shift;
-  const selectedCase=data?.ok && data.data.items.find(x=>x.shiftId===selected);
+  const selectedCase=data?.ok ? data.data.items.find(x=>x.shiftId===selected) : undefined;
   const history=selectedCase ? await cashVarianceHistory(selectedCase.shiftId) : null;
   if (history && !history.ok && history.status===401) redirect("/staff/login?status=expired");
 
