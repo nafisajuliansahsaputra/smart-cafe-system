@@ -33,11 +33,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(properties={
     "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments",
     "scs.payments.environment=sandbox",
-    "scs.payments.sandbox-digital-checkout-enabled=true",
-    "scs.payments.sandbox-webhook-secret=synthetic-only-webhook-secret-long-2026-abcdef"
+    "scs.payments.sandbox-digital-checkout-enabled=true"
 })
 class SandboxSignedWebhookIntegrationTest {
-    private static final String KEY="synthetic-only-webhook-secret-long-2026-abcdef";
+    private static final String KEY=uniqueTestKey();
+    private static String uniqueTestKey() {
+        byte[] key=new byte[48];
+        new java.security.SecureRandom().nextBytes(key);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key);
+    }
     private static final String ENDPOINT="/api/v1/integrations/payments/sandbox/events";
     @Container static final PostgreSQLContainer postgres=new PostgreSQLContainer("postgres:17-alpine")
         .withDatabaseName("scs_signed_fake").withUsername("test").withPassword("test");
@@ -46,6 +50,7 @@ class SandboxSignedWebhookIntegrationTest {
         p.add("spring.datasource.url",postgres::getJdbcUrl);
         p.add("spring.datasource.username",postgres::getUsername);
         p.add("spring.datasource.password",postgres::getPassword);
+        p.add("scs.payments.sandbox-webhook-secret",()->KEY);
     }
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
