@@ -276,6 +276,35 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(cashier.getByRole("heading", { name: "Laporan cash harian" })).toBeVisible();
     await expect(cashier.getByLabel("Ringkasan penerimaan cash")).toContainText("35.000");
     await expect(cashier.getByRole("table")).toContainText("E2E Latte");
+
+    // Restricted report download reuses PAID CASH receipt totals.
+    const csvLink = cashier.getByRole("link", { name: "Unduh CSV laporan" });
+    await expect(csvLink).toBeVisible();
+    const csvPath = await csvLink.getAttribute("href");
+    expect(csvPath).toMatch(/^\/staff\/reports\/export\?date=\d{4}-\d{2}-\d{2}$/);
+    const exportResponse = await cashier.context().request.get(csvPath);
+    expect(exportResponse.status()).toBe(200);
+    expect(exportResponse.headers()["content-type"]).toMatch(/^text\/csv;/);
+    expect(exportResponse.headers()["content-disposition"]).toMatch(/^attachment; filename="cash-daily-/);
+    expect(exportResponse.headers()["cache-control"]).toContain("no-store");
+    const csv = await exportResponse.text();
+    expect(csv).toContain('"gross_cash_collected"');
+    expect(csv).toContain('"35000"');
+    expect(csv).toContain('"E2E Latte"');
+    expect(csv).not.toContain("E2E Visitor");
+    expect(csv).not.toContain("scs_guest_session");
+
+    expect((await cashier.context().request.get(
+      "/staff/reports/export?date=2026-02-30",
+    )).status()).toBe(400);
+    expect((await cashier.context().request.get(
+      "/staff/reports/export?date=2026-10-01&date=2026-10-02",
+    )).status()).toBe(400);
+    const anonymousCsv = await makeContext();
+    expect((await anonymousCsv.request.get(csvPath)).status()).toBe(401);
+    expect((await waiter.context().request.get(csvPath)).status()).toBe(404);
+    expect((await kitchen.context().request.get(csvPath)).status()).toBe(404);
+
     const deniedWaiterReport = await waiter.goto("/staff/reports");
     expect(deniedWaiterReport?.status()).toBe(404);
     const deniedKitchenReport = await kitchen.goto("/staff/reports");

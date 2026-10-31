@@ -508,3 +508,20 @@ Testcontainers/MockMvc checks authenticated ADMIN-only action, anonymous 401, MA
 ## M3 pending FAKE attempt review tests (draft PR #53)
 
 PostgreSQL integration tests: create pending synthetic QRIS attempt without any inbox evidence; ensure NO_EVIDENCE includes it, while SUCCESS_CLAIM excludes it. Add quarantined success and mismatched amount claim; verify success and flagged filters and numerical evidence totals. Inject a clock advanced one day to prove OVERDUE reporting WITHOUT changing database attempt PENDING, payment_intent PENDING, paid amount, receipt or kitchen ticket. Reject invalid filter/page; enforce ADMIN-only/anonymous/manager restrictions, no-store GET and 405 for POST. Normal cash deployment must return 404 for the route. Disposable Chromium sandbox runs after two fake QRIS/VA customer checkout scenarios and verifies both unresolved rows, non-payable warnings, NO_EVIDENCE and empty OVERDUE filter, plus absence of pay/expire/approve buttons. CI must pass all existing cash regression and security jobs.
+
+## M5 restricted daily CASH CSV export (stacked draft PR #54)
+
+- Protected `GET /staff/reports/export?date=YYYY-MM-DD` reuses the existing
+  backend's receipt-backed `/api/v1/ops/reports/cash-daily` aggregate.
+  No new reporting SQL, cache, public data source, or client-side tokens.
+- Only authenticated CASHIER/MANAGER/ADMIN may export; signed-out sessions
+  return 401, other roles 404, backend unavailable 503, invalid or duplicated
+  dates 400. All responses use no-store and nosniff.
+- UTF-8 BOM, quoted RFC 4180-style CSV fields, CRLF line endings and
+  formula-injection neutralization for untrusted item names. Only paid
+  CASH order counts, gross totals and top-ten item aggregates are present.
+  Guest names, phone numbers, access tokens and game unit identifiers are not.
+- Existing synthetic full cash Chromium E2E checks authorized CSV content,
+  headers, absence of PII, invalid dates, anonymous and other-role denial.
+- Not bank/drawer reconciliation, QRIS/VA settlement, refund-adjusted net
+  income, taxes, or a claim of real cafe readiness. Require exact-HEAD CI.

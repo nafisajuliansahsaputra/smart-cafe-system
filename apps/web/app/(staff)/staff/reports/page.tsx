@@ -74,6 +74,12 @@ export default async function DailyCashPage({
         </div>
         {report.data.paidOrders === 0 &&
           <p role="status">Belum ada penerimaan cash untuk tanggal ini.</p>}
+        <p>
+          <Link className="staff-link-button"
+            href={`/staff/reports/export?date=${encodeURIComponent(report.data.date)}`}>
+            Unduh CSV laporan
+          </Link>
+        </p>
       </section>
       <section className="staff-panel">
         <h2>10 item terlaris berdasarkan jumlah terjual</h2>
