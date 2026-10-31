@@ -233,6 +233,144 @@ class SandboxPaymentEventInboxIntegrationTest {
         assertNoSettlement(f);
     }
 
+
+    @Test void adminTriageApiIsAppendOnlyIdempotentAndNotPaymentApproval() throws Exception {
+        var fixture=seed();
+        var evidence=inbox().record(observation(freshEvent(),fixture.reference(),
+            37000,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
+        String route="/api/v1/admin/payments/sandbox-events/"+evidence.id()+"/triage";
+        String admin=bearer("ADMIN");
+        String manager=bearer("MANAGER");
+        String cashier=bearer("CASHIER");
+        String key="triage_idem_"+UUID.randomUUID().toString().replace("-","");
+        var create=org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}");
+        assertEquals(401,mvc.perform(create).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+manager)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+cashier)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"PAID\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse().getStatus());
+        var first=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertTrue(first.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(first.getContentAsString().contains("\"code\":\"INVESTIGATE\""));
+        assertFalse(first.getContentAsString().contains(key));
+        var replay=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,replay.getStatus());
+        var id=java.util.regex.Pattern.compile("\"id\":\"([0-9a-f-]{36})\"")
+            .matcher(first.getContentAsString());
+        assertTrue(id.find());
+        assertTrue(replay.getContentAsString().contains(id.group(1)));
+        assertEquals(409,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"ESCALATE\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+bearer("ADMIN"))
+            .header("Idempotency-Key",key)
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"INVESTIGATE\"}"))
+            .andReturn().getResponse().getStatus());
+        var escalate=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .post(route).header("Authorization","Bearer "+admin)
+            .header("Idempotency-Key","triage_escalate_"+UUID.randomUUID().toString().replace("-",""))
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .content("{\"code\":\"ESCALATE\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,escalate.getStatus());
+        assertEquals(2,jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_triage_actions WHERE evidence_id=?
+            """,Integer.class,evidence.id()));
+        assertEquals("ESCALATE",jdbc.queryForObject("""
+            SELECT action_code FROM sandbox_payment_triage_actions
+            WHERE evidence_id=? ORDER BY created_at DESC,id DESC LIMIT 1
+            """,String.class,evidence.id()));
+        var review=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+            .get("/api/v1/admin/payments/sandbox-events")
+            .header("Authorization","Bearer "+admin))
+            .andReturn().getResponse();
+        assertEquals(200,review.getStatus());
+        assertTrue(review.getContentAsString().contains("\"latestTriageAction\":\"ESCALATE\""));
+        assertFalse(review.getContentAsString().contains(key));
+        assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
+            UPDATE sandbox_payment_triage_actions SET action_code='INVESTIGATE'
+            WHERE evidence_id=?
+            """,evidence.id()));
+        assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
+            DELETE FROM sandbox_payment_triage_actions WHERE evidence_id=?
+            """,evidence.id()));
+        assertThrows(DataIntegrityViolationException.class,()->jdbc.update("""
+            DELETE FROM sandbox_payment_event_inbox WHERE id=?
+            """,evidence.id()));
+        assertNoSettlement(fixture);
+    }
+
+    @Test void parallelTriageWithOneKeyCreatesExactlyOneAuditedAction() throws Exception {
+        var fixture=seed();
+        var evidence=inbox().record(observation(freshEvent(),fixture.reference(),
+            37000,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
+        UUID actorId=UUID.randomUUID();
+        jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+            actorId,"triage-test-"+actorId,"synthetic-test-only");
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,'ADMIN')",
+            actorId);
+        var actor=new com.natsx.smartcafe.identity.StaffPrincipal(
+            actorId,"triage-test-"+actorId,"no-bearer-in-test",java.util.Set.of("ADMIN"));
+        var audit=new SandboxTriageAudit(jdbc,new TransactionTemplate(manager));
+        String key="parallel_triage_123456";
+        var start=new CountDownLatch(1);
+        var pool=Executors.newFixedThreadPool(6);
+        try {
+            var futures=new ArrayList<java.util.concurrent.Future<SandboxTriageAudit.Action>>();
+            for(int n=0;n<12;n++)futures.add(pool.submit(()->{
+                start.await();
+                return audit.append(actor,evidence.id(),"REQUEST_PROVIDER_REVIEW",key);
+            }));
+            start.countDown();
+            var first=futures.getFirst().get(30,TimeUnit.SECONDS);
+            for(var next:futures)assertEquals(first,next.get(30,TimeUnit.SECONDS));
+        }finally{
+            pool.shutdownNow();
+        }
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_triage_actions WHERE evidence_id=?
+            """,Integer.class,evidence.id()));
+        assertNoSettlement(fixture);
+    }
+
     @Test void successClaimIsQuarantinedAndExactReplayIsIdempotent() {
         var f=seed();
         var inbox=inbox();
