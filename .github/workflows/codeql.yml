@@ -54,10 +54,3 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
-          output: codeql-diagnostic
-      - name: Diagnose CodeQL rule IDs and source locations for security review
-        if: matrix.language == 'java-kotlin'
-        shell: bash
-        run: |
-          set -euo pipefail
-          find codeql-diagnostic -type f -name '*.sarif' -exec jq -r             '.runs[]?.results[]? | [.ruleId, .locations[0].physicalLocation.artifactLocation.uri, .locations[0].physicalLocation.region.startLine] | @tsv' {} +
