@@ -497,3 +497,19 @@ cash lifecycle and Chromium test authorization, filtering and privacy.
 **Still open:** exact-head CI review, cash drawer reconciliation, refund
 policy, provider-backed QRIS/VA, phone receipt messaging, production gates.
 M5 is not complete and no public environment is deployed.
+
+### M5 provisional single-till cash shift closure (draft PR #56)
+
+A protected /staff/cash-shifts page and /api/v1/ops/cash-shifts API
+now support opening a single active cash drawer shift, entering opening
+physical float, viewing server-recorded cash net of change, and closing
+with manually counted cash, discrepancy and reason. PostgreSQL V28
+enforces at most one active shift, persisted safe replay keys, immutable
+completed reconciliation records, and audit actor attribution. Only
+CASHIER/MANAGER/ADMIN may access; ordinary cashiers close only their own
+shift, while supervisors may close any. Synthetic PostgreSQL tests plus
+Chromium cover tender inclusion, variance and access denial. This is NOT
+real bank reconciliation: waiter handoff custody, concurrent tender
+freeze/close coordination, in-person till audit and refund policy are
+still open before any pilot. No cash tender or PAID state is modified by
+closing a shift. Exact-head CI required; M5 remains unfinished.

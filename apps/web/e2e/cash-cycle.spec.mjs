@@ -48,6 +48,18 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     expect(waiterOcc?.status()).toBe(404);
     const cashierKitchen = await cashier.goto("/staff/kitchen");
     expect(cashierKitchen?.status()).toBe(404);
+    expect((await waiter.goto("/staff/cash-shifts"))?.status()).toBe(404);
+    expect((await kitchen.goto("/staff/cash-shifts"))?.status()).toBe(404);
+
+    // Open a physical till shift before the guest's cash tender.
+    await cashier.goto("/staff/cash-shifts");
+    await expect(cashier.getByRole("heading", { name: "Rekonsiliasi kas per shift" }))
+      .toBeVisible();
+    await cashier.getByLabel("Uang awal laci (IDR)").fill("10000");
+    await cashier.getByRole("checkbox", { name: "Uang awal telah dihitung langsung" }).check();
+    await cashier.getByRole("button", { name: "Buka shift" }).click();
+    await expect(cashier.getByRole("heading", { name: "Shift aktif" })).toBeVisible();
+    await expect(cashier.getByLabel("Shift kasir aktif")).toContainText("10.000");
 
     // OCC subscribes BEFORE the guest submits; the order must arrive via
     // SSE and router.refresh, with no manual navigation or refresh.
@@ -270,6 +282,24 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "Struk digital" })).toBeVisible();
     await expect(guest.getByText(/Struk #/)).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
+
+    // Recorded cash is the real received amount MINUS recorded change.
+    // Closing produces immutable discrepancy evidence, never more PAID orders.
+    await cashier.goto("/staff/cash-shifts");
+    const till = cashier.getByLabel("Shift kasir aktif");
+    await expect(till).toContainText("35.000");
+    await expect(till).toContainText("45.000");
+    await cashier.getByLabel("Uang fisik yang dihitung (IDR)").fill("44000");
+    await cashier.getByLabel("Catatan pemeriksaan").fill(
+      "Synthetic closing count, all waiter cash handed over",
+    );
+    await cashier.getByRole("checkbox", {
+      name: "Saya sudah menghitung uang fisik dan menyetujui pencatatan selisih",
+    }).check();
+    await cashier.getByRole("button", { name: "Tutup shift & catat selisih" }).click();
+    await expect(cashier.getByLabel("Riwayat shift kasir")).toContainText("-Rp");
+    await expect(cashier.getByLabel("Riwayat shift kasir")).toContainText("1.000");
+    await expect(cashier.getByRole("heading", { name: "Buka shift kasir" })).toBeVisible();
 
     // Cash report is server-backed: only this finalized receipt is counted.
     await cashier.goto("/staff/reports");
