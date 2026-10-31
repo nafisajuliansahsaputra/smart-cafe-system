@@ -42,6 +42,26 @@ jobs:
       - name: Unit and Testcontainers integration
         working-directory: backend
         run: mvn -B -ntp verify
+  upgrade-rehearsal:
+    name: V27 to V30 / existing-data PostgreSQL upgrade rehearsal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the exact candidate commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure Java 21 and Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Run isolated historical-data migration regression
+        working-directory: backend
+        run: mvn -B -ntp -Dtest=LegacyUpgradeToV30IntegrationTest test
+
   web:
     name: Next.js lint / types / build
     runs-on: ubuntu-latest
