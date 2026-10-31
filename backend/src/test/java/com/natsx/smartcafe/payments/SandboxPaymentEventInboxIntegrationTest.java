@@ -31,7 +31,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * Evidence remains untrusted forever in this sandbox-only increment.
  */
 @Testcontainers
-@SpringBootTest(properties="SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments")
+@org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+@SpringBootTest(properties={
+    "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments",
+    "scs.payments.environment=sandbox",
+    "scs.payments.sandbox-digital-checkout-enabled=true"
+})
 class SandboxPaymentEventInboxIntegrationTest {
     @Container
     static final PostgreSQLContainer postgres=new PostgreSQLContainer("postgres:17-alpine")
@@ -45,6 +50,8 @@ class SandboxPaymentEventInboxIntegrationTest {
     }
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager manager;
+    @Autowired org.springframework.test.web.servlet.MockMvc mvc;
+    @Autowired org.springframework.security.crypto.password.PasswordEncoder passwords;
 
     private record Fixture(UUID orderId,UUID intentId,UUID attemptId,String reference) {}
     private SandboxPaymentEventInbox inbox() {
@@ -106,6 +113,107 @@ class SandboxPaymentEventInboxIntegrationTest {
             "SELECT count(*) FROM receipts WHERE order_id=?",Integer.class,f.orderId()));
         assertEquals(0,jdbc.queryForObject(
             "SELECT count(*) FROM kitchen_tickets WHERE order_id=?",Integer.class,f.orderId()));
+    }
+
+
+    private String bearer(String role) throws Exception {
+        UUID id=UUID.randomUUID();
+        String login="reconcile-"+id;
+        jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+            id,login,passwords.encode("safe-test-password-123"));
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            id,role);
+        var result=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/v1/staff/auth/login")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"login\":\""+login+
+                    "\",\"password\":\"safe-test-password-123\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,result.getStatus());
+        var found=java.util.regex.Pattern.compile(
+            "\"accessToken\":\"([^\"]+)\"").matcher(result.getContentAsString());
+        assertTrue(found.find());
+        return found.group(1);
+    }
+
+    private int occurrences(String value,String needle) {
+        return (value.length()-value.replace(needle,"").length())/needle.length();
+    }
+
+    @Test void sandboxEvidenceReviewIsAdminOnlyPaginatedReadOnlyAndFiltered()
+        throws Exception {
+        var f=seed();
+        var evidence=inbox();
+        for(int i=0;i<24;i++) {
+            evidence.record(observation(freshEvent(),f.reference(),
+                i==23?37001:37000,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
+        }
+        String endpoint="/api/v1/admin/payments/sandbox-events";
+        String admin=bearer("ADMIN");
+        String manager=bearer("MANAGER");
+        String cashier=bearer("CASHIER");
+        assertEquals(401,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint)
+                .header("Authorization","Bearer "+manager))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint)
+                .header("Authorization","Bearer "+cashier))
+            .andReturn().getResponse().getStatus());
+        var first=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(endpoint)
+                .header("Authorization","Bearer "+admin))
+            .andReturn().getResponse();
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertTrue(first.getHeader("Cache-Control").contains("no-store"));
+        String json=first.getContentAsString();
+        assertTrue(json.contains("\"classification\":\"ALL\""),json);
+        assertTrue(json.contains("\"hasNext\":true"),json);
+        assertTrue(json.contains("\"totalEvidence\":24"),json);
+        assertTrue(json.contains("\"successClaims\":24"),json);
+        assertTrue(json.contains("\"flaggedEvidence\":1"),json);
+        assertEquals(20,occurrences(json,"\"eventId\":"));
+        assertFalse(json.contains("safe-test-password"));
+        assertFalse(json.contains("payloadFingerprint"));
+        assertFalse(json.contains("idempotencyKey"));
+        var second=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get(endpoint+"?page=1")
+                .header("Authorization","Bearer "+admin))
+            .andReturn().getResponse();
+        assertEquals(200,second.getStatus());
+        assertTrue(second.getContentAsString().contains("\"hasNext\":false"));
+        assertEquals(4,occurrences(second.getContentAsString(),"\"eventId\":"));
+        var flagged=mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get(endpoint+"?classification=FINANCIAL_MISMATCH")
+                .header("Authorization","Bearer "+admin))
+            .andReturn().getResponse();
+        assertEquals(200,flagged.getStatus());
+        assertEquals(1,occurrences(flagged.getContentAsString(),"\"eventId\":"));
+        assertTrue(flagged.getContentAsString().contains("FINANCIAL_MISMATCH"));
+        for(String query:List.of("?page=-1","?page=1001",
+            "?classification=INVALID","?classification=all")) {
+            assertEquals(400,mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .get(endpoint+query)
+                    .header("Authorization","Bearer "+admin))
+                .andReturn().getResponse().getStatus(),query);
+        }
+        assertEquals(405,mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(endpoint)
+                .header("Authorization","Bearer "+admin)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"state\":\"PAID\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(24,jdbc.queryForObject(
+            "SELECT count(*) FROM sandbox_payment_event_inbox WHERE attempt_id=?",
+            Integer.class,f.attemptId()));
+        assertNoSettlement(f);
     }
 
     @Test void successClaimIsQuarantinedAndExactReplayIsIdempotent() {
