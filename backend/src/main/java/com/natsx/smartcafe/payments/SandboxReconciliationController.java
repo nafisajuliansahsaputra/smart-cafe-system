@@ -8,6 +8,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
+import java.util.UUID;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,12 +33,37 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/payments/sandbox-events")
 public class SandboxReconciliationController {
     private final SandboxReconciliationReview review;
+    private final SandboxTriageAudit triage;
     private final boolean enabled;
 
     public SandboxReconciliationController(JdbcTemplate jdbc,
+        PlatformTransactionManager manager,
         @Value("${scs.payments.sandbox-digital-checkout-enabled:false}") boolean enabled) {
         this.review=new SandboxReconciliationReview(jdbc);
+        this.triage=new SandboxTriageAudit(jdbc,new TransactionTemplate(manager));
         this.enabled=enabled;
+    }
+
+    public record ActionRequest(String code) {}
+
+    private void checkAccess(StaffPrincipal staff) {
+        if(staff==null||staff.roles()==null||!staff.roles().contains("ADMIN"))
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Administrator review required");
+        if(!enabled)
+            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
+                "Sandbox review is disabled");
+    }
+
+    @PostMapping("/{id}/triage")
+    public ResponseEntity<ApiEnvelope<SandboxTriageAudit.Action>> appendTriage(
+        @PathVariable UUID id,@AuthenticationPrincipal StaffPrincipal staff,
+        @RequestHeader(value="Idempotency-Key",required=false) String key,
+        @RequestBody ActionRequest action,HttpServletRequest request) {
+        checkAccess(staff);
+        var recorded=triage.append(staff,id,action==null?null:action.code(),key);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(recorded,RequestIdFilter.get(request)));
     }
 
     @GetMapping
@@ -40,12 +72,7 @@ public class SandboxReconciliationController {
         @RequestParam(defaultValue="0") int page,
         @RequestParam(defaultValue="ALL") String classification,
         HttpServletRequest request) {
-        if(staff==null||!staff.roles().contains("ADMIN"))
-            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
-                "Administrator review required");
-        if(!enabled)
-            throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
-                "Sandbox review is disabled");
+        checkAccess(staff);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(review.list(page,classification),
                 RequestIdFilter.get(request)));
