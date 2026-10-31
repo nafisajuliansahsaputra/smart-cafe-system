@@ -561,3 +561,18 @@ Next gates: protected integration branch decision, reviewed
 parent-first merge/rebase, synthetic upgrade rehearsal, separately
 authorized hosted staging, backup/restore with realistic RPO/RTO,
 real payment-provider review, and actual-cafe operational policy.
+
+### M6 existing-data Flyway upgrade regression (stacked draft PR #60)
+
+A dedicated PostgreSQL 17 Testcontainers/JUnit test now migrates an
+actual synthetic database V1..V27, seeds a legacy fully PAID cash tender,
+immutable receipt, order, physical game loan and staff audit, and
+upgrades that same database in place to V30. It compares before/after
+financial and operational snapshots; confirms the old tender is not
+backfilled into a shift; proves that V28/V29/V30 constraints enforce
+exclusive open drawers, valid physical custody, immutable closed
+snapshots and append-only manager review; and verifies repeat migration
+is a no-op. CI has an independent V27→V30 upgrade-rehearsal job in
+addition to the full Java suite. This does NOT claim production-like
+staging, merchant integration, live/large-volume migration or
+deployment readiness. See docs/M6-V27-V30-UPGRADE-REHEARSAL.md.
