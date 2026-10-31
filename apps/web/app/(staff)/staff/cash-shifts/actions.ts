@@ -55,3 +55,27 @@ export async function closeCashShift(form: FormData): Promise<void> {
   revalidatePath("/staff/cash-shifts");
   redirect("/staff/cash-shifts?notice=closed");
 }
+
+/** Confirm physical transfer only after counting the waiter-held net cash. */
+export async function receiveWaiterCash(form: FormData): Promise<void> {
+  const id = form.get("shiftId");
+  const tenderId = form.get("tenderId");
+  const key = form.get("idempotencyKey");
+  const counted = amount(form.get("countedNetIdr"));
+  if (typeof id !== "string" || !UUID.test(id) ||
+      typeof tenderId !== "string" || !UUID.test(tenderId) ||
+      typeof key !== "string" || !KEY.test(key) || counted === null ||
+      form.get("confirm") !== "yes") {
+    redirect("/staff/cash-shifts?notice=invalid");
+  }
+  const token = await staffToken();
+  if (!token) redirect("/staff/login?status=expired");
+  const result = await staffApi(
+    "/api/v1/ops/cash-shifts/" + id + "/handoffs/" + tenderId + "/receive",
+    "POST", token, { countedNetIdr: counted, confirmedPhysicalReceipt: true }, key,
+  );
+  if (result.status === 401) redirect("/staff/login?status=expired");
+  if (result.status !== 200) redirect("/staff/cash-shifts?notice=" + fail(result.status));
+  revalidatePath("/staff/cash-shifts");
+  redirect("/staff/cash-shifts?notice=received");
+}
