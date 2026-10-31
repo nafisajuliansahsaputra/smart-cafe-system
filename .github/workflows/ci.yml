@@ -260,6 +260,17 @@ jobs:
           test "$(query "SELECT COUNT(*) FROM payment_intents WHERE method_selected IN ('QRIS','VA') AND (aggregate_status<>'PENDING' OR amount_paid_idr<>0)")" = "0"
           test "$(query "SELECT COUNT(*) FROM receipts r JOIN payment_intents p ON p.order_id=r.order_id WHERE p.method_selected IN ('QRIS','VA')")" = "0"
           test "$(query "SELECT COUNT(*) FROM kitchen_tickets k JOIN payment_intents p ON p.order_id=k.order_id WHERE p.method_selected IN ('QRIS','VA')")" = "0"
+      - name: Seed one quarantined, synthetic unknown reference for admin review
+        run: |
+          docker compose -f compose.yaml -f infra/verification/compose.sandbox-e2e.yaml \
+            exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+            < infra/fixtures/e2e-sandbox-reconciliation.sql
+      - name: Verify ADMIN-only read-only reconciliation in sandbox Chromium
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_SANDBOX_PAYMENTS: "true"
+        run: npx playwright test --config e2e/playwright.config.mjs e2e/sandbox-reconciliation.spec.mjs
       - name: Upload fake-payment browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
