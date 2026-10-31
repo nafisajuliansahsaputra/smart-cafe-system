@@ -61,6 +61,20 @@ class StaffAuthIntegrationTest {
         return match.group(1);
     }
 
+    @Test void reconciliationReviewRouteIsAbsentInDefaultCashEnvironment() throws Exception {
+        var admin=staff("ADMIN");
+        var loginResponse=mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(admin.login(),"safe-test-password-123")))
+            .andReturn().getResponse();
+        assertEquals(200,loginResponse.getStatus());
+        String bearer=token(loginResponse.getContentAsString());
+        var hidden=mvc.perform(get("/api/v1/admin/payments/sandbox-events")
+            .header("Authorization","Bearer "+bearer)).andReturn().getResponse();
+        assertEquals(404,hidden.getStatus(),
+            "Sandbox financial evidence must have no controller in the default environment");
+    }
+
     @Test void loginRoleGatesAndLogoutRevokesSession() throws Exception {
         var cashier = staff("CASHIER");
         var ok = mvc.perform(post("/api/v1/staff/auth/login").contentType(MediaType.APPLICATION_JSON)
