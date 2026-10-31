@@ -484,3 +484,16 @@ Synthetic browser acceptance covers paid cash totals, item names,
 missing guest PII and access denials. **M5 remains unfinished**:
 no cash drawer reconciliation, QRIS/VA settlement, refunds/net revenue,
 receipt phone messaging, or production deployment. Check exact-HEAD CI.
+
+### M5 bounded CASH receipt ledger (stacked draft PR #55)
+
+Added a receipt-backed read-only, WIB-filtered per-transaction ledger for
+CASHIER/MANAGER/ADMIN via /api/v1/ops/reports/cash-daily/receipts.
+The /staff/reports view shows 20 newest receipts per page with stable
+tie-breaking, no customer PII, no-store responses, 0–1000 bounded page
+validation, immutable gross receipts and a supporting Flyway V27 index.
+Testcontainers proves 22 receipts across two pages and WIB day boundaries;
+cash lifecycle and Chromium test authorization, filtering and privacy.
+**Still open:** exact-head CI review, cash drawer reconciliation, refund
+policy, provider-backed QRIS/VA, phone receipt messaging, production gates.
+M5 is not complete and no public environment is deployed.

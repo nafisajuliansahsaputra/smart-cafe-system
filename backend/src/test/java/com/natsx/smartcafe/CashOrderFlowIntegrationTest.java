@@ -358,6 +358,49 @@ class CashOrderFlowIntegrationTest {
         assertEquals(200,emptyReport.getStatus());
         assertTrue(emptyReport.getContentAsString().contains("\"paidOrders\":0"));
         assertTrue(emptyReport.getContentAsString().contains("\"grossCollectedIdr\":0"));
+
+        // M5: immutable issued CASH receipts, not outstanding unpaid orders.
+        String ledgerRoute="/api/v1/ops/reports/cash-daily/receipts";
+        var ledger=mvc.perform(get(ledgerRoute)
+            .param("date",reportDay).param("page","0")
+            .header("Authorization","Bearer "+cashier)).andReturn().getResponse();
+        assertEquals(200,ledger.getStatus(),ledger.getContentAsString());
+        assertTrue(ledger.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(ledger.getContentAsString().contains("\"date\":\""+reportDay+"\""));
+        assertTrue(ledger.getContentAsString().contains("\"timezone\":\"Asia/Jakarta\""));
+        assertTrue(ledger.getContentAsString().contains(receipt.toString()));
+        assertTrue(ledger.getContentAsString().contains(orderId.toString()));
+        assertTrue(ledger.getContentAsString().contains("\"totalIdr\":56000"));
+        assertTrue(!ledger.getContentAsString().contains("Synthetic A"));
+        assertTrue(!ledger.getContentAsString().contains("accessToken"));
+        var emptyLedger=mvc.perform(get(ledgerRoute)
+            .param("date","2000-01-01")
+            .header("Authorization","Bearer "+cashier)).andReturn().getResponse();
+        assertEquals(200,emptyLedger.getStatus());
+        assertTrue(emptyLedger.getContentAsString().contains("\"items\":[]"));
+        assertEquals(401,mvc.perform(get(ledgerRoute).param("date",reportDay))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get(ledgerRoute).param("date",reportDay)
+            .header("Authorization","Bearer "+waiter)).andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get(ledgerRoute).param("date",reportDay)
+            .header("Authorization","Bearer "+kitchen)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get(ledgerRoute).param("date",reportDay)
+            .header("Authorization","Bearer "+a.token())).andReturn().getResponse().getStatus());
+        for(String badDate : List.of("2026-02-30", "1800-01-01", "bad")) {
+            assertEquals(400,mvc.perform(get(ledgerRoute).param("date",badDate)
+                .header("Authorization","Bearer "+cashier)).andReturn().getResponse().getStatus());
+        }
+        for(String badPage : List.of("-1", "01", "1001", "hello", "99999")) {
+            assertEquals(400,mvc.perform(get(ledgerRoute).param("date",reportDay)
+                .param("page",badPage).header("Authorization","Bearer "+cashier))
+                .andReturn().getResponse().getStatus());
+        }
+        assertEquals(200,mvc.perform(get(ledgerRoute).param("date",reportDay)
+            .param("page","1000").header("Authorization","Bearer "+cashier))
+            .andReturn().getResponse().getStatus());
+        assertEquals(1,jdbc.queryForObject(
+            "SELECT count(*) FROM receipts WHERE id=?",Integer.class,receipt));
+
         assertEquals("PAID",jdbc.queryForObject(
             "SELECT aggregate_status FROM payment_intents WHERE id=?",String.class,intent));
         assertEquals(200,mvc.perform(get("/api/v1/me/receipts/" + receipt)

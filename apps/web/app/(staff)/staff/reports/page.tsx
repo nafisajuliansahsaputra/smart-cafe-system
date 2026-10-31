@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { canUseOcc, dailyCashReport, idr, staffIdentity } from "@/lib/staff-server";
+import { canUseOcc, dailyCashReport, idr, localTime, staffIdentity } from "@/lib/staff-server";
+import { dailyCashReceipts } from "@/lib/cash-receipt-ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ function todayWib(): string {
 export default async function DailyCashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; page?: string }>;
 }) {
   const current = await staffIdentity();
   if (current.kind === "signed-out") redirect("/staff/login?status=expired");
@@ -30,8 +31,16 @@ export default async function DailyCashPage({
   const params = await searchParams;
   const date = params.date ?? todayWib();
   const validDate = typeof date === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date);
+  const pageText = params.page ?? "0";
+  const validPage = typeof pageText === "string" &&
+    /^(0|[1-9][0-9]{0,3})$/.test(pageText) && Number(pageText) <= 1000;
   const report = validDate ? await dailyCashReport(date) : null;
   if (report && !report.ok && report.status === 401) redirect("/staff/login?status=expired");
+  const receipts = report?.ok && validPage
+    ? await dailyCashReceipts(report.data.date, Number(pageText)) : null;
+  if (receipts && !receipts.ok && receipts.status === 401) {
+    redirect("/staff/login?status=expired");
+  }
 
   return <main className="staff-shell">
     <header className="staff-header">
@@ -61,6 +70,9 @@ export default async function DailyCashPage({
       {report.status === 400
         ? "Tanggal tidak valid. Pilih tanggal antara tahun 2000 sampai 2100."
         : "Laporan belum dapat dimuat. Data tidak akan diganti dengan perkiraan."}
+    </p>}
+    {!validPage && <p className="staff-notice" role="alert">
+      Nomor halaman transaksi tidak valid.
     </p>}
     {report?.ok && <>
       <section className="staff-panel" aria-label="Ringkasan penerimaan cash">
@@ -96,6 +108,49 @@ export default async function DailyCashPage({
             ))}</tbody>
           </table></div>
         )}
+      </section>
+      <section className="staff-panel" aria-label="Rincian transaksi cash harian">
+        <h2>Rincian struk cash lunas</h2>
+        <p className="staff-muted">
+          Berdasarkan struk final yang diterbitkan pada tanggal ini.
+          Hanya 20 transaksi per halaman, urut terbaru; tanpa identitas pelanggan.
+        </p>
+        {receipts && !receipts.ok && <p role="alert" className="staff-notice">
+          Rincian transaksi belum dapat diverifikasi dari server.
+        </p>}
+        {receipts?.ok && receipts.data.items.length === 0 &&
+          <p role="status">Tidak ada struk pada halaman ini.</p>}
+        {receipts?.ok && receipts.data.items.length > 0 &&
+          <div className="staff-table-wrap">
+            <table className="staff-table" aria-label="Transaksi cash lunas">
+              <thead><tr>
+                <th scope="col">Struk</th>
+                <th scope="col">Waktu (WIB)</th>
+                <th scope="col">Meja</th>
+                <th scope="col">Total</th>
+                <th scope="col">Pesanan</th>
+              </tr></thead>
+              <tbody>{receipts.data.items.map((item) =>
+                <tr key={item.receiptId}>
+                  <td>#{item.receiptNumber}</td>
+                  <td>{localTime(item.issuedAt)}</td>
+                  <td>{item.tableCode}</td>
+                  <td>{idr(item.totalIdr)}</td>
+                  <td><Link href={`/staff/orders/${item.orderId}`}>Lihat pesanan</Link></td>
+                </tr>
+              )}</tbody>
+            </table>
+          </div>}
+        {receipts?.ok && <nav className="staff-form" aria-label="Halaman transaksi cash">
+          {receipts.data.page > 0 &&
+            <Link className="staff-secondary" href={`/staff/reports?date=${encodeURIComponent(report.data.date)}&page=${receipts.data.page - 1}`}>
+              Halaman sebelumnya
+            </Link>}
+          {receipts.data.hasNext && receipts.data.page < 1000 &&
+            <Link className="staff-secondary" href={`/staff/reports?date=${encodeURIComponent(report.data.date)}&page=${receipts.data.page + 1}`}>
+              Halaman berikutnya
+            </Link>}
+        </nav>}
       </section>
     </>}
     <p className="staff-footnote">
