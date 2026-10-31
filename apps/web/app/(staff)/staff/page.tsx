@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { LiveRefresh } from "@/components/live-refresh";
 import { managerGameLossAlerts } from "@/lib/game-server";
 import { logoutStaff } from "./actions";
-import { canUseOcc, canUseKitchen, canUseWaiter, staffIdentity } from "@/lib/staff-server";
+import { canUseOcc, canUseKitchen, canUseWaiter, sandboxReviewEnabled, staffIdentity } from "@/lib/staff-server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,14 @@ export default async function StaffPage() {
         <p>Ganti kata sandi sendiri. Setelah berhasil, semua sesi pada perangkat lain akan dicabut.</p>
         <Link className="staff-link-button" href="/staff/account">Ganti kata sandi</Link>
       </section>
+      {sandboxReviewEnabled() && current.staff.roles.includes("ADMIN") && <section className="staff-panel">
+        <h2>Rekonsiliasi pembayaran simulasi</h2>
+        <p>Antrean bukti FAKE yang dikarantina untuk pemeriksaan admin.
+          Hanya baca, tidak dapat mengubah status lunas atau struk.</p>
+        <Link className="staff-link-button" href="/staff/reconciliation">
+          Periksa event sandbox
+        </Link>
+      </section>}
       {isManager && <section className="staff-panel">
         <h2>Manajemen staf</h2>
         <p>Lihat akun, nonaktifkan akses staf biasa dan lihat perubahan lewat audit. Akun admin/manager dilindungi.</p>
