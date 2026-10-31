@@ -42,6 +42,7 @@ class CashDrawerShiftIntegrationTest {
     @Autowired PasswordEncoder encoder;
     @Autowired StaffAuthService auth;
     @Autowired CashDrawerShiftService shifts;
+    @Autowired com.natsx.smartcafe.orders.CashWorkflowService cashWorkflow;
 
     private record Actor(StaffPrincipal principal,String token) {}
     private Actor staff(String role) {
@@ -177,6 +178,28 @@ class CashDrawerShiftIntegrationTest {
             "UPDATE cash_drawer_shifts SET counted_cash_idr=1 WHERE id=?",first.id()));
         assertThrows(DataAccessException.class,()->jdbc.update(
             "DELETE FROM cash_drawer_shifts WHERE id=?",first.id()));
+
+        // After the first tracked shift, accepting unassigned cash while closed
+        // must fail instead of silently omitting money from drawer accounting.
+        UUID postCloseOrder=UUID.randomUUID(),postCloseIntent=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO orders(id,visit_id,guest_id,status,subtotal_idr,total_idr,pricing_policy_version)
+            VALUES (?,?,?,'SERVED',9000,9000,'SYNTHETIC-NO-OPEN-TILL')
+            """,postCloseOrder,visit,guest);
+        jdbc.update("""
+            INSERT INTO payment_intents(id,order_id,method_selected,amount_due_idr,
+                aggregate_status)
+            VALUES (?,?,'CASH',9000,'AWAITING_CASH')
+            """,postCloseIntent,postCloseOrder);
+        assertEquals(409,assertThrows(ApiFailureException.class,()->
+            cashWorkflow.capture(postCloseIntent,10000,"closed-"+UUID.randomUUID(),
+                cashier.principal().staffId(),"no-open-shift")).status().value());
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM cash_tenders WHERE payment_intent_id=?
+            """,Integer.class,postCloseIntent));
+        assertEquals("AWAITING_CASH",jdbc.queryForObject("""
+            SELECT aggregate_status FROM payment_intents WHERE id=?
+            """,String.class,postCloseIntent));
 
         var next=shifts.open(otherCashier.principal(),0,"next-"+UUID.randomUUID(),"test-next");
         assertEquals("OPEN",next.state());
