@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { recordSandboxTriage } from "./actions";
 import { notFound, redirect } from "next/navigation";
 import {
   localTime, sandboxReconciliationPage, sandboxReviewClassifications,
@@ -13,7 +14,7 @@ function pageLink(page:number,classification:SandboxClassification) {
 
 export default async function SandboxReconciliationPage({
   searchParams,
-}:{searchParams:Promise<{page?:string;classification?:string}>}) {
+}:{searchParams:Promise<{page?:string;classification?:string;notice?:string}>}) {
   const identity=await staffIdentity();
   if(identity.kind==="signed-out")redirect("/staff/login?status=expired");
   if(identity.kind==="unavailable")return <main className="staff-shell">
@@ -43,11 +44,18 @@ export default async function SandboxReconciliationPage({
     <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link>
       <span>/</span><strong>Rekonsiliasi simulasi</strong></nav>
     <section className="staff-panel">
-      <h2>Hanya baca</h2>
+      <h2>Bukti pembayaran hanya baca</h2>
       <p className="staff-notice" role="status">
         Event SUCCEEDED di layar ini hanya klaim palsu dari simulator.
+        Catatan investigasi bersifat append-only, tanpa mengubah bukti asli.
         Tidak ada otorisasi pembayaran, tombol pelunasan, refund, atau penerbitan struk.
       </p>
+      {query.notice==="recorded"&&<p role="status">
+        Tindakan investigasi tersimpan sebagai jejak audit. Bukti pembayaran tetap karantina.
+      </p>}
+      {query.notice&&query.notice!=="recorded"&&<p role="alert">
+        Tindakan investigasi tidak dikonfirmasi ({query.notice}). Periksa status terbaru.
+      </p>}
       <form method="GET" className="staff-form">
         <label htmlFor="sandbox-classification">Filter klasifikasi</label>
         <select id="sandbox-classification" name="classification" defaultValue={classification}>
@@ -85,6 +93,7 @@ export default async function SandboxReconciliationPage({
               <th scope="col">Nominal dilaporkan</th>
               <th scope="col">Referensi FAKE</th>
               <th scope="col">Status tercatat</th>
+              <th scope="col">Investigasi admin</th>
             </tr></thead>
             <tbody>{result.data.items.map((event)=><tr key={event.id}>
               <td>{localTime(event.receivedAt)}</td>
@@ -93,6 +102,30 @@ export default async function SandboxReconciliationPage({
               <td>{event.reportedAmountIdr.toLocaleString("id-ID")} {event.currency}</td>
               <td><code>{event.reference}</code></td>
               <td>{event.currentPaymentState??"Tidak diketahui"}</td>
+              <td>
+                <p>{event.latestTriageAction??"Belum ada tindakan"}</p>
+                {event.latestTriageAt&&<p className="staff-muted">
+                  {localTime(event.latestTriageAt)}
+                </p>}
+                <form action={recordSandboxTriage} className="staff-form">
+                  <input type="hidden" name="evidenceId" value={event.id}/>
+                  <input type="hidden" name="page" value={page}/>
+                  <input type="hidden" name="classification" value={classification}/>
+                  <label htmlFor={"triage-"+event.id}>Tindak lanjut</label>
+                  <select id={"triage-"+event.id} name="code" defaultValue="INVESTIGATE">
+                    <option value="INVESTIGATE">Investigasi</option>
+                    <option value="REQUEST_PROVIDER_REVIEW">Perlu periksa provider</option>
+                    <option value="ESCALATE">Eskalasi</option>
+                  </select>
+                  <label className="staff-check">
+                    <input name="confirm" type="checkbox" value="yes" required/>
+                    Catat tindakan audit, bukan menyetujui pembayaran
+                  </label>
+                  <button className="staff-secondary" type="submit">
+                    Catat investigasi
+                  </button>
+                </form>
+              </td>
             </tr>)}</tbody>
           </table>
         </div>}
@@ -106,8 +139,8 @@ export default async function SandboxReconciliationPage({
       </section>
     </>}
     <p className="staff-footnote">
-      Data hanya untuk analisis di sandbox dan tidak dapat diedit dari layar ini.
-      Klaim keberhasilan pembayaran tidak sama dengan verifikasi provider.
+      Bukti asli tidak dapat diedit; tindakan investigasi baru hanya ditambahkan
+      sebagai audit. Klaim keberhasilan pembayaran tidak sama dengan verifikasi provider.
       Total dan halaman adalah dua pembacaan database yang mungkin berubah selama refresh.
     </p>
   </main>;
