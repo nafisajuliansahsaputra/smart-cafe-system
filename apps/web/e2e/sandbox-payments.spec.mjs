@@ -47,6 +47,8 @@ async function checkoutSandbox(page, method) {
 }
 
 test("guest QRIS and VA sandbox are non-payable, scoped, idempotent and never PAID", async ({ browser }) => {
+  test.skip(process.env.E2E_SANDBOX_PAYMENTS !== "true",
+    "Isolated sandbox payment browser job only; default cash jobs remain untouched.");
   test.setTimeout(150_000);
   const contexts = [];
   const options = { baseURL: BASE, ignoreHTTPSErrors: process.env.E2E_PROXY_TLS === "true" };
