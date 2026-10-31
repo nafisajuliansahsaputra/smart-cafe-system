@@ -400,6 +400,31 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     // The manager-only landing alert uses the existing authenticated game
     // stream and intentionally excludes private complaint notes.
     const manager = await staff("manager");
+
+    // A closed, negative-variance till requires manager review, not mutation.
+    expect((await cashier.goto("/staff/cash-shifts/investigations"))?.status()).toBe(404);
+    expect((await waiter.goto("/staff/cash-shifts/investigations"))?.status()).toBe(404);
+    await manager.goto("/staff/cash-shifts/investigations");
+    await expect(manager.getByRole("heading", { name: "Investigasi selisih kas" }))
+      .toBeVisible();
+    const varianceList = manager.getByLabel("Daftar investigasi selisih kas");
+    await expect(varianceList).toContainText("1.000");
+    await expect(varianceList).toContainText("Belum ditinjau");
+    await manager.getByLabel("Tindak lanjut").selectOption("REQUEST_RECOUNT");
+    await manager.getByLabel(/Catatan pemeriksaan/).fill(
+      "Synthetic manager review: recount till after waiter cash handoff",
+    );
+    await manager.getByRole("checkbox", {
+      name: /ini hanya catatan investigasi, bukan koreksi nominal uang/,
+    }).check();
+    await manager.getByRole("button", { name: "Catat tindak lanjut" }).click();
+    await expect(manager.getByText("Tindakan investigasi tersimpan sebagai audit."))
+      .toBeVisible();
+    await expect(manager.getByLabel("Riwayat investigasi shift"))
+      .toContainText("Synthetic manager review");
+    await expect(manager.getByLabel("Daftar investigasi selisih kas"))
+      .toContainText("1.000");
+
     const managerHome=await manager.context().newPage();
     await managerHome.goto("/staff");
     await expect(managerHome.getByRole("heading", {
