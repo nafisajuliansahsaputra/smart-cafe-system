@@ -45,7 +45,33 @@ test("sandbox reconciliation evidence is read-only and hidden from non-admin rol
       await expect(admin.page.getByRole("button",{name:"Tampilkan bukti"})).toBeVisible();
       await expect(admin.page.getByRole("button",{name:/setujui|lunas|refund|approve/i}))
         .toHaveCount(0);
-      await admin.page.getByLabel("Filter klasifikasi").selectOption("FINANCIAL_MISMATCH");
+
+      // Investigate with a controlled code; no FAKE claim can be approved.
+      const form=rows.first().locator("form");
+      await form.getByLabel("Tindak lanjut").selectOption("ESCALATE");
+      await form.getByRole("checkbox").check();
+      await form.getByRole("button",{name:"Catat investigasi"}).click();
+      await expect(admin.page).toHaveURL(/notice=recorded/);
+      await expect(admin.page.getByText(
+        /Tindakan investigasi tersimpan sebagai jejak audit/
+      )).toBeVisible();
+      await expect(admin.page.locator("tbody tr").first()).toContainText("ESCALATE");
+      await expect(admin.page.locator("tbody tr").first())
+        .toContainText("UNKNOWN_REFERENCE");
+      // A repeated same admin+event+code action replays the original audit id.
+      const replayForm=admin.page.locator("tbody tr").first().locator("form");
+      await replayForm.getByLabel("Tindak lanjut").selectOption("ESCALATE");
+      await replayForm.getByRole("checkbox").check();
+      await replayForm.getByRole("button",{name:"Catat investigasi"}).click();
+      await expect(admin.page).toHaveURL(/notice=recorded/);
+      await expect(admin.page.locator("tbody tr").first()).toContainText("ESCALATE");
+
+      // Let the server-action redirect/hydration settle before a native GET filter form.
+      await admin.page.reload();
+      const filter=admin.page.getByLabel("Filter klasifikasi");
+      await expect(filter).toHaveValue("ALL");
+      await filter.selectOption("FINANCIAL_MISMATCH");
+      await expect(filter).toHaveValue("FINANCIAL_MISMATCH");
       await admin.page.getByRole("button",{name:"Tampilkan bukti"}).click();
       await expect(admin.page).toHaveURL(/classification=FINANCIAL_MISMATCH/);
       await expect(admin.page.getByText(

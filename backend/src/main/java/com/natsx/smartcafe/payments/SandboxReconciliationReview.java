@@ -29,7 +29,8 @@ public final class SandboxReconciliationReview {
         String classification,String claimedState,String method,
         long reportedAmountIdr,String currency,String environment,
         Instant receivedAt,UUID attemptId,String currentAttemptState,
-        String currentPaymentState) {}
+        String currentPaymentState,String latestTriageAction,
+        Instant latestTriageAt,UUID latestTriageActor) {}
     public record Page(int page,String classification,boolean hasNext,
                        List<Evidence> items,long totalEvidence,long successClaims,
                        long flaggedEvidence) {}
@@ -54,11 +55,19 @@ public final class SandboxReconciliationReview {
                    e.classification,e.observed_state,e.method,
                    e.reported_amount_idr,e.reported_currency,
                    e.reported_environment,e.received_at,e.attempt_id,
-                   a.state AS attempt_state,p.aggregate_status AS payment_state
+                   a.state AS attempt_state,p.aggregate_status AS payment_state,
+                   t.action_code AS triage_action,
+                   t.created_at AS triage_at,t.actor_staff_id AS triage_actor
             FROM sandbox_payment_event_inbox e
             LEFT JOIN digital_payment_attempts a ON a.id=e.attempt_id
               AND a.provider_key='SANDBOX_FAKE'
             LEFT JOIN payment_intents p ON p.id=a.payment_intent_id
+            LEFT JOIN LATERAL (
+                SELECT action_code,created_at,actor_staff_id
+                FROM sandbox_payment_triage_actions t
+                WHERE t.evidence_id=e.id
+                ORDER BY created_at DESC,id DESC LIMIT 1
+            ) t ON true
             WHERE e.provider_key='SANDBOX_FAKE'
               AND (?='ALL' OR e.classification=?)
             ORDER BY e.received_at DESC,e.id DESC
@@ -72,7 +81,10 @@ public final class SandboxReconciliationReview {
                 rs.getString("reported_environment"),
                 rs.getTimestamp("received_at").toInstant(),
                 rs.getObject("attempt_id",UUID.class),rs.getString("attempt_state"),
-                rs.getString("payment_state")),
+                rs.getString("payment_state"),rs.getString("triage_action"),
+                rs.getTimestamp("triage_at")==null?null:
+                    rs.getTimestamp("triage_at").toInstant(),
+                rs.getObject("triage_actor",UUID.class)),
             classification,classification,SIZE+1,page*SIZE);
         return new Page(page,classification,rows.size()>SIZE,
             List.copyOf(rows.subList(0,Math.min(rows.size(),SIZE))),
