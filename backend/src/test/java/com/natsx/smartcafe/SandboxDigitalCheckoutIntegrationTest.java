@@ -222,6 +222,109 @@ class SandboxDigitalCheckoutIntegrationTest {
             "SELECT count(*) FROM orders WHERE guest_id=?",Integer.class,guest.guest()));
     }
 
+
+    @Test void ownedFakeAttemptApiDoesNotSettleAndRejectsForeignOrDuplicate() throws Exception {
+        var alice=guest();
+        var bob=guest();
+        var orderId=order(submit(alice,"QRIS","attempt-checkout-"+UUID.randomUUID()));
+        String url="/api/v1/me/orders/"+orderId+"/sandbox-attempts";
+        String key="attempt-"+UUID.randomUUID();
+        String body="{\"method\":\"QRIS\"}";
+
+        var before=mvc.perform(get(url).header("Authorization","Bearer "+alice.token()))
+            .andReturn().getResponse();
+        assertEquals(200,before.getStatus(),before.getContentAsString());
+        assertTrue(before.getContentAsString().contains("\"data\":[]"));
+        assertTrue(before.getHeader("Cache-Control").contains("no-store"));
+        assertEquals(401,mvc.perform(post(url)
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+        assertEquals(404,mvc.perform(post(url)
+            .header("Authorization","Bearer "+bob.token())
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+        assertEquals(404,mvc.perform(get(url)
+            .header("Authorization","Bearer "+bob.token()))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"VA\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"CASH\"}"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+
+        var created=mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse();
+        assertEquals(200,created.getStatus(),created.getContentAsString());
+        assertTrue(created.getHeader("Cache-Control").contains("no-store"));
+        assertTrue(created.getContentAsString().contains("FAKE_QRIS_NOT_PAYABLE"));
+        assertTrue(created.getContentAsString().contains("SANDBOX_FAKE_NOT_MONEY"));
+        assertTrue(created.getContentAsString().contains("\"state\":\"PENDING\""));
+        String reference=Pattern.compile("FAKE_[a-f0-9]{32}")
+            .matcher(created.getContentAsString()).results().findFirst()
+            .orElseThrow().group();
+        var replay=mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .header("Idempotency-Key",key)
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse();
+        assertEquals(200,replay.getStatus(),replay.getContentAsString());
+        assertTrue(replay.getContentAsString().contains(reference));
+        assertEquals(409,mvc.perform(post(url)
+            .header("Authorization","Bearer "+alice.token())
+            .header("Idempotency-Key","different-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+        var visible=mvc.perform(get(url)
+            .header("Authorization","Bearer "+alice.token()))
+            .andReturn().getResponse();
+        assertEquals(200,visible.getStatus());
+        assertTrue(visible.getContentAsString().contains(reference));
+        assertTrue(visible.getContentAsString().contains("NON_PAYABLE") ||
+            visible.getContentAsString().contains("NOT_PAYABLE"));
+        assertTrue(!visible.getContentAsString().contains(key));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT count(*) FROM digital_payment_attempts d
+            JOIN payment_intents p ON p.id=d.payment_intent_id WHERE p.order_id=?
+            """,Integer.class,orderId));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT amount_paid_idr FROM payment_intents WHERE order_id=?
+            """,Long.class,orderId));
+        assertEquals("PENDING",jdbc.queryForObject("""
+            SELECT aggregate_status FROM payment_intents WHERE order_id=?
+            """,String.class,orderId));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM receipts WHERE order_id=?
+            """,Integer.class,orderId));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT count(*) FROM kitchen_tickets WHERE order_id=?
+            """,Integer.class,orderId));
+
+        var cash=guest();
+        var cashOrder=order(submit(cash,"CASH","attempt-cash-"+UUID.randomUUID()));
+        assertEquals(409,mvc.perform(post("/api/v1/me/orders/"+cashOrder+"/sandbox-attempts")
+            .header("Authorization","Bearer "+cash.token())
+            .header("Idempotency-Key","cash-attempt-"+UUID.randomUUID())
+            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn().getResponse().getStatus());
+        assertEquals(409,mvc.perform(get("/api/v1/me/orders/"+cashOrder+"/sandbox-attempts")
+            .header("Authorization","Bearer "+cash.token()))
+            .andReturn().getResponse().getStatus());
+    }
+
     @Test void invalidMethodDoesNotCreateOrderOrReserveStock() throws Exception {
         var guest=guest();
         assertTrue(submit(guest,"CARD","bad-method-123456").startsWith("400:"));

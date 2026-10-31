@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   GUEST_COOKIE, TABLE_ALIAS, UUID_PATTERN, envelopeData, getCart, getVariants,
-  guestApi, guestToken, isCart, isRecord,
+  guestApi, guestToken, isCart, isRecord, sandboxCheckoutEnabled,
 } from "@/lib/guest-server";
 
 function notice(status: number): string {
@@ -195,3 +195,66 @@ export async function restoreVisit(form: FormData): Promise<void> {
   redirect(`/t/${alias}`);
 }
 
+
+
+/** Development-only checkout; backend independently enforces both sandbox gates. */
+export async function checkoutSandbox(form: FormData): Promise<void> {
+  if (!sandboxCheckoutEnabled()) redirect("/visit/cart?notice=invalid");
+  const version=form.get("cartVersion");
+  const key=form.get("idempotencyKey");
+  const method=form.get("paymentMethod");
+  if (form.get("confirm")!=="yes" ||
+      typeof version!=="string" || !/^(?:0|[1-9][0-9]{0,12})$/.test(version) ||
+      typeof key!=="string" || !/^[a-zA-Z0-9_-]{8,128}$/.test(key) ||
+      (method!=="QRIS" && method!=="VA")) {
+    redirect("/visit/cart?notice=invalid");
+  }
+  const token=await guestToken();
+  if (!token) redirect("/visit?notice=expired");
+  const response=await guestApi("/api/v1/orders","POST",token,{
+    cartVersion:Number(version),paymentMethod:method,
+  },key);
+  if (response.status===403) redirect("/visit/cart?notice=sandbox-unavailable");
+  if (response.status!==200) redirect("/visit/cart?notice="+notice(response.status));
+  const order=envelopeData(response.payload);
+  if (!isRecord(order) || typeof order.id!=="string" ||
+      !UUID_PATTERN.test(order.id) || order.paymentStatus!=="PENDING" ||
+      order.status!=="SUBMITTED") {
+    redirect("/visit/cart?notice=offline");
+  }
+  revalidatePath("/visit/cart");
+  revalidatePath("/visit/orders");
+  redirect("/visit/orders/"+order.id+"?notice=sandbox-submitted");
+}
+
+/** Creates only an explicitly NON-PAYABLE fake attempt, never a paid receipt. */
+export async function createSandboxAttempt(form: FormData): Promise<void> {
+  if (!sandboxCheckoutEnabled()) redirect("/visit/orders");
+  const orderId=form.get("orderId");
+  const method=form.get("paymentMethod");
+  const key=form.get("idempotencyKey");
+  if (typeof orderId!=="string" || !UUID_PATTERN.test(orderId) ||
+      (method!=="QRIS" && method!=="VA") ||
+      typeof key!=="string" || !/^[a-zA-Z0-9_-]{8,128}$/.test(key) ||
+      form.get("confirm")!=="yes") {
+    redirect("/visit/orders");
+  }
+  const token=await guestToken();
+  if (!token) redirect("/visit?notice=expired");
+  const result=await guestApi("/api/v1/me/orders/"+orderId+"/sandbox-attempts",
+    "POST",token,{method},key);
+  if (result.status!==200) {
+    if (result.status===403) redirect("/visit/orders/"+orderId+"?notice=sandbox-unavailable");
+    redirect("/visit/orders/"+orderId+"?notice="+notice(result.status));
+  }
+  const attempt=envelopeData(result.payload);
+  if (!isRecord(attempt) || attempt.orderId!==orderId ||
+      typeof attempt.providerReference!=="string" ||
+      !/^FAKE_[a-f0-9]{32}$/.test(attempt.providerReference) ||
+      attempt.state!=="PENDING" ||
+      attempt.environment!=="SANDBOX_FAKE_NOT_MONEY") {
+    redirect("/visit/orders/"+orderId+"?notice=offline");
+  }
+  revalidatePath("/visit/orders/"+orderId);
+  redirect("/visit/orders/"+orderId+"?notice=sandbox-attempt");
+}

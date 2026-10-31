@@ -155,6 +155,14 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("heading", { name: "E2E Latte" })).toBeVisible();
     await expect(guest.locator(".guest-cart-total")).toContainText("35.000");
 
+    // Default cash browser must not expose sandbox-only payment controls.
+    await expect(guest.getByRole("heading", {
+      name: "Simulasi pembayaran digital (SANDBOX)",
+    })).toHaveCount(0);
+    await expect(guest.getByRole("button", {
+      name: "Simulasikan pesanan QRIS",
+    })).toHaveCount(0);
+
     // Guest checkout records an unpaid order, NEVER optimistic PAID.
     await guest.getByRole("checkbox", { name: /Saya setuju membuat pesanan cash/ }).check();
     await guest.getByRole("button", { name: "Buat pesanan cash" }).click();
