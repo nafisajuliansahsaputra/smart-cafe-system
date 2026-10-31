@@ -147,6 +147,10 @@ class SandboxPaymentEventInboxIntegrationTest {
         var amount=inbox.record(observation(freshEvent(),f.reference(),37001,FAKE_ENV,
             PaymentGateway.State.SUCCEEDED));
         assertEquals("FINANCIAL_MISMATCH",amount.classification());
+        var differentCurrency=inbox.record(new SandboxPaymentEventInbox.Observation(
+            freshEvent(),f.reference(),PaymentGateway.Method.QRIS,
+            PaymentGateway.State.SUCCEEDED,37000,"USD",FAKE_ENV));
+        assertEquals("FINANCIAL_MISMATCH",differentCurrency.classification());
         var env=inbox.record(observation(freshEvent(),f.reference(),37000,
             "PRODUCTION_REAL",PaymentGateway.State.SUCCEEDED));
         assertEquals("ENVIRONMENT_MISMATCH",env.classification());
@@ -169,9 +173,9 @@ class SandboxPaymentEventInboxIntegrationTest {
             37000,FAKE_ENV,PaymentGateway.State.SUCCEEDED));
         assertEquals("CONTRADICTORY_STATE",contradictory.classification());
         assertNoSettlement(next);
-        assertEquals(6,jdbc.queryForObject("""
-            SELECT count(*) FROM sandbox_payment_event_inbox WHERE id IN (?,?,?,?,?,?)
-            """,Integer.class,missing.id(),amount.id(),env.id(),
+        assertEquals(7,jdbc.queryForObject("""
+            SELECT count(*) FROM sandbox_payment_event_inbox WHERE id IN (?,?,?,?,?,?,?)
+            """,Integer.class,missing.id(),amount.id(),differentCurrency.id(),env.id(),
             wrongMethod.id(),late.id(),contradictory.id()));
     }
 
