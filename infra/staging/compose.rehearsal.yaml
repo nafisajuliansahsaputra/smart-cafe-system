@@ -22,7 +22,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 512
-    tmpfs: [/tmp:rw,nosuid,nodev,size=64m,mode=1777]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
     environment:
       DB_URL: jdbc:postgresql://db:5432/${SCS_STAGING_DB:?Set staging DB name}
       DB_USERNAME: ${SCS_STAGING_USER:?Set staging DB user}
