@@ -21,8 +21,9 @@ settlement, real payment processing, branch deletion or a merge.
 5. The current main commit is an ancestor of the exact candidate SHA,
    verified with GitHub compare API using immutable commit SHAs, not
    mutable branch names.
-6. An optional manual `--verify-ancestry` mode validates every parent
-   commit pair in the stack individually.
+6. The integration-candidate GitHub Actions gate runs
+   `--verify-ancestry` automatically, comparing every parent commit SHA
+   pair in the stack, not just matching textual base/head branch names.
 
 All reads use the existing least-privilege GitHub Actions token. The script
 does not merge, cherry-pick, checkout arbitrary remote code, write files,
@@ -41,7 +42,8 @@ or mismatched source SHAs, forked candidates, non-draft status, invalid
 branch references, duplicate source branches and broken ancestry.
 
 For direct-to-main pull requests whose head begins with `integration/`,
-it additionally runs the live read-only GitHub comparison script.
+it additionally runs the live read-only GitHub comparison script
+**with full commit-by-commit ancestry verification**.
 Existing CI, Flyway V27→V30 historical-data rehearsal, Docker,
 security, Chromium, CodeQL, OSV and container image scans must still
 pass on the same exact HEAD. Successful green workflows do not
