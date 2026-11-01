@@ -519,7 +519,7 @@ jobs:
         with:
           node-version: "22"
       - name: Reject public ports, unsafe networks, webhooks and host mounts
-        run: node --test scripts/isolated-staging-preflight.test.mjs
+        run: node --test scripts/isolated-staging-preflight.test.mjs scripts/isolated-staging-runtime-inspect.test.mjs
       - name: Create disposable independent staging DB credentials
         run: |
           set -euo pipefail
@@ -587,6 +587,47 @@ jobs:
             -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)
           echo "STAGING CHECK: DB published host port count $(test -z "$db_port" && echo 0 || echo 1)"
           test -z "$db_port"
+      - name: Verify actual Docker Engine staging isolation and filesystem permissions
+        run: |
+          set -euo pipefail
+          umask 077
+          stage_env="$RUNNER_TEMP/scs-staging-rehearsal.env"
+          runtime="$RUNNER_TEMP/scs-staging-engine-inspect.json"
+          networks="$RUNNER_TEMP/scs-staging-engine-networks.json"
+          trap 'rm -f "$runtime" "$networks"' EXIT
+          for service in db api web; do
+            id=$(docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml ps -q "$service")
+            if test -z "$id"; then
+              echo "STAGING ENGINE FAILURE: $service container is absent" >&2
+              exit 1
+            fi
+          done
+          # Docker inspect contains secrets, so never log or upload this JSON.
+          docker inspect \
+            "$(docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml ps -q db)" \
+            "$(docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml ps -q api)" \
+            "$(docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml ps -q web)" \
+            > "$runtime"
+          docker network inspect scs-staging-rehearsal_data scs-staging-rehearsal_frontend > "$networks"
+          node scripts/isolated-staging-runtime-inspect.mjs "$runtime" "$networks"
+          for service in api web; do
+            docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml exec -T "$service" sh -ec '
+              scratch="/tmp/scs-engine-probe-$"
+              touch "$scratch"
+              rm "$scratch"
+              if touch /app/scs-engine-illegal-write 2>/dev/null; then
+                rm -f /app/scs-engine-illegal-write
+                echo "FAIL: image rootfs unexpectedly writable" >&2
+                exit 1
+              fi
+              if [ "$1" = web ]; then
+                scratch="/app/.next/cache/scs-engine-probe-$"
+                touch "$scratch"
+                rm "$scratch"
+              fi
+            ' sh "$service"
+          done
+          echo "STAGING ENGINE CHECK: filesystem writes restricted to bounded tmpfs"
       - name: Diagnose disposable staging service failure
         if: failure()
         run: |
