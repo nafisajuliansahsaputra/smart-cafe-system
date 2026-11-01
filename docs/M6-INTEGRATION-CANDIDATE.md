@@ -49,6 +49,22 @@ security, Chromium, CodeQL, OSV and container image scans must still
 pass on the same exact HEAD. Successful green workflows do not
 substitute for manual code/financial/privacy review.
 
+## Maven OSV when the target main branch is documentation-only
+
+A consolidated candidate PR to `main` is a special dependency-scan case:
+the previous reusable PR scanner compared `backend/pom.xml` on both
+sides, but the current mainline does not yet contain that file.
+That comparison fails before it can evaluate any dependency advisories.
+
+`.github/workflows/osv-maven.yml` now checks the exact immutable PR base
+commit for `backend/pom.xml`. If it exists, the normal OSV delta scan
+runs. If it does not, the candidate is subject to the **strict full OSV
+scan** with `fail-on-vuln: true`. An unavailable feed, invalid
+dependency file, or detected known vulnerability fails the gate.
+When the app eventually exists on main, scheduled and mainline checks
+use the strict full scan. This change must not be interpreted as
+suppressing a reported vulnerability or waiving a security check.
+
 ## Operational procedure
 
 - Keep PR #61 **draft** and do not merge it.
