@@ -34,6 +34,8 @@ jobs:
           node-version: "22"
       - name: Prove the release guard refuses unsafe configurations
         run: node --test scripts/release-readiness.test.mjs
+      - name: Prove integration-candidate provenance guard rejects unsafe cases
+        run: node --test scripts/integration-candidate.test.mjs
       - name: Audit open PR stack reference topology (read-only)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,7 +49,6 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           SCS_INTEGRATION_CANDIDATE_BRANCH: ${{ github.head_ref || inputs.tip_branch }}
         run: |
-          node --test scripts/integration-candidate.test.mjs
           node scripts/integration-candidate.mjs
       - name: Optionally verify every PR's actual commit ancestry
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_ancestry }}
