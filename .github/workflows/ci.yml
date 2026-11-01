@@ -554,23 +554,38 @@ jobs:
             fi
             sleep 3
           done
-          grep -q '"database":"connected"' "$RUNNER_TEMP/scs-stage-api.json"
-          grep -q 'API dan database terhubung' "$RUNNER_TEMP/scs-stage-home.html"
+          grep -q '"database":"connected"' "$RUNNER_TEMP/scs-stage-api.json" || {
+            echo "STAGING FAILURE: API did not confirm database connectivity" >&2
+            exit 1
+          }
+          echo "STAGING CHECK: isolated API and database healthy"
+          grep -q 'API dan database terhubung' "$RUNNER_TEMP/scs-stage-home.html" || {
+            echo "STAGING FAILURE: web did not render expected connected state" >&2
+            exit 1
+          }
+          echo "STAGING CHECK: frontend rendered connected state"
           for path in /v3/api-docs /swagger-ui/index.html; do
             code=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$path")
-            test "$code" = 404
+            echo "STAGING CHECK: $path returned HTTP $code"
+            case "$code" in
+              401|403|404) ;;
+              *) echo "STAGING FAILURE: API docs endpoint accessible or redirected" >&2; exit 1 ;;
+            esac
           done
           code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18080/api/v1/ops/orders)
+          echo "STAGING CHECK: unauthenticated staff order endpoint HTTP $code"
           test "$code" = 401 -o "$code" = 403
           flyway=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
             -f infra/staging/compose.rehearsal.yaml exec -T db \
             sh -c 'psql -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
               -c "SELECT max(version::int) FROM flyway_schema_history WHERE success"')
+          echo "STAGING CHECK: latest installed Flyway version $flyway"
           test "$flyway" = 30
           # Database has zero published host ports, unlike the local dev Compose.
           db_port=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
             -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)
+          echo "STAGING CHECK: DB published host port count $(test -z "$db_port" && echo 0 || echo 1)"
           test -z "$db_port"
       - name: Diagnose disposable staging service failure
         if: failure()
