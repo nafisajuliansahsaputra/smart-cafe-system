@@ -11,9 +11,50 @@ permissions:
   contents: read
 
 jobs:
+  detect-maven-baseline:
+    name: Determine whether PR base has a Maven lockfile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    outputs:
+      mode: ${{ steps.detect.outputs.mode }}
+    steps:
+      - name: Read full history for immutable PR base inspection
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Choose delta scan or strict full scan
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Missing immutable PR base commit SHA" >&2
+              exit 1
+            fi
+            if git cat-file -e "$BASE_SHA:backend/pom.xml" 2>/dev/null; then
+              echo "mode=delta" >> "$GITHUB_OUTPUT"
+              echo "PR baseline contains Maven dependencies: compare vulnerabilities."
+            else
+              echo "mode=full" >> "$GITHUB_OUTPUT"
+              echo "Baseline does not have backend/pom.xml; scanning all HEAD dependencies."
+            fi
+          elif [[ -f backend/pom.xml ]]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "Mainline full dependency scan."
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "No Java Maven application on this mainline commit."
+          fi
+
   scan-pr:
     name: Maven OSV / new PR vulnerabilities
-    if: github.event_name == 'pull_request'
+    needs: detect-maven-baseline
+    if: ${{ github.event_name == 'pull_request' && needs.detect-maven-baseline.outputs.mode == 'delta' }}
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.7.0
     with:
       scan-args: |-
@@ -24,8 +65,9 @@ jobs:
       security-events: write
 
   scan-all:
-    name: Maven OSV / full main baseline
-    if: github.event_name != 'pull_request'
+    name: Maven OSV / strict full dependency baseline
+    needs: detect-maven-baseline
+    if: ${{ needs.detect-maven-baseline.outputs.mode == 'full' }}
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.7.0
     with:
       scan-args: |-
@@ -35,3 +77,12 @@ jobs:
       contents: read
       actions: read
       security-events: write
+
+  no-java-on-main:
+    name: Maven OSV / no Maven application on main
+    needs: detect-maven-baseline
+    if: ${{ github.event_name != 'pull_request' && needs.detect-maven-baseline.outputs.mode == 'none' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report no Maven application exists to scan
+        run: echo "No backend/pom.xml on this mainline commit. Java scanning resumes when application exists."
