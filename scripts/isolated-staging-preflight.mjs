@@ -81,7 +81,7 @@ export function inspectIsolatedRehearsalConfig(config) {
   const dbMounts=db.volumes??[];
   if(!Array.isArray(dbMounts)||dbMounts.length!==1||
     dbMounts[0]?.type!=="volume"||
-    dbMounts[0]?.source!==expectedVolume||
+    dbMounts[0]?.source!=="staging_postgres_data"||
     dbMounts[0]?.target!=="/var/lib/postgresql/data"||
     dbMounts[0]?.read_only===true) {
     reject("Database must mount only its dedicated writable staging volume");
