@@ -1,0 +1,87 @@
+# M6 isolated staging runtime rehearsal
+
+## What is actually running
+
+`infra/staging/compose.rehearsal.yaml` starts **real Spring Boot,
+PostgreSQL 17 and Next.js containers in GitHub Actions** under the
+separate Docker Compose project `scs-staging-rehearsal`. This is a
+short-lived, locally bound rehearsal in the CI runner, **not an online
+staging or production deployment**.
+
+The staging topology does not share containers, Docker networks,
+database volumes or fixed credentials with the developer's default
+`compose.yaml`.
+
+- `db`: a dedicated named Docker volume and an **internal** data
+  network. No DB port is published to the host, LAN or internet.
+- `api`: connects only to data and frontend Docker networks, publishes
+  only to `127.0.0.1:18080`; read-only filesystem, dropped capabilities,
+  `no-new-privileges`, process cap and tmpfs.
+- `web`: connects only to frontend network, publishes only to
+  `127.0.0.1:13080`, same runtime hardening. It accesses the API via
+  private `http://api:8080`.
+- Disposable database name `smart_cafe_staging_rehearsal`. Database
+  password and API HMAC secret are generated with `openssl rand`,
+  placed in a temporary mode-600 envfile outside the checkout, never
+  committed or uploaded as an artifact.
+- API docs and Swagger UI disabled; `dev-bootstrap` and bootstrap
+  username/password disabled. Only QRIS/VA **synthetic sandbox** attempts
+  can be created; the sandbox callback webhook key is empty, so it cannot
+  accept even a simulated callback in this rehearsal.
+- No public host binding, real payments, provider token, production
+  accounts, real merchant database, PII, or real-cafe receipt delivery.
+
+The runtime check `scripts/isolated-staging-preflight.mjs` extends
+`scripts/staging-preflight.mjs` to require an internal DB network,
+frontend/DB network segregation, reserved project and localhost ports,
+no published database port, no host-mounted data, no external networks
+or volumes, no webhook key, and no unrelated services. Its negative
+unit tests run before a Docker image is built.
+
+## Actual CI acceptance
+
+A separate job, `Isolated staging rehearsal / private DB / sandbox /
+HTTP smoke`, in `.github/workflows/ci.yml` performs:
+
+1. Generate disposable environment credentials, validate the **resolved**
+   Compose JSON before launching any container, and fail closed.
+2. Build all three services and perform real Flyway V1–V30 migration
+   against a fresh staging-only PostgreSQL volume.
+3. Reach the API at `127.0.0.1:18080` and verify a connected database;
+   reach the frontend at `127.0.0.1:13080` and verify rendering.
+4. Verify API docs and Swagger endpoints are **not publicly accessible**
+   (401/403/404; the running Spring Security layer may return 401 before
+   the disabled API docs handler can return 404). Unauthorized staff
+   order reads must be rejected with HTTP 401/403.
+5. Query the **running staging PostgreSQL** to verify successful latest
+   Flyway version 30, and verify the DB publishes no host port.
+6. Destroy all staging containers, DB volume, temporary env and
+   resolved configuration on every runner completion or failure.
+
+Existing CI independently validates cash/browser workflows, fake
+digital payments, paid receipts, historical Flyway upgrades, and full
+financial-evidence backup/restore. This staging job is additive and
+does **not** seed operational staff or live cafe orders.
+
+## Branch protection is a separate, currently open action
+
+The audit on 2026-11-01 found `main` **unprotected**. Available
+connected GitHub actions permit read-only inspection and branch/PR
+changes but do not expose repository ruleset or branch-protection
+configuration. This work does not claim to have changed that setting.
+
+Before merging the release candidate, the owner or authorized repository
+admin should configure `Settings → Rules → Rulesets` (or the equivalent
+branch protection UI) for `main`, evaluate required reviews suitable
+for the repository collaborators, disable force pushes and deletions,
+require PR integration, and require up-to-date successful checks,
+including the full CI, CodeQL, Maven OSV, Docker CVE and staging preflight
+jobs. Verify enforcement with a non-destructive test. A GitHub Free
+personal private repository may have ruleset availability/enforcement
+limitations depending on plan; confirm in the repository UI rather than
+assuming protection.
+
+The full-stack candidate PR #61 and source PR chain remain **draft**.
+A passing CI staging rehearsal is not approval for public hosting,
+DNS/TLS provisioning, secret management, RPO/RTO, PITR, real QRIS/VA,
+real receipt messaging, human financial controls or a real-cafe pilot.

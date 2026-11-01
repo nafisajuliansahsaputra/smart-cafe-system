@@ -504,3 +504,99 @@ jobs:
       - name: Remove two backend replicas and ephemeral database
         if: always()
         run: docker compose -f compose.yaml -f infra/perf/compose.replicas.yaml down --volumes --remove-orphans
+
+  isolated-staging-runtime:
+    name: Isolated staging rehearsal / private DB / sandbox / HTTP smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the exact candidate commit without saved credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure Node for strict staging policy tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reject public ports, unsafe networks, webhooks and host mounts
+        run: node --test scripts/isolated-staging-preflight.test.mjs
+      - name: Create disposable independent staging DB credentials
+        run: |
+          set -euo pipefail
+          umask 077
+          stage_env="$RUNNER_TEMP/scs-staging-rehearsal.env"
+          cat > "$stage_env" <<EOF
+          SCS_STAGING_DB=smart_cafe_staging_rehearsal
+          SCS_STAGING_USER=scs_rehearsal
+          SCS_STAGING_PASSWORD=$(openssl rand -hex 32)
+          SCS_STAGING_JOIN_SECRET=$(openssl rand -hex 48)
+          EOF
+          chmod 600 "$stage_env"
+      - name: Validate fully resolved sandbox staging configuration
+        run: |
+          set -euo pipefail
+          stage_env="$RUNNER_TEMP/scs-staging-rehearsal.env"
+          config="$RUNNER_TEMP/scs-staging-resolved.json"
+          docker compose --env-file "$stage_env" -f infra/staging/compose.rehearsal.yaml config --format json > "$config"
+          node scripts/isolated-staging-preflight.mjs "$config"
+          rm -f "$config"
+      - name: Build and start isolated staging rehearsal
+        run: |
+          docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
+            -f infra/staging/compose.rehearsal.yaml up --build --detach
+      - name: Exercise actual running staging API and web
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            if curl --fail --silent http://127.0.0.1:18080/api/v1/system/status > "$RUNNER_TEMP/scs-stage-api.json" \
+              && curl --fail --silent http://127.0.0.1:13080/ > "$RUNNER_TEMP/scs-stage-home.html"; then
+              break
+            fi
+            sleep 3
+          done
+          grep -q '"database":"connected"' "$RUNNER_TEMP/scs-stage-api.json" || {
+            echo "STAGING FAILURE: API did not confirm database connectivity" >&2
+            exit 1
+          }
+          echo "STAGING CHECK: isolated API and database healthy"
+          grep -q 'API dan database terhubung' "$RUNNER_TEMP/scs-stage-home.html" || {
+            echo "STAGING FAILURE: web did not render expected connected state" >&2
+            exit 1
+          }
+          echo "STAGING CHECK: frontend rendered connected state"
+          for path in /v3/api-docs /swagger-ui/index.html; do
+            code=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$path")
+            echo "STAGING CHECK: $path returned HTTP $code"
+            case "$code" in
+              401|403|404) ;;
+              *) echo "STAGING FAILURE: API docs endpoint accessible or redirected" >&2; exit 1 ;;
+            esac
+          done
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18080/api/v1/ops/orders)
+          echo "STAGING CHECK: unauthenticated staff order endpoint HTTP $code"
+          test "$code" = 401 -o "$code" = 403
+          flyway=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
+            -f infra/staging/compose.rehearsal.yaml exec -T db \
+            sh -c 'psql -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+              -c "SELECT max(version::int) FROM flyway_schema_history WHERE success"')
+          echo "STAGING CHECK: latest installed Flyway version $flyway"
+          test "$flyway" = 30
+          # Database has zero published host ports, unlike the local dev Compose.
+          db_port=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
+            -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)
+          echo "STAGING CHECK: DB published host port count $(test -z "$db_port" && echo 0 || echo 1)"
+          test -z "$db_port"
+      - name: Diagnose disposable staging service failure
+        if: failure()
+        run: |
+          docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
+            -f infra/staging/compose.rehearsal.yaml logs --no-color --tail=90 api db web
+      - name: Destroy staging DB volume, containers and disposable credentials
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/scs-staging-rehearsal.env"; then
+            docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
+              -f infra/staging/compose.rehearsal.yaml down --volumes --remove-orphans
+          fi
+          rm -f "$RUNNER_TEMP/scs-staging-rehearsal.env" "$RUNNER_TEMP/scs-staging-resolved.json"
