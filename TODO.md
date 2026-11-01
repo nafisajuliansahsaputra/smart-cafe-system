@@ -621,3 +621,16 @@ This is NOT hosted/public staging and does not handle real payment.
 `main` branch protection remains disabled; the available GitHub
 connector cannot edit repository rulesets. See
 `docs/M6-ISOLATED-STAGING-REHEARSAL.md`.
+
+### M6 staging capability and resource fence (stacked draft PR)
+
+Tightened the CI-only isolated staging Compose validator against adding
+Linux capabilities after cap_drop: ALL, disabling seccomp via extra
+security options, inheriting host namespaces/devices, Docker volume
+inheritance, shared-volume mounts, custom host/DNS mappings and
+unexpected Docker network/volume identities. API/web must use only the
+existing no-new-privileges profile, and DB must mount its one dedicated
+writable project volume at the PostgreSQL data directory. Negative Node
+tests now explicitly reject these unsafe mutations. This is a release
+rehearsal hardening increment, **not** approval to merge, host publicly,
+use actual customer data, activate a merchant or mark M6 complete.

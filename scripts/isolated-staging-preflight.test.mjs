@@ -11,7 +11,7 @@ function staging() {
         restart:"no",networks:{data:null},
         environment:{POSTGRES_DB:"smart_cafe_staging_rehearsal",
           POSTGRES_USER:"scs_ci",POSTGRES_PASSWORD:secret},
-        volumes:[{type:"volume",source:"scs-staging-rehearsal_staging_postgres_data",
+        volumes:[{type:"volume",source:"staging_postgres_data",
           target:"/var/lib/postgresql/data"}],
       },
       api:{
@@ -40,7 +40,10 @@ function staging() {
           SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED:"true"},
       },
     },
-    networks:{data:{internal:true},frontend:{}},
+    networks:{
+      data:{internal:true,name:"scs-staging-rehearsal_data"},
+      frontend:{name:"scs-staging-rehearsal_frontend"},
+    },
     volumes:{staging_postgres_data:{name:"scs-staging-rehearsal_staging_postgres_data"}},
   };
 }
@@ -91,4 +94,48 @@ test("rehearsal must use reserved project/ports",()=>{
   x.name="smart-cafe-system";
   x.services.web.ports[0].published="3000";
   assert.ok(inspectIsolatedRehearsalConfig(x).length>=2);
+});
+
+test("privileged capability cannot be re-added after cap_drop ALL",()=>{
+  const x=staging();x.services.api.cap_add=["SYS_ADMIN"];
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/cap_add/);
+});
+test("additional unconfined seccomp security option is rejected",()=>{
+  const x=staging();x.services.web.security_opt=[
+    "no-new-privileges:true","seccomp:unconfined"
+  ];
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/no-new-privileges/);
+});
+test("host user namespace and volume inheritance are rejected",()=>{
+  const x=staging();x.services.api.userns_mode="host";
+  x.services.web.volumes_from=["db"];
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/userns_mode/);
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/volumes_from/);
+});
+test("application containers may not mount reusable volumes",()=>{
+  const x=staging();x.services.web.volumes=[
+    {type:"volume",source:"staging_other",target:"/app/secrets"}
+  ];
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/must not mount volumes/);
+});
+test("database may only mount dedicated writable database volume",()=>{
+  const x=staging();
+  x.services.db.volumes[0].source="some_other_project_data";
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/dedicated writable/);
+  x.services.db.volumes[0].source="staging_postgres_data";
+  x.services.db.volumes[0].target="/host-data";
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/dedicated writable/);
+});
+test("project network and database volume names cannot be shared",()=>{
+  const x=staging();x.networks.frontend.name="production_frontend";
+  x.volumes.staging_postgres_data.name="production_postgres_data";
+  const errors=inspectIsolatedRehearsalConfig(x).join(";");
+  assert.match(errors,/project-isolated/);
+  assert.match(errors,/project-specific/);
+});
+test("extra host DNS and device permissions are forbidden",()=>{
+  const x=staging();x.services.api.extra_hosts=["merchant-db:10.0.0.2"];
+  x.services.db.devices=["/dev/sda:/dev/sda"];
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/extra_hosts/);
+  assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/devices/);
 });

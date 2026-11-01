@@ -85,3 +85,18 @@ The full-stack candidate PR #61 and source PR chain remain **draft**.
 A passing CI staging rehearsal is not approval for public hosting,
 DNS/TLS provisioning, secret management, RPO/RTO, PITR, real QRIS/VA,
 real receipt messaging, human financial controls or a real-cafe pilot.
+
+## Additional capability and resource isolation (M6 follow-up)
+
+The resolved-Compose gate rejects cap_add, host namespace/userns settings,
+device grants, volumes_from, custom DNS/host overrides, secret mounts and
+unexpected security profiles. API and web must retain exactly
+no-new-privileges:true, and must never mount Docker volumes. Database
+persistence must use exactly one writable staging project database volume
+at /var/lib/postgresql/data; data/frontend network names must remain within
+the dedicated scs-staging-rehearsal project. Negative Node tests exercise
+attempts to bypass cap_drop: ALL and introduce shared volumes/networks.
+
+This policy is for the **disposable localhost-only CI rehearsal**. It is
+not proof that a real externally hosted staging environment, its network
+perimeter, secrets, disaster recovery, or payment integrations are safe.
