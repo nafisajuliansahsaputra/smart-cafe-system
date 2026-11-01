@@ -634,3 +634,17 @@ writable project volume at the PostgreSQL data directory. Negative Node
 tests now explicitly reject these unsafe mutations. This is a release
 rehearsal hardening increment, **not** approval to merge, host publicly,
 use actual customer data, activate a merchant or mark M6 complete.
+
+### M6 runtime Docker Engine staging acceptance (stacked draft PR)
+
+Added verification of actual running isolated staging Docker Engine
+containers and networks, beyond the static Compose preflight.
+The runtime inspector checks project ownership, expected members, ports,
+private DB and dedicated writable volume, unprivileged/read-only API/web
+containers, no capability/host attachment escalation and bounded tmpfs.
+CI also probes permissible temporary writes and refuses image-root writes.
+Synthetic negative tests prevent false acceptance of unsafe runtime
+conditions. Docker inspect output is handled as ephemeral secret-bearing
+data and is deleted without artifact upload. **Exact-head CI and review
+are required before accepting this increment.** This is not public staging
+or production approval.
