@@ -576,3 +576,17 @@ is a no-op. CI has an independent V27→V30 upgrade-rehearsal job in
 addition to the full Java suite. This does NOT claim production-like
 staging, merchant integration, live/large-volume migration or
 deployment readiness. See docs/M6-V27-V30-UPGRADE-REHEARSAL.md.
+
+### M6 consolidated candidate provenance guard (stacked draft PR #62)
+
+Release review PR #61 is a draft direct-to-main snapshot of the entire
+existing stack. A new fail-closed `scripts/integration-candidate.mjs` gate
+requires it to match the exact head SHA of one other draft source PR in
+the linear stack, validates that source's full dependency ancestry
+and checks current main commit ancestry by immutable SHA. Candidate
+modifications that bypass the stacked source, non-draft candidate status,
+forked or missing parent links, and mismatched SHA are rejected.
+Negative tests run on every PR; the read-only live provenance check
+runs when a PR head is `integration/`. No branch merge, deployment
+or production financial mutation occurs. See
+`docs/M6-INTEGRATION-CANDIDATE.md`.
