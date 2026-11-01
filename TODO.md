@@ -590,3 +590,17 @@ Negative tests run on every PR; the read-only live provenance check
 runs when a PR head is `integration/`. No branch merge, deployment
 or production financial mutation occurs. See
 `docs/M6-INTEGRATION-CANDIDATE.md`.
+
+### M6 financial-evidence backup/restore gate (stacked draft PR #63)
+
+CI smoke backup/restore now includes **actual synthetic paid-cash evidence**:
+served order, PAID payment, Rp50,000 collected / Rp15,000 change for
+Rp35,000 net, Rp10,000 float, explicit waiter-to-manager handoff,
+immutable receipt, closed Rp45,000 expected/Rp44,000 counted drawer and
+-1,000 variance review. The rehearsal refuses missing evidence, requires
+table row counts plus 17 content fingerprints to match across the source
+and a brand-new restored PostgreSQL database, and proves paid receipt,
+handoff, closed shift and review mutation triggers remain enforced
+AFTER restoration. No real data, production restore, or provider
+integration; PITR, RPO/RTO and separate hosted staging remain open.
+See docs/M6-FINANCIAL-RESTORE-REHEARSAL.md.
