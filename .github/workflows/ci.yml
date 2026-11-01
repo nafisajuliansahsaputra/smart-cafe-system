@@ -158,6 +158,7 @@ jobs:
         run: |
           docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/fixtures/e2e-browser.sql
           docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/fixtures/restore-rehearsal.sql
+          docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/fixtures/restore-financial-evidence.sql
       - name: Rehearse PostgreSQL dump and verified separate-database restore
         env:
           SCS_RESTORE_TEST_ISOLATED: "yes"
