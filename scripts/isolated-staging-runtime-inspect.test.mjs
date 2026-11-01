@@ -55,6 +55,9 @@ function fixture() {
     container("api", [data, frontend]),
     container("web", [frontend])
   ];
+  // Docker Compose may represent a managed named volume as a DB Bind.
+  // Effective Mounts still must prove the exact allowed volume and target.
+  containers[0].HostConfig.Binds = [project + "_staging_postgres_data:/var/lib/postgresql/data:rw"];
   const networks = [
     { Name: data, Internal: true,
       Labels: { "com.docker.compose.project": project },
