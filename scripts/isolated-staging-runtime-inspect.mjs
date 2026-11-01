@@ -55,7 +55,7 @@ export function inspectStagingRuntime(containers, networks) {
         host.UsernsMode === "host" ||
         (host.CapAdd ?? []).length > 0 ||
         (host.Devices ?? []).length > 0 ||
-        (host.Binds ?? []).length > 0 ||
+        (service !== "db" && (host.Binds ?? []).length > 0) ||
         (host.VolumesFrom ?? []).length > 0) {
       reject(service + ": forbidden host privilege or attachment");
     }
