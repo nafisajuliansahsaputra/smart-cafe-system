@@ -40,6 +40,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           SCS_RELEASE_TIP_BRANCH: ${{ github.head_ref || inputs.tip_branch }}
         run: node scripts/release-chain.mjs
+      - name: Prove integration candidate exactly matches full stacked source
+        if: ${{ (github.event_name == 'pull_request' && startsWith(github.head_ref, 'integration/')) || (github.event_name == 'workflow_dispatch' && startsWith(inputs.tip_branch, 'integration/')) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SCS_INTEGRATION_CANDIDATE_BRANCH: ${{ github.head_ref || inputs.tip_branch }}
+        run: |
+          node --test scripts/integration-candidate.test.mjs
+          node scripts/integration-candidate.mjs
       - name: Optionally verify every PR's actual commit ancestry
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_ancestry }}
         env:
