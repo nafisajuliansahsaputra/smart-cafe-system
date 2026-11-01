@@ -100,3 +100,23 @@ attempts to bypass cap_drop: ALL and introduce shared volumes/networks.
 This policy is for the **disposable localhost-only CI rehearsal**. It is
 not proof that a real externally hosted staging environment, its network
 perimeter, secrets, disaster recovery, or payment integrations are safe.
+
+## Actual Docker Engine isolation verification (stacked M6 follow-up)
+
+The isolated staging CI job additionally inspects the **running Docker
+Engine containers** and network memberships after API/DB/frontend smoke.
+A read-only Node inspector rejects missing or foreign containers, unexpected
+network attachments/members, a non-internal DB network, DB host ports, public
+API/web port binds, unintended volumes, missing rootfs/capability/security
+controls, root app users and missing bounded temporary filesystems.
+
+Actual API and web container shell probes verify writable /tmp and the
+frontend cache but deny writes to the application image filesystem.
+Synthetic negative Node tests cover reused DB volumes and cross-project
+network memberships. Docker inspect JSON may contain environment credentials:
+it is written with restrictive umask to temporary runner files, never printed
+or uploaded, and deleted immediately by an EXIT trap.
+
+This is a CI-only rehearsal verification, **not** an audit of a public staging
+host, a production network penetration test, or authorization to use real
+customer data, payment credentials or receipt delivery.
