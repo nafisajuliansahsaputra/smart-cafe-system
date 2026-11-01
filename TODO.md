@@ -604,3 +604,20 @@ handoff, closed shift and review mutation triggers remain enforced
 AFTER restoration. No real data, production restore, or provider
 integration; PITR, RPO/RTO and separate hosted staging remain open.
 See docs/M6-FINANCIAL-RESTORE-REHEARSAL.md.
+
+### M6 disposable isolated staging runtime (stacked draft PR #64)
+
+Separate `infra/staging/compose.rehearsal.yaml` boots actual Spring
+Boot/PostgreSQL 17/Next.js in CI with an internal no-ingress DB network,
+separate disposable volume and random credentials, API/web localhost
+ports only, read-only app containers, sandbox digital checkout but no
+webhook key, no bootstrap staff or public Swagger docs. A strict
+`scripts/isolated-staging-preflight.mjs` plus negative tests reject
+external DB, mounts/networks, public host ports, dev bootstrap and
+non-sandbox configurations. An additional CI job builds and boots the
+services, verifies Flyway V30 and healthy frontend/API while denying
+unauthorized staff and API docs, then destroys all ephemeral resources.
+This is NOT hosted/public staging and does not handle real payment.
+`main` branch protection remains disabled; the available GitHub
+connector cannot edit repository rulesets. See
+`docs/M6-ISOLATED-STAGING-REHEARSAL.md`.
