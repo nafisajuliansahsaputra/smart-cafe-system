@@ -49,8 +49,10 @@ HTTP smoke`, in `.github/workflows/ci.yml` performs:
    against a fresh staging-only PostgreSQL volume.
 3. Reach the API at `127.0.0.1:18080` and verify a connected database;
    reach the frontend at `127.0.0.1:13080` and verify rendering.
-4. Verify both API docs endpoints are HTTP 404 and unauthorized staff
-   order reads are rejected with HTTP 401/403.
+4. Verify API docs and Swagger endpoints are **not publicly accessible**
+   (401/403/404; the running Spring Security layer may return 401 before
+   the disabled API docs handler can return 404). Unauthorized staff
+   order reads must be rejected with HTTP 401/403.
 5. Query the **running staging PostgreSQL** to verify successful latest
    Flyway version 30, and verify the DB publishes no host port.
 6. Destroy all staging containers, DB volume, temporary env and
