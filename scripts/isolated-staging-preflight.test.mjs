@@ -11,7 +11,7 @@ function staging() {
         restart:"no",networks:{data:null},
         environment:{POSTGRES_DB:"smart_cafe_staging_rehearsal",
           POSTGRES_USER:"scs_ci",POSTGRES_PASSWORD:secret},
-        volumes:[{type:"volume",source:"scs-staging-rehearsal_staging_postgres_data",
+        volumes:[{type:"volume",source:"staging_postgres_data",
           target:"/var/lib/postgresql/data"}],
       },
       api:{
@@ -122,7 +122,7 @@ test("database may only mount dedicated writable database volume",()=>{
   const x=staging();
   x.services.db.volumes[0].source="some_other_project_data";
   assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/dedicated writable/);
-  x.services.db.volumes[0].source="scs-staging-rehearsal_staging_postgres_data";
+  x.services.db.volumes[0].source="staging_postgres_data";
   x.services.db.volumes[0].target="/host-data";
   assert.match(inspectIsolatedRehearsalConfig(x).join(";"),/dedicated writable/);
 });
