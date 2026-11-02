@@ -691,3 +691,5 @@ This safeguard runs before ADMIN insertion, but **not before Flyway
 startup migrations**. A `db` hostname alone is not evidence of local
 network isolation. Never run `dev-bootstrap` against valuable or
 remote databases, and retain owner review plus the normal release gates.
+
+The check additionally enforces the resolved Spring payment environment, sandbox checkout toggle and webhook-secret presence, so system property overrides cannot bypass harmless-looking environment flags. Negative tests exercise these effective configuration mismatches.
