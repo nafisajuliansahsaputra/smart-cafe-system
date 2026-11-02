@@ -27,6 +27,7 @@ public class LocalAdminBootstrap implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        LocalBootstrapGuard.requireSafeConfiguration(System.getenv());
         String login=System.getenv("SCS_BOOTSTRAP_USERNAME");
         String secret=System.getenv("SCS_BOOTSTRAP_PASSWORD");
         if(login==null || !login.matches("[a-zA-Z0-9._-]{3,120}")
