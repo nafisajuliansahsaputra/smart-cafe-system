@@ -17,9 +17,18 @@ class LocalBootstrapGuardTest {
         ));
     }
 
+    private LocalBootstrapGuard.EffectiveRuntime runtime(Map<String, String> env,
+                                                          String jdbcUrl) {
+        return new LocalBootstrapGuard.EffectiveRuntime(
+            jdbcUrl,
+            env.getOrDefault("SCS_PAYMENT_ENVIRONMENT", "disabled"),
+            "true".equals(env.getOrDefault("SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED", "false")),
+            !env.getOrDefault("SCS_SANDBOX_WEBHOOK_SECRET", "").isEmpty());
+    }
+
     private void check(Map<String, String> env) {
-        LocalBootstrapGuard.requireSafeConfiguration(env,
-            env.getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/smart_cafe"));
+        LocalBootstrapGuard.requireSafeConfiguration(env, runtime(env,
+            env.getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/smart_cafe")));
     }
 
     @Test
@@ -29,15 +38,32 @@ class LocalBootstrapGuardTest {
         env.put("SPRING_DATASOURCE_URL", "jdbc:postgresql://merchant-db:5432/live");
         assertThrows(IllegalStateException.class,
             () -> LocalBootstrapGuard.requireSafeConfiguration(env,
-                env.get("SPRING_DATASOURCE_URL")));
+                runtime(env, env.get("SPRING_DATASOURCE_URL"))));
         // Even a second allowlisted URL must match the declared target exactly.
         assertThrows(IllegalStateException.class,
             () -> LocalBootstrapGuard.requireSafeConfiguration(env,
-                "jdbc:postgresql://localhost:5432/smart_cafe"));
+                runtime(env, "jdbc:postgresql://localhost:5432/smart_cafe")));
         assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env, null));
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env, runtime(env, null)));
         assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(
-            env, "jdbc:postgresql://db:5432/smart_cafe"));
+            env, runtime(env, "jdbc:postgresql://db:5432/smart_cafe")));
+    }
+
+    @Test
+    void resolvedSpringPaymentPropertiesOverrideSafeLookingEnvironment() {
+        var env = localEnvironment();
+        String local = env.get("DB_URL");
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env,
+                new LocalBootstrapGuard.EffectiveRuntime(local, "sandbox", false, false)));
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env,
+                new LocalBootstrapGuard.EffectiveRuntime(local, "disabled", true, false)));
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env,
+                new LocalBootstrapGuard.EffectiveRuntime(local, "disabled", false, true)));
+        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(env,
+            new LocalBootstrapGuard.EffectiveRuntime(local, "disabled", false, false)));
     }
 
     @Test
