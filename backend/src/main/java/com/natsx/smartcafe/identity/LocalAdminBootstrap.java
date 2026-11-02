@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,11 @@ public class LocalAdminBootstrap implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        LocalBootstrapGuard.requireSafeConfiguration(System.getenv());
+        // Inspect the connection Spring actually selected. A higher-priority
+        // spring.datasource.url override must never bypass DB_URL policy.
+        String actualUrl = jdbc.execute(
+            (ConnectionCallback<String>) connection -> connection.getMetaData().getURL());
+        LocalBootstrapGuard.requireSafeConfiguration(System.getenv(), actualUrl);
         String login=System.getenv("SCS_BOOTSTRAP_USERNAME");
         String secret=System.getenv("SCS_BOOTSTRAP_PASSWORD");
         if(login==null || !login.matches("[a-zA-Z0-9._-]{3,120}")
