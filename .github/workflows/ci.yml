@@ -587,6 +587,19 @@ jobs:
             -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)
           echo "STAGING CHECK: DB published host port count $(test -z "$db_port" && echo 0 || echo 1)"
           test -z "$db_port"
+      - name: Deny Spring-generated developer account and password in staging logs
+        run: |
+          set -euo pipefail
+          umask 077
+          stage_log="$RUNNER_TEMP/scs-staging-auth-audit.log"
+          trap 'rm -f "$stage_log"' EXIT
+          docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \\
+            -f infra/staging/compose.rehearsal.yaml logs --no-color api > "$stage_log"
+          if grep -Eq 'Using generated security password|inMemoryUserDetailsManager' "$stage_log"; then
+            echo "STAGING SECURITY FAILURE: framework-generated account/password must be disabled" >&2
+            exit 1
+          fi
+          echo "STAGING SECURITY CHECK: no framework-generated development user or password"
       - name: Verify actual Docker Engine staging isolation and filesystem permissions
         run: |
           set -euo pipefail
