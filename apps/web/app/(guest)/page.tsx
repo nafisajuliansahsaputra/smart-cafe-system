@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { fetchSystemStatus } from "@/lib/server-status";
 import "../showcase.css";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +16,6 @@ export default async function HomePage({
   searchParams: Promise<{ notice?: string }>;
 }) {
   const { notice } = await searchParams;
-  const status = await fetchSystemStatus();
   return (
     <main className="portfolio-home">
       <div className="home-frame">
@@ -111,7 +109,7 @@ export default async function HomePage({
         <div className="home-outro-actions"><p>Jelajahi alur pelanggan, kasir, dapur, dan waiter di sandbox presentasi yang tidak menyimpan data pribadi atau memproses uang.</p><Link href="/showcase" className="home-button home-button-light">Buka demo interaktif <span aria-hidden="true">↗</span></Link></div>
       </section>
 
-      <footer className="home-footer"><span>© SMART CAFE SYSTEM / NATSX</span><span>{status ? "LOCAL API AVAILABLE" : "SHOWCASE MODE"} · NOT A LIVE MERCHANT SERVICE</span><Link href="/staff/login">Staff portal ↗</Link></footer>
+      <footer className="home-footer"><span>© SMART CAFE SYSTEM / NATSX</span><span>SHOWCASE MODE · NOT A LIVE MERCHANT SERVICE</span><Link href="/staff/login">Staff portal ↗</Link></footer>
     </main>
   );
 }
