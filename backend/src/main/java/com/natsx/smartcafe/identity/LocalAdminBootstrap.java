@@ -5,6 +5,8 @@ import java.util.UUID;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -19,14 +21,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocalAdminBootstrap implements ApplicationRunner {
     private final JdbcTemplate jdbc;
     private final PasswordEncoder encoder;
+    private final Environment environment;
 
-    public LocalAdminBootstrap(JdbcTemplate jdbc, PasswordEncoder encoder) {
-        this.jdbc=jdbc;this.encoder=encoder;
+    public LocalAdminBootstrap(JdbcTemplate jdbc, PasswordEncoder encoder, Environment environment) {
+        this.jdbc=jdbc;
+        this.encoder=encoder;
+        this.environment=environment;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        // Inspect the connection Spring actually selected. A higher-priority
+        // spring.datasource.url override must never bypass DB_URL policy.
+        String actualUrl = jdbc.execute(
+            (ConnectionCallback<String>) connection -> connection.getMetaData().getURL());
+        // Resolve the same Spring properties the synthetic payment components
+        // use. Higher-precedence system/command-line properties must not bypass
+        // the environment-only bootstrap guard.
+        var runtime = new LocalBootstrapGuard.EffectiveRuntime(
+            actualUrl,
+            environment.getProperty("scs.payments.environment", "disabled"),
+            environment.getProperty("scs.payments.sandbox-digital-checkout-enabled",
+                Boolean.class, false),
+            !environment.getProperty("scs.payments.sandbox-webhook-secret", "").isEmpty());
+        LocalBootstrapGuard.requireSafeConfiguration(System.getenv(), runtime);
         String login=System.getenv("SCS_BOOTSTRAP_USERNAME");
         String secret=System.getenv("SCS_BOOTSTRAP_PASSWORD");
         if(login==null || !login.matches("[a-zA-Z0-9._-]{3,120}")

@@ -661,3 +661,35 @@ if API startup logs reveal a generated developer password/account. Logs
 remain temporary and are never uploaded. **Do not mark M6 complete without
 exact-head tests, human review, branch protection, operational credential
 policy and separately approved hosted staging.**
+
+### M6 explicit local-only first-admin bootstrap guard (stacked draft PR)
+
+The `dev-bootstrap` profile now also requires an exact, opt-in local
+acknowledgement before it is allowed to write the first ADMIN account.
+The guard refuses combined/production profiles, any database URL outside
+the dedicated local `smart_cafe` PostgreSQL addresses, non-disabled
+payment environments, fake sandbox checkout and webhook keys. Plaintext
+credentials are never included in error messages. Unit regressions
+exercise permitted local profiles and deny remote DBs, unexpected database
+names, active payments, missing acknowledgements and mixed profiles.
+The local Compose env mapping and bootstrap instructions now document
+the explicit opt-in and mandatory cleanup after the first startup.
+This is additional guardrail for disposable development only; it does
+not certify that a host named `db` is physically private, grant
+production staff provisioning, or satisfy hosted staging gates.
+
+### M6 bootstrap effective-connection fail-closed check (PR #68 follow-up)
+
+The first-ADMIN local-only bootstrap now checks both the declared
+`DB_URL` and the JDBC URL reported by the **live Spring DataSource**.
+The two must match the same strictly allowlisted local target; a
+higher-precedence `SPRING_DATASOURCE_URL` or Spring property override
+can no longer silently redirect the privileged initial-account insert.
+Unit regression covers a safe-looking `DB_URL` with a remote effective
+connection, missing connection metadata and differing local destinations.
+This safeguard runs before ADMIN insertion, but **not before Flyway
+startup migrations**. A `db` hostname alone is not evidence of local
+network isolation. Never run `dev-bootstrap` against valuable or
+remote databases, and retain owner review plus the normal release gates.
+
+The check additionally enforces the resolved Spring payment environment, sandbox checkout toggle and webhook-secret presence, so system property overrides cannot bypass harmless-looking environment flags. Negative tests exercise these effective configuration mismatches.
