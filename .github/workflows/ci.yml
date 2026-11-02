@@ -593,7 +593,7 @@ jobs:
           umask 077
           stage_log="$RUNNER_TEMP/scs-staging-auth-audit.log"
           trap 'rm -f "$stage_log"' EXIT
-          docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \\
+          docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
             -f infra/staging/compose.rehearsal.yaml logs --no-color api > "$stage_log"
           if grep -Eq 'Using generated security password|inMemoryUserDetailsManager' "$stage_log"; then
             echo "STAGING SECURITY FAILURE: framework-generated account/password must be disabled" >&2
