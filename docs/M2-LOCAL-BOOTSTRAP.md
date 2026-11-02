@@ -15,9 +15,16 @@ DataSource connection**, not just `DB_URL`. A higher-priority
 the first ADMIN write to another database while leaving `DB_URL` apparently
 safe. URL validation is not network isolation: a hostname such as `db`
 must still resolve only inside a trusted disposable local Docker network.
-**Flyway runs before this bootstrap runner**; therefore do not start
-`dev-bootstrap` on any external or valuable database, even for a safety
-test. This gate protects ADMIN provisioning, not every startup migration.
+The new `LocalBootstrapEarlyPreflight` BeanFactoryPostProcessor checks
+the **resolved Spring JDBC URL, payment settings and exact active-profile
+set before Flyway or other normal singleton beans initialize**. It refuses
+misconfigured `dev-bootstrap` startup before any migration is allowed.
+The existing bootstrap runner then rechecks the **actual JDBC connection**
+before provisioning the first ADMIN. Both checks are fail-closed.
+
+This is defense in depth, not proof of Docker network locality: `db`
+must resolve to the disposable development PostgreSQL instance. Always
+avoid connecting development bootstrap to valuable or external data.
 
 **Strict warning:** this is a local onboarding mechanism only, not a production administrator provisioning or password-recovery system. It is explicitly opt-in by Spring profile and never used in automated tests. Real pilot requires formal staff management, credential lifecycle, TLS, secure browser auth and a reviewed operator recovery path.
 
