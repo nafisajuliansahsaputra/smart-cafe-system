@@ -648,3 +648,16 @@ conditions. Docker inspect output is handled as ephemeral secret-bearing
 data and is deleted without artifact upload. **Exact-head CI and review
 are required before accepting this increment.** This is not public staging
 or production approval.
+
+### M6 disable default Spring Security development credential (stacked draft PR)
+
+Removed the unwanted framework-generated in-memory user by introducing
+an explicit fail-closed UserDetailsService. This does not alter the real
+staff JSON login, database verification, session revocation or bearer-only
+API security. Integration regressions cover nonexistent framework users,
+HTTP Basic rejection with valid synthetic staff credentials, and continued
+successful staff login. The CI-only isolated staging run now fails closed
+if API startup logs reveal a generated developer password/account. Logs
+remain temporary and are never uploaded. **Do not mark M6 complete without
+exact-head tests, human review, branch protection, operational credential
+policy and separately approved hosted staging.**
