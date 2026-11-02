@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcase` for the independent demonstration. The home page may show *Showcase Mode* while the API is absent; the isolated tour remains interactive. To explore the full backend and staff system, follow [local bootstrap](docs/M2-LOCAL-BOOTSTRAP.md) and use disposable Docker/PostgreSQL data only.
+Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcase` for the independent demonstration. The public home page and isolated tour do not contact the backend and work without a database; the full operational routes still require the API. To explore the full backend and staff system, follow [local bootstrap](docs/M2-LOCAL-BOOTSTRAP.md) and use disposable Docker/PostgreSQL data only.
 
 
 
