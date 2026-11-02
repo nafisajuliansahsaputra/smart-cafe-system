@@ -15,7 +15,7 @@ final class LocalBootstrapGuard {
 
     private LocalBootstrapGuard() {}
 
-    static void requireSafeConfiguration(Map<String, String> env) {
+    static void requireSafeConfiguration(Map<String, String> env, String effectiveJdbcUrl) {
         if (!ACK.equals(env.get("SCS_BOOTSTRAP_LOCAL_ACK"))) {
             throw new IllegalStateException(
                 "Local admin bootstrap requires explicit local-only acknowledgement");
@@ -24,9 +24,12 @@ final class LocalBootstrapGuard {
             throw new IllegalStateException(
                 "Local admin bootstrap requires the isolated dev-bootstrap profile");
         }
-        String databaseUrl = env.getOrDefault("DB_URL", DEFAULT_LOCAL_DB);
-        if (!databaseUrl.matches(
-            "jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1|db):5432/smart_cafe")) {
+        // Both the declared DB_URL and the live JDBC connection must satisfy
+        // this allowlist. Spring environment/property overrides can redirect the
+        // configured DataSource even when DB_URL still looks local.
+        String declaredUrl = env.getOrDefault("DB_URL", DEFAULT_LOCAL_DB);
+        if (!allowedLocalDatabase(declaredUrl) || !allowedLocalDatabase(effectiveJdbcUrl)
+            || !declaredUrl.equals(effectiveJdbcUrl)) {
             throw new IllegalStateException(
                 "Local admin bootstrap requires the dedicated local smart_cafe database");
         }
@@ -36,5 +39,9 @@ final class LocalBootstrapGuard {
             throw new IllegalStateException(
                 "Local admin bootstrap refuses any enabled payment environment");
         }
+    }
+    private static boolean allowedLocalDatabase(String url) {
+        return url != null && url.matches(
+            "jdbc:postgresql://(?:localhost|127\\.0\\.0\\.1|db):5432/smart_cafe");
     }
 }
