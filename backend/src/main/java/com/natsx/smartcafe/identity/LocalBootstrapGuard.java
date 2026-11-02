@@ -15,7 +15,10 @@ final class LocalBootstrapGuard {
 
     private LocalBootstrapGuard() {}
 
-    static void requireSafeConfiguration(Map<String, String> env, String effectiveJdbcUrl) {
+    record EffectiveRuntime(String jdbcUrl, String paymentEnvironment,
+                            boolean sandboxCheckoutEnabled, boolean webhookConfigured) {}
+
+    static void requireSafeConfiguration(Map<String, String> env, EffectiveRuntime runtime) {
         if (!ACK.equals(env.get("SCS_BOOTSTRAP_LOCAL_ACK"))) {
             throw new IllegalStateException(
                 "Local admin bootstrap requires explicit local-only acknowledgement");
@@ -28,14 +31,18 @@ final class LocalBootstrapGuard {
         // this allowlist. Spring environment/property overrides can redirect the
         // configured DataSource even when DB_URL still looks local.
         String declaredUrl = env.getOrDefault("DB_URL", DEFAULT_LOCAL_DB);
-        if (!allowedLocalDatabase(declaredUrl) || !allowedLocalDatabase(effectiveJdbcUrl)
-            || !declaredUrl.equals(effectiveJdbcUrl)) {
+        if (runtime == null || !allowedLocalDatabase(declaredUrl)
+            || !allowedLocalDatabase(runtime.jdbcUrl())
+            || !declaredUrl.equals(runtime.jdbcUrl())) {
             throw new IllegalStateException(
                 "Local admin bootstrap requires the dedicated local smart_cafe database");
         }
         if (!"disabled".equals(env.getOrDefault("SCS_PAYMENT_ENVIRONMENT", "disabled"))
             || !"false".equals(env.getOrDefault("SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED", "false"))
-            || !env.getOrDefault("SCS_SANDBOX_WEBHOOK_SECRET", "").isEmpty()) {
+            || !env.getOrDefault("SCS_SANDBOX_WEBHOOK_SECRET", "").isEmpty()
+            || !"disabled".equals(runtime.paymentEnvironment())
+            || runtime.sandboxCheckoutEnabled()
+            || runtime.webhookConfigured()) {
             throw new IllegalStateException(
                 "Local admin bootstrap refuses any enabled payment environment");
         }
