@@ -142,3 +142,23 @@ and **fails** if a generated-password/in-memory-user startup signature
 appears. The file is deleted via an EXIT trap and is not printed or uploaded.
 This does not imply that production credential lifecycle, MFA, account
 recovery or public TLS protection is complete.
+
+## Development ADMIN bootstrap pre-migration guard (stacked draft PR #69)
+
+When `dev-bootstrap` is explicitly enabled, a dedicated
+`BeanFactoryPostProcessor` validates the exact active profile set, the
+required local acknowledgement, resolved JDBC URL and effective sandbox/
+merchant payment properties **before normal singleton creation, including
+Flyway migration initialization**. Invalid/remote database destinations,
+mixed profiles or payment settings fail closed before the application
+attempts migration or first-ADMIN provisioning. A unit test proves that a
+simulated ordinary singleton is never initialized after an unsafe setting.
+
+The earlier first-ADMIN runner guard remains and independently checks the
+**actual database connection metadata** before account insertion, which
+protects against differing configuration/driver resolution. These checks
+are specific to the opt-in local bootstrap profile. They do **not** claim
+that the `db` hostname is physically private, that unrelated normal
+application profiles cannot be misconfigured, or that any real database
+can safely be selected for this dev-only process. External hosted staging,
+production administrator recovery and payment integration remain blocked.
