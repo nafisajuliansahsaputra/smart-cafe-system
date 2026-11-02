@@ -677,3 +677,17 @@ the explicit opt-in and mandatory cleanup after the first startup.
 This is additional guardrail for disposable development only; it does
 not certify that a host named `db` is physically private, grant
 production staff provisioning, or satisfy hosted staging gates.
+
+### M6 bootstrap effective-connection fail-closed check (PR #68 follow-up)
+
+The first-ADMIN local-only bootstrap now checks both the declared
+`DB_URL` and the JDBC URL reported by the **live Spring DataSource**.
+The two must match the same strictly allowlisted local target; a
+higher-precedence `SPRING_DATASOURCE_URL` or Spring property override
+can no longer silently redirect the privileged initial-account insert.
+Unit regression covers a safe-looking `DB_URL` with a remote effective
+connection, missing connection metadata and differing local destinations.
+This safeguard runs before ADMIN insertion, but **not before Flyway
+startup migrations**. A `db` hostname alone is not evidence of local
+network isolation. Never run `dev-bootstrap` against valuable or
+remote databases, and retain owner review plus the normal release gates.
