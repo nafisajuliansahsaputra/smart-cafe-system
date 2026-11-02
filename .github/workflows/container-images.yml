@@ -31,12 +31,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert checkout is the exact PR HEAD or main commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Build actual application runtime image locally
-        run: docker build --pull --tag "scs-ci-${{ matrix.component }}:${{ github.sha }}" "${{ matrix.context }}"
+        run: docker build --pull --tag "scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}" "${{ matrix.context }}"
       - name: Scan OS and application library vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: "scs-ci-${{ matrix.component }}:${{ github.sha }}"
+          image-ref: "scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}"
           version: v0.76.1
           scanners: vuln
           vuln-type: os,library
@@ -50,7 +53,7 @@ jobs:
       - name: Generate SARIF for repository security alerts
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: "scs-ci-${{ matrix.component }}:${{ github.sha }}"
+          image-ref: "scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}"
           version: v0.76.1
           skip-setup-trivy: "true"
           scanners: vuln
@@ -69,3 +72,34 @@ jobs:
         env:
           SCS_IMAGE_COMPONENT: ${{ matrix.component }}
         run: node scripts/inspect-image-vulnerabilities.mjs trivy-results.json
+      - name: Generate CycloneDX inventory from the already built runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}"
+          version: v0.76.1
+          skip-setup-trivy: "true"
+          scanners: vuln
+          format: cyclonedx
+          output: runtime-image.cdx.json
+          exit-code: "0"
+      - name: Validate SBOM inventory and exact source/image fingerprints
+        env:
+          SCS_IMAGE_COMPONENT: ${{ matrix.component }}
+          SCS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SCS_IMAGE_REFERENCE: scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          SCS_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$SCS_IMAGE_REFERENCE")"
+          export SCS_IMAGE_ID
+          node --test scripts/verify-image-sbom.test.mjs
+          node scripts/verify-image-sbom.mjs runtime-image.cdx.json \
+            "${{ matrix.context }}/Dockerfile" runtime-sbom-evidence.json
+      - name: Retain short-lived unsigned SBOM evidence for human review
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-sbom-${{ matrix.component }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            runtime-image.cdx.json
+            runtime-sbom-evidence.json
+          if-no-files-found: error
+          retention-days: 7
