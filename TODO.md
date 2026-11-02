@@ -707,3 +707,18 @@ mixed profiles and failure before a simulated migration-like singleton.
 Exact-head CI and human security review are pending for this increment.
 Nothing is merged or deployed and `main` branch protections, true hosted
 staging and operational controls remain unimplemented.
+
+### M6 runtime image SBOM evidence for CI review (stacked draft PR #70)
+
+The existing Trivy runtime image CVE workflow now also generates a
+CycloneDX SBOM for each built API/web image, records the exact PR head
+source SHA and local Docker image ID, hashes the runtime Dockerfile and
+SBOM, validates the inventory/manifest with negative unit tests and
+retains a seven-day artifact on successful scans. Checkout is tied to
+the immutable PR HEAD rather than a synthetic merge ref. The guard
+fails for malformed/empty inventories, source/tag/ID mismatches and a
+substituted component/Dockerfile. This is **unsigned CI evidence**, not
+registry publication, immutable deployment digest, reproducible build,
+SLSA supply-chain provenance or production readiness. See
+docs/M6-RUNTIME-SBOM-EVIDENCE.md. Exact-head CI and human review remain
+required; main, real payments and hosted infrastructure remain untouched.
