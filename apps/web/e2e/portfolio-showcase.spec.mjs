@@ -22,7 +22,7 @@ test("isolated showcase demonstrates cashier approval separate from actual cash 
   await expect(page.getByRole("heading", { name: "What sounds good?" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Cashier \/ OCC/ })).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: "Tambah Butter Croissant" }).click();
-  await expect(page.getByRole("output", { name: "Kuantitas Butter Croissant" })).toHaveText("1");
+  await expect(page.locator('output[aria-label="Kuantitas Butter Croissant"]')).toHaveText("1");
   await page.screenshot({ path: "test-results/portfolio-demo-guest.png", fullPage: true });
   await page.getByRole("button", { name: /Kirim pesanan cash/ }).click();
   await expect(page.getByRole("button", { name: /Cashier \/ OCC/ })).toHaveAttribute("aria-pressed", "true");
@@ -41,7 +41,7 @@ test("isolated showcase demonstrates cashier approval separate from actual cash 
   await page.screenshot({ path: "test-results/portfolio-demo-receipt.png", fullPage: true });
   await page.getByRole("button", { name: /Coba simulasi lagi/ }).click();
   await expect(page.getByRole("heading", { name: "What sounds good?" })).toBeVisible();
-  await expect(page.getByRole("output", { name: "Kuantitas Butter Croissant" })).toHaveText("0");
+  await expect(page.locator('output[aria-label="Kuantitas Butter Croissant"]')).toHaveText("0");
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
 });
 
