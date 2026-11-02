@@ -32,6 +32,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert checkout is the exact PR HEAD or main commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Build actual application runtime image locally
         run: docker build --pull --tag "scs-ci-${{ matrix.component }}:${{ github.event.pull_request.head.sha || github.sha }}" "${{ matrix.context }}"
       - name: Scan OS and application library vulnerabilities
