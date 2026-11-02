@@ -17,16 +17,39 @@ class LocalBootstrapGuardTest {
         ));
     }
 
+    private void check(Map<String, String> env) {
+        LocalBootstrapGuard.requireSafeConfiguration(env,
+            env.getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/smart_cafe"));
+    }
+
+    @Test
+    void runtimeDataSourceOverrideOrConnectionMismatchIsRejected() {
+        var env = localEnvironment();
+        // A higher-priority SPRING_DATASOURCE_URL can override the harmless DB_URL.
+        env.put("SPRING_DATASOURCE_URL", "jdbc:postgresql://merchant-db:5432/live");
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env,
+                env.get("SPRING_DATASOURCE_URL")));
+        // Even a second allowlisted URL must match the declared target exactly.
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env,
+                "jdbc:postgresql://localhost:5432/smart_cafe"));
+        assertThrows(IllegalStateException.class,
+            () -> LocalBootstrapGuard.requireSafeConfiguration(env, null));
+        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(
+            env, "jdbc:postgresql://db:5432/smart_cafe"));
+    }
+
     @Test
     void explicitlyAcknowledgedLocalDatabaseAndDisabledPaymentsAccepted() {
         var env = localEnvironment();
-        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(env));
+        assertDoesNotThrow(() -> check(env));
         env.put("DB_URL", "jdbc:postgresql://localhost:5432/smart_cafe");
-        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(env));
+        assertDoesNotThrow(() -> check(env));
         env.put("DB_URL", "jdbc:postgresql://127.0.0.1:5432/smart_cafe");
-        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(env));
+        assertDoesNotThrow(() -> check(env));
         env.remove("DB_URL");
-        assertDoesNotThrow(() -> LocalBootstrapGuard.requireSafeConfiguration(env));
+        assertDoesNotThrow(() -> check(env));
     }
 
     @Test
@@ -34,10 +57,10 @@ class LocalBootstrapGuardTest {
         var env = localEnvironment();
         env.remove("SCS_BOOTSTRAP_LOCAL_ACK");
         assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+            () -> check(env));
         env.put("SCS_BOOTSTRAP_LOCAL_ACK", "true");
         assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+            () -> check(env));
     }
 
     @Test
@@ -47,7 +70,7 @@ class LocalBootstrapGuardTest {
             "production,dev-bootstrap"}) {
             env.put("SPRING_PROFILES_ACTIVE", value);
             assertThrows(IllegalStateException.class,
-                () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+                () -> check(env));
         }
     }
 
@@ -63,7 +86,7 @@ class LocalBootstrapGuardTest {
         }) {
             env.put("DB_URL", url);
             assertThrows(IllegalStateException.class,
-                () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+                () -> check(env));
         }
     }
 
@@ -73,16 +96,16 @@ class LocalBootstrapGuardTest {
         for (String paymentEnvironment : new String[] {"sandbox", "production", "live", ""}) {
             env.put("SCS_PAYMENT_ENVIRONMENT", paymentEnvironment);
             assertThrows(IllegalStateException.class,
-                () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+                () -> check(env));
         }
         env.put("SCS_PAYMENT_ENVIRONMENT", "disabled");
         env.put("SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED", "true");
         assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+            () -> check(env));
         env.put("SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED", "false");
         env.put("SCS_SANDBOX_WEBHOOK_SECRET", "not-a-real-test-secret");
         assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+            () -> check(env));
     }
 
     @Test
@@ -91,7 +114,7 @@ class LocalBootstrapGuardTest {
         env.put("DB_URL", "jdbc:postgresql://db.private:5432/live");
         env.put("SCS_BOOTSTRAP_PASSWORD", "private-not-for-logs");
         var error = assertThrows(IllegalStateException.class,
-            () -> LocalBootstrapGuard.requireSafeConfiguration(env));
+            () -> check(env));
         assertFalse(error.getMessage().contains("private-not-for-logs"));
         assertFalse(error.getMessage().contains("db.private"));
     }
