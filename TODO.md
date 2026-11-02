@@ -722,3 +722,19 @@ registry publication, immutable deployment digest, reproducible build,
 SLSA supply-chain provenance or production readiness. See
 docs/M6-RUNTIME-SBOM-EVIDENCE.md. Exact-head CI and human review remain
 required; main, real payments and hosted infrastructure remain untouched.
+
+### Portfolio readiness: editorial landing, isolated demo and visual evidence (stacked draft PR)
+
+- [x] Replace the public diagnostic home screen with a responsive editorial introduction, clear staff navigation and explicit non-merchant disclaimer.
+- [x] Implement a standalone client-only `/showcase` product tour with order item controls, a separate OCC cash approval state, KDS preparation, waiter handover, simulated cash receipt and an explicitly non-fiscal customer receipt. It does not create persistent users, orders or payments.
+- [x] Add automated Playwright assertions for the static demo lifecycle, cash state distinction, mobile overflow, keyboard-operated role selector and no localStorage token storage.
+- [x] Capture synthetic desktop/mobile landing and demo screenshots as a 7-day CI artifact after success.
+- [x] Add full-stack portfolio case study, current-status README guidance, and accurate SEO/social metadata.
+- [ ] Validate all changes at the exact feature PR head, including successful portfolio screenshot artifacts and candidate-to-main workflows.
+- [ ] Conduct design/accessibility review with real devices and adjust editorial tone based on portfolio direction.
+- [ ] Integrate the reviewed draft dependency stack into a protected main branch only after owner-approved merge plan.
+- [ ] Provision an isolated hosted read-only/public-safe demo through a separately authorized environment and TLS; never expose synthetic staff login fixtures or a writable cash/merchant database publicly.
+- [ ] Gather real operational screenshots using a disposable local seeded environment for full OCC/KDS/Waiter case-study evidence.
+- [ ] Add a featured-project card and case-study link to NATSX portfolio in a separate, approved repository change.
+
+The publicly accessible no-backend tour, if hosted later, is only an educational simulation. Its UI progression cannot be cited as evidence of API financial settlement or actual kitchen order processing. Actual acceptance is independently verified by ephemeral full-stack CI.
