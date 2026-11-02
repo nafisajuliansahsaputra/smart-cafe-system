@@ -119,7 +119,7 @@ jobs:
             fi
             sleep 3
           done
-          grep -q 'API dan database terhubung' /tmp/scs-web.html
+          grep -q 'Good coffee' /tmp/scs-web.html
           login_code=$(curl --silent --output /tmp/scs-login.html --write-out '%{http_code}' http://127.0.0.1:3000/staff/login)
           test "$login_code" = "200"
           grep -q 'Masuk sebagai staf' /tmp/scs-login.html
@@ -572,11 +572,11 @@ jobs:
             exit 1
           }
           echo "STAGING CHECK: isolated API and database healthy"
-          grep -q 'API dan database terhubung' "$RUNNER_TEMP/scs-stage-home.html" || {
-            echo "STAGING FAILURE: web did not render expected connected state" >&2
+          grep -q 'Good coffee' "$RUNNER_TEMP/scs-stage-home.html" || {
+            echo "STAGING FAILURE: web did not render the portfolio homepage" >&2
             exit 1
           }
-          echo "STAGING CHECK: frontend rendered connected state"
+          echo "STAGING CHECK: portfolio homepage rendered"
           for path in /v3/api-docs /swagger-ui/index.html; do
             code=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$path")
             echo "STAGING CHECK: $path returned HTTP $code"
