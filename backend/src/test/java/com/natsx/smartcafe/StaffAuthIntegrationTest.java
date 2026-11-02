@@ -3,9 +3,12 @@ package com.natsx.smartcafe;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -40,6 +45,7 @@ class StaffAuthIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PasswordEncoder passwords;
+    @Autowired UserDetailsService disabledPasswordLogin;
 
     private record SyntheticStaff(UUID id, String login) {}
     private SyntheticStaff staff(String role) {
@@ -59,6 +65,27 @@ class StaffAuthIntegrationTest {
         var match = Pattern.compile("\"accessToken\":\"([^\"]+)\"").matcher(json);
         assertTrue(match.find(), "Login should return one opaque bearer token");
         return match.group(1);
+    }
+
+    @Test void springFrameworkUserAndHttpBasicCannotAuthenticateStaff() throws Exception {
+        var cashier = staff("CASHIER");
+        assertThrows(UsernameNotFoundException.class,
+            () -> disabledPasswordLogin.loadUserByUsername(cashier.login()),
+            "Spring's framework user store must never expose the real staff login");
+        assertThrows(UsernameNotFoundException.class,
+            () -> disabledPasswordLogin.loadUserByUsername("user"),
+            "The auto-generated Spring Boot development user must not exist");
+        String basic = "Basic " + Base64.getEncoder().encodeToString(
+            (cashier.login() + ":safe-test-password-123").getBytes(StandardCharsets.UTF_8));
+        assertEquals(401, mvc.perform(get("/api/v1/staff/auth/me")
+            .header("Authorization", basic)).andReturn().getResponse().getStatus());
+        assertEquals(401, mvc.perform(get("/api/v1/ops/orders")
+            .header("Authorization", basic)).andReturn().getResponse().getStatus());
+        // Database-backed JSON login remains the only password entry point.
+        assertEquals(200, mvc.perform(post("/api/v1/staff/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginJson(cashier.login(), "safe-test-password-123")))
+            .andReturn().getResponse().getStatus());
     }
 
     @Test void sandboxSignedWebhookDoesNotExistOnDefaultDeployment() throws Exception {

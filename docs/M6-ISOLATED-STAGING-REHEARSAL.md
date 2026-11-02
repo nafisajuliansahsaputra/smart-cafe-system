@@ -120,3 +120,25 @@ or uploaded, and deleted immediately by an EXIT trap.
 This is a CI-only rehearsal verification, **not** an audit of a public staging
 host, a production network penetration test, or authorization to use real
 customer data, payment credentials or receipt delivery.
+
+## Spring Security generated-password elimination (M6 follow-up)
+
+The backend intentionally uses PostgreSQL-backed staff login and short-lived,
+revocable Bearer credentials. Spring Boot previously created an unrelated
+in-memory development account because no framework UserDetailsService bean
+was defined; it logged a random password during CI staging startup. HTTP
+Basic and form login were disabled, but a generated password in logs is an
+unnecessary security footgun.
+
+The backend now explicitly defines a fail-closed UserDetailsService that
+never resolves a username and prevents auto-creation of the framework user.
+Staff login and Bearer authorization remain unchanged. A PostgreSQL-backed
+integration test rejects both a staff username and the conventional generated
+framework username through this service, refuses HTTP Basic even with a
+real synthetic staff password, and verifies JSON staff login still works.
+
+The isolated staging CI reads API logs into a runner-private temporary file
+and **fails** if a generated-password/in-memory-user startup signature
+appears. The file is deleted via an EXIT trap and is not printed or uploaded.
+This does not imply that production credential lifecycle, MFA, account
+recovery or public TLS protection is complete.
