@@ -18,6 +18,21 @@ final class LocalBootstrapGuard {
     record EffectiveRuntime(String jdbcUrl, String paymentEnvironment,
                             boolean sandboxCheckoutEnabled, boolean webhookConfigured) {}
 
+    /**
+     * Validate configuration before the DataSource and Flyway migration beans
+     * can initialize. A later check compares against the actual JDBC metadata.
+     */
+    static void requirePreMigrationConfiguration(Map<String, String> env,
+                                                 String[] activeProfiles,
+                                                 EffectiveRuntime effective) {
+        if (activeProfiles == null || activeProfiles.length != 1
+            || !"dev-bootstrap".equals(activeProfiles[0])) {
+            throw new IllegalStateException(
+                "Local admin bootstrap requires the isolated development profile");
+        }
+        requireSafeConfiguration(env, effective);
+    }
+
     static void requireSafeConfiguration(Map<String, String> env, EffectiveRuntime runtime) {
         if (!ACK.equals(env.get("SCS_BOOTSTRAP_LOCAL_ACK"))) {
             throw new IllegalStateException(
