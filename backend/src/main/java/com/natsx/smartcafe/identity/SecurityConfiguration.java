@@ -6,6 +6,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -13,6 +15,17 @@ public class SecurityConfiguration {
     @Bean
     org.springframework.security.crypto.password.PasswordEncoder passwordEncoder() {
         return new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(12);
+    }
+
+    // Staff credentials are validated exclusively by the DB-backed staff login
+    // service and stateless bearer tokens. Declaring this fail-closed framework
+    // user store suppresses Spring Boot's random, logged development password
+    // and prevents an accidental default in-memory user from being created.
+    @Bean
+    UserDetailsService disabledFrameworkPasswordLogin() {
+        return username -> {
+            throw new UsernameNotFoundException("Framework-managed password login disabled");
+        };
     }
 
     @Bean
