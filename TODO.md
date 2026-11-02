@@ -693,3 +693,17 @@ network isolation. Never run `dev-bootstrap` against valuable or
 remote databases, and retain owner review plus the normal release gates.
 
 The check additionally enforces the resolved Spring payment environment, sandbox checkout toggle and webhook-secret presence, so system property overrides cannot bypass harmless-looking environment flags. Negative tests exercise these effective configuration mismatches.
+
+### M6 dev-bootstrap pre-Flyway fail-closed gate (stacked draft PR #69)
+
+A profile-scoped Spring `BeanFactoryPostProcessor` now checks the
+opt-in local ADMIN bootstrap guard **before Flyway migrations or other
+normal singleton initialization**. It compares the resolved Spring JDBC
+target, effective payment mode/sandbox callback settings, the exact one
+active dev profile and explicit acknowledgement. The existing bootstrap
+runner still verifies live JDBC metadata before privileged account insert.
+Unit tests exercise unsafe effective destinations, payment overrides,
+mixed profiles and failure before a simulated migration-like singleton.
+Exact-head CI and human security review are pending for this increment.
+Nothing is merged or deployed and `main` branch protections, true hosted
+staging and operational controls remain unimplemented.
