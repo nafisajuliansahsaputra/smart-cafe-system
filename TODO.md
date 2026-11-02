@@ -661,3 +661,19 @@ if API startup logs reveal a generated developer password/account. Logs
 remain temporary and are never uploaded. **Do not mark M6 complete without
 exact-head tests, human review, branch protection, operational credential
 policy and separately approved hosted staging.**
+
+### M6 explicit local-only first-admin bootstrap guard (stacked draft PR)
+
+The `dev-bootstrap` profile now also requires an exact, opt-in local
+acknowledgement before it is allowed to write the first ADMIN account.
+The guard refuses combined/production profiles, any database URL outside
+the dedicated local `smart_cafe` PostgreSQL addresses, non-disabled
+payment environments, fake sandbox checkout and webhook keys. Plaintext
+credentials are never included in error messages. Unit regressions
+exercise permitted local profiles and deny remote DBs, unexpected database
+names, active payments, missing acknowledgements and mixed profiles.
+The local Compose env mapping and bootstrap instructions now document
+the explicit opt-in and mandatory cleanup after the first startup.
+This is additional guardrail for disposable development only; it does
+not certify that a host named `db` is physically private, grant
+production staff provisioning, or satisfy hosted staging gates.
