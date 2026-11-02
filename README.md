@@ -2,7 +2,26 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Current branch status (2026-11-01):** The working application has reached the stacked draft PR #58 (backend, frontend, cash/game operations, synthetic sandbox payment workflows and manager variance investigation), with exact-head CI passing. The entire feature history remains in 57 open, dependency-stacked draft PRs; the default `main` branch has **not** received these changes and no public staging or production service is deployed. Real merchant payments and receipt delivery are not enabled. For the chain audit and non-deploying staging preflight see [M6 release readiness](docs/M6-RELEASE-STAGING-READINESS.md).
+> **Current build (2026-11-03):** The application is implemented in the stacked **draft integration PR #61** (not merged into `main`). The prior exact-head candidate passed 5/5 GitHub Actions workflows, including Java/PostgreSQL, Chromium end-to-end, CodeQL, dependency scanning, runtime image CVE scanning, and SBOMs. The new homepage and standalone portfolio tour are being reviewed in a separate stacked draft PR. **No production or public hosted environment exists. No real merchant QRIS/VA or phone receipt sender is connected.** Historical milestone notes below are development snapshots and should not override this current status.
+
+## Portfolio preview
+
+- **Landing page:** `/` features a responsive editorial product introduction, separate staff portal link, and honest non-merchant status.
+- **Try-it route:** `/showcase` demonstrates a complete cash ordering journey across Customer, Cashier, Kitchen, and Waiter. This is an **in-memory UI simulation**, without API calls, database access or actual payment.
+- **Real application:** `/t/[tableAlias]` (active visit join), `/visit/*` (menu, cart, status, receipt), `/staff/*` (role-gated operational tools). These require a genuine local isolated backend, a disposable database and proper staff access.
+- **Case study and screenshots:** [Portfolio Case Study](docs/PORTFOLIO-CASE-STUDY.md), including an Actions screenshot artifact retained for seven days after passing browser acceptance.
+
+To preview the landing and interactive tour without a backend, use Node.js 22 or newer:
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcase` for the independent demonstration. The public home page and isolated tour do not contact the backend and work without a database; the full operational routes still require the API. To explore the full backend and staff system, follow [local bootstrap](docs/M2-LOCAL-BOOTSTRAP.md) and use disposable Docker/PostgreSQL data only.
+
+
 
 ## What it solves
 

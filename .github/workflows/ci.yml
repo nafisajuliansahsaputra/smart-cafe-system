@@ -119,7 +119,7 @@ jobs:
             fi
             sleep 3
           done
-          grep -q 'API dan database terhubung' /tmp/scs-web.html
+          grep -q 'Good coffee' /tmp/scs-web.html
           login_code=$(curl --silent --output /tmp/scs-login.html --write-out '%{http_code}' http://127.0.0.1:3000/staff/login)
           test "$login_code" = "200"
           grep -q 'Masuk sebagai staf' /tmp/scs-login.html
@@ -210,6 +210,19 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:3000
         run: npx playwright test --config e2e/playwright.config.mjs
+      - name: Retain synthetic portfolio screenshots on successful browser acceptance
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-showcase-screenshots
+          path: |
+            apps/web/test-results/portfolio-home-desktop.png
+            apps/web/test-results/portfolio-home-mobile.png
+            apps/web/test-results/portfolio-demo-guest.png
+            apps/web/test-results/portfolio-demo-kitchen.png
+            apps/web/test-results/portfolio-demo-receipt.png
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload browser failure trace and screenshots
         if: failure()
         uses: actions/upload-artifact@v4
@@ -559,11 +572,11 @@ jobs:
             exit 1
           }
           echo "STAGING CHECK: isolated API and database healthy"
-          grep -q 'API dan database terhubung' "$RUNNER_TEMP/scs-stage-home.html" || {
-            echo "STAGING FAILURE: web did not render expected connected state" >&2
+          grep -q 'Good coffee' "$RUNNER_TEMP/scs-stage-home.html" || {
+            echo "STAGING FAILURE: web did not render the portfolio homepage" >&2
             exit 1
           }
-          echo "STAGING CHECK: frontend rendered connected state"
+          echo "STAGING CHECK: portfolio homepage rendered"
           for path in /v3/api-docs /swagger-ui/index.html; do
             code=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$path")
             echo "STAGING CHECK: $path returned HTTP $code"
