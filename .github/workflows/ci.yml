@@ -603,7 +603,7 @@ jobs:
             sh -c 'psql -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
               -c "SELECT max(version::int) FROM flyway_schema_history WHERE success"')
           echo "STAGING CHECK: latest installed Flyway version $flyway"
-          test "$flyway" = 30
+          test "$flyway" = 31
           # Database has zero published host ports, unlike the local dev Compose.
           db_port=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
             -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)
