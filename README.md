@@ -42,7 +42,7 @@ phone receipt sending still require separate external integrations.
 
 ## Table onboarding for actual cafe operations
 
-Managers and admins can now use `/staff/tables/registry` to register physical
+Managers and admins can now use `/staff/tables/registry` to search a server-paginated inventory, and register physical
 tables, reserve permanent public URL aliases, adjust seating capacity, and
 mark empty tables out of service. The backend uses a row lock shared with
 waiter visit opening and refuses deactivation while a visit is active.
@@ -51,7 +51,7 @@ See [table registry runbook](docs/M7-TABLE-REGISTRY.md).
 Printed QR codes encode `https://<your-cafe-host>/t/<publicAlias>`,
 and NFC tags use the same URL. A manager/admin-only **draft QR studio** at
 `/staff/tables/registry/print` now creates A4 printable batches and downloadable
-SVG QR artwork without an external generator. URLs derive from the browser's
+SVG QR artwork without an external generator, with database batch navigation beyond the waiter floor-board 250-row limit. URLs derive from the browser's
 current origin; open from the verified public HTTPS host before printing for
 physical use, not localhost. This is a stacked development change, not yet
 released on `main`. A public table link never contains a join credential;
