@@ -15,7 +15,7 @@ Constraint: a table has at most one visit in ACTIVE/CLOSING. Alias is not creden
 ## 2. Catalog and order
 
 - menu_categories: id; name; slug; sort_order; active.
-- menu_items: id; category_id; name; description; base_price_idr; tax_profile_id; availability; image_key nullable; revision.
+- menu_items: id; category_id; name; description; base_price_idr; tax_profile_id; availability; image_url nullable (V31, approved Cloudinary URL only); revision.
 - menu_variants: id; menu_item_id; variant_key; label; price_delta_idr; required/selection rules.
 - item_availability: menu_item_id; available; limited_quantity nullable; version; optional inventory reserve rules.
 - carts: id; guest_id; visit_id; status; updated_at; optimistic_version.
