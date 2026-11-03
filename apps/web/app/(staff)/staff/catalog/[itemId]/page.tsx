@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { catalogItemDetail, catalogOverview } from "@/lib/catalog-server";
+import { catalogItemDetail, catalogCategories } from "@/lib/catalog-server";
 import { idr, staffIdentity } from "@/lib/staff-server";
 import {
   createGroup, createOption, editGroup, editItem, editOption, updateStock,
@@ -35,7 +35,7 @@ export default async function CatalogItemPage({ params, searchParams }: {
   if (!identity.staff.roles.some(r => r === "MANAGER" || r === "ADMIN")) notFound();
   const { itemId } = await params;
   const [detail, catalog, query] = await Promise.all([
-    catalogItemDetail(itemId), catalogOverview(), searchParams,
+    catalogItemDetail(itemId), catalogCategories(), searchParams,
   ]);
   if (!detail.ok && detail.status === 401 || !catalog.ok && catalog.status === 401) {
     redirect("/staff/login?status=expired");
@@ -49,7 +49,7 @@ export default async function CatalogItemPage({ params, searchParams }: {
     <Link href="/staff/catalog">Kembali ke katalog</Link>
   </main>;
   const { item, stock, groups } = detail.data;
-  const categories = catalog.data.categories;
+  const categories = catalog.data;
   return <main className="staff-shell staff-wide">
     <header className="staff-header"><div>
       <div className="staff-eyebrow">SMART CAFE / CATALOG EDITOR</div>
