@@ -800,7 +800,7 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
   code/alias search and safe active-visit-only read projection.
 - [x] Connect manager inventory and QR print studio to the paginated API
   so tables beyond the old 250-row waiter board limit remain reachable.
-- [x] Add synthetic PostgreSQL 28-row boundaries, invalid input and role
+- [x] Add synthetic PostgreSQL 253-row boundaries, invalid input and role
   denial checks, plus browser search and QR-filter regression.
 - [ ] Confirm exact-head CI and real-device QR/NFC print checks before merge.
 - [ ] Independently scale waiter floor-board listing and validate physical
