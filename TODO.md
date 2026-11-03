@@ -774,8 +774,8 @@ the operational transaction system.
   role-denial checks and mobile layout regression.
 - [ ] Verify the newly implemented manager-only A4/SVG QR studio on
   exact-head CI, then test physical printed scanning and NFC on real devices;
-  scalable table registry pagination remains separate. The studio is currently
-  present only in the stacked draft branch, not on `main`.
+  waiter floor-board scaling and on-site QR scanning remain separate.
+  The QR studio is currently present only in the stacked draft branch, not on `main`.
 - [ ] Verify exact PR and integration head CI, human review and isolated
   hosted staging before declaring this capability released.
 
@@ -792,3 +792,16 @@ production access ready.
 - [ ] Operational readiness still needs audit retention/index review, controlled staging, release merge approval, merchant QRIS/VA, authorized external receipt sender and operator rehearsal.
 
 See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; it does not turn the separate marketing showcase into live operations.
+
+
+### M7 manager table registry pagination (stacked draft)
+
+- [x] Add backend-bound 25-row manager/admin registry pagination, literal
+  code/alias search and safe active-visit-only read projection.
+- [x] Connect manager inventory and QR print studio to the paginated API
+  so tables beyond the old 250-row waiter board limit remain reachable.
+- [x] Add synthetic PostgreSQL 28-row boundaries, invalid input and role
+  denial checks, plus browser search and QR-filter regression.
+- [ ] Confirm exact-head CI and real-device QR/NFC print checks before merge.
+- [ ] Independently scale waiter floor-board listing and validate physical
+  cafe UX in a separately authorized hosted environment.
