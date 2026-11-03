@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { exitVisit } from "./actions";
-import { getMenu, guestIdentity, idr } from "@/lib/guest-server";
+import { getMenu, guestIdentity } from "@/lib/guest-server";
+import GuestMenuBrowser from "./guest-menu-browser";
 
 export const dynamic = "force-dynamic";
 const messages: Record<string, string> = {
@@ -30,7 +31,6 @@ export default async function VisitPage({ searchParams }: {
   const { notice } = await searchParams;
   const message = notice && Object.hasOwn(messages, notice) ? messages[notice] : null;
   const menu = await getMenu();
-  const categories = menu.ok ? [...new Set(menu.data.map((item) => item.category))] : [];
   return (
     <main className="guest-shell guest-wide">
       <header className="guest-top">
@@ -52,21 +52,7 @@ export default async function VisitPage({ searchParams }: {
         <Link href="/visit">Segarkan</Link></section>}
       {menu.ok && menu.data.length === 0 && <section className="guest-panel"><h2>Menu sedang kosong</h2>
         <p>Belum ada makanan atau minuman yang tersedia untuk dipesan.</p></section>}
-      {menu.ok && categories.map((category) => (
-        <section key={category} className="guest-category">
-          <h2>{category}</h2>
-          <div className="guest-menu-grid">{menu.data.filter((i) => i.category === category).map((item) => (
-            <article className="guest-panel guest-menu-card" key={item.id}>
-              <div><h3>{item.name}</h3>
-                {item.description && <p className="guest-menu-description">{item.description}</p>}
-                <p className="guest-price">{idr(item.priceIdr)} <span>harga mulai</span></p>
-                {item.remainingQuantity !== null && <small>Sisa {item.remainingQuantity} porsi</small>}
-              </div>
-              <Link className="guest-secondary" href={`/visit/menu/${item.id}`}>Pilih menu</Link>
-            </article>
-          ))}</div>
-        </section>
-      ))}
+      {menu.ok && menu.data.length > 0 && <GuestMenuBrowser items={menu.data} />}
       <p className="guest-footnote">Menu ditampilkan tanpa simulasi pembayaran. Stok dan harga dicek lagi saat checkout.</p>
     </main>
   );

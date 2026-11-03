@@ -90,3 +90,12 @@ The full code is still in the stacked draft integration candidate PR #61; `main`
 **Smart Cafe System** is a full-stack QR/NFC cafe ordering and operations platform built with Next.js, Spring Boot and PostgreSQL. It connects guest ordering, cashier approvals, kitchen preparation, waiter fulfillment, physical-game loans and audited cash settlement. A dedicated no-backend interactive showcase demonstrates the product flow; the core app is validated through containerized end-to-end tests with synthetic data.
 
 **Status label:** Functional MVP · Portfolio showcase · Not production deployed.
+
+## M7 guest discovery improvement (draft source)
+The real guest menu now offers category chips and instant search across
+published available products (including product descriptions) with a
+clear no-results state. The search is client-only presentation over the
+API-verified menu; server control of stock and price remains unchanged.
+The existing real guest cash lifecycle browser test captures a narrow
+mobile screenshot for reviewed portfolio evidence. This still requires
+source CI and human integration review before claiming release.

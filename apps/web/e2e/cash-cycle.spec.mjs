@@ -102,6 +102,37 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await guest.getByRole("button", { name: "Gabung dan lihat menu" }).click();
     await expect(guest).toHaveURL(/\/visit$/);
     await expect(guest.getByRole("heading", { name: "Pilih sesuatu yang enak." })).toBeVisible();
+
+    // Customer-side discovery uses only the API-verified available catalog.
+    // This search has no direct path to payment, tokens or stock writes.
+    const search = guest.getByRole("searchbox", { name: "Cari makanan atau minuman" });
+    await expect(search).toBeVisible();
+    await expect(guest.locator(".guest-menu-count")).toContainText("1 dari 1 menu");
+    await expect(guest.getByRole("heading", { name: "E2E Latte" })).toBeVisible();
+    await search.fill("synthetic drink");
+    await expect(guest.getByRole("heading", { name: "E2E Latte" })).toBeVisible();
+    await search.fill("menu-tidak-ada-123");
+    await expect(guest.getByRole("heading", { name: "Tidak ada menu yang cocok" })).toBeVisible();
+    await expect(guest.getByRole("link", { name: "Pilih menu" })).toHaveCount(0);
+    await guest.getByRole("button", { name: "Tampilkan semua menu" }).click();
+    await expect(search).toHaveValue("");
+    await expect(guest.getByRole("heading", { name: "E2E Latte" })).toBeVisible();
+    const filters = guest.getByRole("group", { name: "Filter kategori menu" });
+    await filters.getByRole("button", { name: "Browser Acceptance" }).click();
+    await expect(filters.getByRole("button", { name: "Browser Acceptance" }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect(guest.locator(".guest-menu-count")).toContainText("Browser Acceptance");
+    await filters.getByRole("button", { name: "Semua menu" }).click();
+    await expect(filters.getByRole("button", { name: "Semua menu" }))
+      .toHaveAttribute("aria-pressed", "true");
+    await guest.setViewportSize({ width: 320, height: 720 });
+    await expect.poll(() => guest.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )).toBeLessThanOrEqual(1);
+    await guest.screenshot({
+      path: "test-results/operational-guest-menu-search.png", fullPage: true,
+    });
+    await guest.setViewportSize({ width: 390, height: 844 });
     const guestCookie = (await guestContext.cookies()).find((c) => c.name === "scs_guest_session");
     expect(guestCookie).toMatchObject({ httpOnly: true, sameSite: "Strict", path: "/visit" });
     expect(guestCookie?.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
