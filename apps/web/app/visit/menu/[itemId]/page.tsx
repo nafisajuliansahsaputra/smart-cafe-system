@@ -41,6 +41,7 @@ export default async function MenuItemPage({ params, searchParams }: {
       ) : item && (
         <section className="guest-panel">
           <p className="guest-eyebrow">{item.category}</p><h1>{item.name}</h1>
+          {item.description && <p className="guest-menu-description">{item.description}</p>}
           <p className="guest-price">{idr(item.priceIdr)} <span>harga dasar</span></p>
           <p className="guest-subtitle">Tentukan pilihan sebelum masuk keranjang. Opsi tambahan dapat memengaruhi total.</p>
           <form action={addCartItem} className="guest-form">
