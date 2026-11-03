@@ -91,7 +91,7 @@ test("manager creates a physical table and cannot disable it during a live visit
     expect(new URL(await qr.getAttribute("data-qr-url")).pathname).toBe("/t/e2e-m7");
 
     await manager.page.goto("/staff/tables/registry?page=1001");
-    await expect(manager.page.getByRole("alert")).toContainText("Pencarian tidak valid");
+    await expect(manager.page.locator("section.staff-panel[role='alert']")).toContainText("Pencarian tidak valid");
   } finally {
     await manager.context.close();
     await waiter.context.close();
