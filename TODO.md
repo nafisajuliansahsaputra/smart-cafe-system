@@ -780,3 +780,13 @@ the operational transaction system.
 See docs/M7-TABLE-REGISTRY.md. This is real domain/DB behavior; it does
 not make real merchant payments, external receipt dispatch or live
 production access ready.
+
+### M7 real operational audit review (stacked draft PR)
+
+- [x] Add MANAGER/ADMIN-only, read-only PostgreSQL audit history projection with 25-row pagination, operation/resource/staff query and no raw diff, free-form reason or correlation ID.
+- [x] Add role-gated authenticated Next.js `/staff/audit`, search, pagination and explicit offline/invalid states.
+- [x] Add backend Testcontainers security/redaction/pagination tests and browser end-to-end manager/cross-role tests with synthetic screenshot evidence.
+- [ ] All source exact-head CI and integration-candidate workflow gates must pass before release review.
+- [ ] Operational readiness still needs audit retention/index review, controlled staging, release merge approval, merchant QRIS/VA, authorized external receipt sender and operator rehearsal.
+
+See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; it does not turn the separate marketing showcase into live operations.
