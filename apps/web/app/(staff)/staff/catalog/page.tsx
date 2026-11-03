@@ -114,6 +114,12 @@ export default async function CatalogPage({ searchParams }: {
               <label htmlFor="catalog-new-description">Deskripsi singkat (opsional)</label>
               <textarea id="catalog-new-description" name="description" maxLength={500}
                 rows={3} placeholder="Contoh: Espresso, susu segar, disajikan dingin"/>
+              <label htmlFor="catalog-new-image">Foto produk (URL Cloudinary, opsional)</label>
+              <input id="catalog-new-image" name="imageUrl" type="url" maxLength={700}
+                placeholder="https://res.cloudinary.com/.../image/upload/...jpg" />
+              <small className="staff-muted">Gunakan tautan HTTPS dari akun Cloudinary
+                yang dikonfigurasi untuk kafe ini. Kosongkan jika belum ada foto.
+                File perlu diunggah lebih dulu ke Cloudinary.</small>
               <label htmlFor="catalog-new-category">Kategori</label>
               <select id="catalog-new-category" name="categoryId" required
                 defaultValue={categories.find(item => item.active)?.id ?? categories[0]?.id}>
