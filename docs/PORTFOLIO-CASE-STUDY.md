@@ -99,3 +99,11 @@ API-verified menu; server control of stock and price remains unchanged.
 The existing real guest cash lifecycle browser test captures a narrow
 mobile screenshot for reviewed portfolio evidence. This still requires
 source CI and human integration review before claiming release.
+
+## M7 product media (stacked source, provider authorization pending)
+Real manager product edit/create now supports validated, revisioned
+Cloudinary image delivery links from one configured provider tenant.
+Guests see these on actual server-backed menu cards and item detail;
+missing assets retain text-first cards. Browser/API/upgrade tests
+use only synthetic URLs; there is no direct file upload or existing
+production Cloudinary account connection in this increment.

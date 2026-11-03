@@ -18,11 +18,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Upgrade rehearsal against an actual V27 PostgreSQL database, not a new V30 schema.
+ * Upgrade rehearsal against an actual V27 PostgreSQL database, not a new V31 schema.
  * All customer/staff/payment data is synthetic and lives in a disposable Testcontainer.
  */
 @Testcontainers
-class LegacyUpgradeToV30IntegrationTest {
+class LegacyUpgradeToV31IntegrationTest {
     @Container
     static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine")
         .withDatabaseName("smart_cafe_upgrade_v27_ci")
@@ -63,7 +63,7 @@ class LegacyUpgradeToV30IntegrationTest {
         UUID.fromString("f0000000-0000-4000-8000-000000000016");
 
     @Test
-    void existingV27MoneyReceiptsGamesAndAuditsSurviveV30Migration() {
+    void existingV27MoneyReceiptsGamesAndAuditsSurviveV31Migration() {
         // This database starts completely empty; no app context, migrations or
         // production credentials can be inherited from other integration tests.
         DataSource data = new DriverManagerDataSource(
@@ -93,11 +93,14 @@ class LegacyUpgradeToV30IntegrationTest {
             .locations("classpath:db/migration").load();
         upgraded.migrate();
         upgraded.validate();
-        assertEquals(30,jdbc.queryForObject(
+        assertEquals(31,jdbc.queryForObject(
             "SELECT count(*) FROM flyway_schema_history WHERE success",Integer.class));
-        assertEquals(3,jdbc.queryForObject("""
+        assertTrue(columnExists(jdbc,"menu_items","image_url"));
+        assertNull(jdbc.queryForObject("SELECT image_url FROM menu_items WHERE id=?",
+            String.class,ITEM),"Existing menu items must not gain artificial photo links");
+        assertEquals(4,jdbc.queryForObject("""
             SELECT count(*) FROM flyway_schema_history
-            WHERE success AND version IN ('28','29','30')
+            WHERE success AND version IN ('28','29','30','31')
             """,Integer.class));
         assertEquals(before,legacySnapshot(jdbc),
             "Existing V27 payment, immutable receipt, game, order and audit evidence changed");

@@ -14,11 +14,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CatalogAdminService {
     private final JdbcTemplate jdbc;
-    public CatalogAdminService(JdbcTemplate jdbc) { this.jdbc=jdbc; }
+    private final CatalogImagePolicy imagePolicy;
+    public CatalogAdminService(JdbcTemplate jdbc, CatalogImagePolicy imagePolicy) {
+        this.jdbc=jdbc;
+        this.imagePolicy=imagePolicy;
+    }
 
     public record Category(UUID id,String name,String slug,boolean active) {}
     public record Item(UUID id,UUID categoryId,String name,long priceIdr,String availability,
-                       long revision,String description) {}
+                       long revision,String description,String imageUrl) {}
 
     @Transactional(readOnly=true)
     public List<Category> categories() {
@@ -54,38 +58,41 @@ public class CatalogAdminService {
     @Transactional(readOnly=true)
     public List<Item> items() {
         return jdbc.query("""
-            SELECT id,category_id,name,base_price_idr,availability,revision,description
+            SELECT id,category_id,name,base_price_idr,availability,revision,description,image_url
             FROM menu_items ORDER BY name,id LIMIT 500
             """,(rs,n)->readItem(rs));
     }
 
     @Transactional
     public Item createItem(UUID categoryId,String name,long price,String description,
-                           StaffPrincipal actor,String requestId) {
+                           String imageUrl,StaffPrincipal actor,String requestId) {
         checkName(name);
         checkPrice(price);
         String safeDescription=validateDescription(description);
+        String safeImage=imagePolicy.validate(imageUrl);
         if(categoryId==null)throw invalid("Category required");
         Integer category=jdbc.queryForObject("SELECT count(*) FROM menu_categories WHERE id=?",
             Integer.class,categoryId);
         if(category==null || category==0)throw missing();
         UUID id=UUID.randomUUID();
         jdbc.update("""
-            INSERT INTO menu_items(id,category_id,name,description,base_price_idr,availability)
-            VALUES (?,?,?,?,?,'HIDDEN')
+            INSERT INTO menu_items(id,category_id,name,description,image_url,base_price_idr,availability)
+            VALUES (?,?,?,?,?,?,'HIDDEN')
             """,id,categoryId,name.strip(),
-            safeDescription == null || safeDescription.isEmpty() ? null : safeDescription,price);
+            safeDescription == null || safeDescription.isEmpty() ? null : safeDescription,
+            safeImage == null || safeImage.isEmpty() ? null : safeImage,price);
         audit(actor,"MENU_ITEM_CREATED","MENU_ITEM",id,requestId);
         return detail(id);
     }
 
     @Transactional
     public Item changeItem(UUID id,UUID categoryId,String name,long price,String availability,
-                           long expectedRevision,String description,
+                           long expectedRevision,String description,String imageUrl,
                            StaffPrincipal actor,String requestId) {
         checkName(name);
         checkPrice(price);
         String safeDescription=validateDescription(description);
+        String safeImage=imagePolicy.validate(imageUrl);
         if(expectedRevision<1 || categoryId==null || availability==null ||
             !List.of("AVAILABLE","SOLD_OUT","HIDDEN").contains(availability))
             throw invalid("Invalid catalog update");
@@ -97,11 +104,13 @@ public class CatalogAdminService {
             SET category_id=?,name=?,base_price_idr=?,availability=?,
                 description=CASE WHEN CAST(? AS text) IS NULL THEN description
                                  ELSE NULLIF(CAST(? AS text), '') END,
+                image_url=CASE WHEN CAST(? AS text) IS NULL THEN image_url
+                               ELSE NULLIF(CAST(? AS text), '') END,
                 revision=revision+1
             WHERE id=? AND revision=?
-            RETURNING id,category_id,name,base_price_idr,availability,revision,description
+            RETURNING id,category_id,name,base_price_idr,availability,revision,description,image_url
             """,(rs,n)->readItem(rs),categoryId,name.strip(),price,availability,
-            safeDescription,safeDescription,id,expectedRevision);
+            safeDescription,safeDescription,safeImage,safeImage,id,expectedRevision);
         if(edited.isEmpty()){
             detail(id);
             throw conflict("Item was modified; refresh its revision");
@@ -113,7 +122,7 @@ public class CatalogAdminService {
     @Transactional(readOnly=true)
     public Item detail(UUID id) {
         var rows=jdbc.query("""
-            SELECT id,category_id,name,base_price_idr,availability,revision,description
+            SELECT id,category_id,name,base_price_idr,availability,revision,description,image_url
             FROM menu_items WHERE id=?
             """,(rs,n)->readItem(rs),id);
         if(rows.isEmpty())throw missing();
@@ -124,7 +133,7 @@ public class CatalogAdminService {
         return new Item(rs.getObject("id",UUID.class),rs.getObject("category_id",UUID.class),
             rs.getString("name"),rs.getLong("base_price_idr"),
             rs.getString("availability"),rs.getLong("revision"),
-            rs.getString("description"));
+            rs.getString("description"),rs.getString("image_url"));
     }
 
     private void audit(StaffPrincipal actor,String operation,String type,UUID id,String requestId) {

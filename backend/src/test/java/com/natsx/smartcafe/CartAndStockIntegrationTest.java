@@ -25,7 +25,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@SpringBootTest(properties = "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments")
+@SpringBootTest(properties = {
+    "SCS_JOIN_THROTTLE_SECRET=only-for-integration-tests-not-for-deployments",
+    "SCS_MENU_IMAGE_CLOUD_NAME=scs-e2e"
+})
 @AutoConfigureMockMvc
 @Testcontainers
 class CartAndStockIntegrationTest {
@@ -639,5 +642,65 @@ class CartAndStockIntegrationTest {
         assertEquals(400,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
             .contentType(MediaType.APPLICATION_JSON).content(tooLong))
             .andReturn().getResponse().getStatus());
+    }
+
+    @Test void menuPhotosAreVersionedGuestVisibleAndManagerOnly() throws Exception {
+        UUID item=menu(18000,7);
+        UUID category=jdbc.queryForObject(
+            "SELECT category_id FROM menu_items WHERE id=?",UUID.class,item);
+        String manager=staffSession("MANAGER");
+        String cashier=staffSession("CASHIER");
+        String path="/api/v1/admin/menu-items/" + item;
+        String photo="https://res.cloudinary.com/scs-e2e/image/upload/v123456789/menu/latte.webp";
+        String set="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":18000,
+             "availability":"AVAILABLE","expectedRevision":1,"imageUrl":"%s"}
+            """.formatted(category,photo);
+        var saved=mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(set))
+            .andReturn().getResponse();
+        assertEquals(200,saved.getStatus(),saved.getContentAsString());
+        assertTrue(saved.getContentAsString().contains("\"imageUrl\":\"" + photo + "\""));
+        var publicMenu=mvc.perform(get("/api/v1/menu")).andReturn().getResponse();
+        assertEquals(200,publicMenu.getStatus());
+        assertTrue(publicMenu.getContentAsString().contains("\"imageUrl\":\"" + photo + "\""));
+        assertTrue(mvc.perform(get("/api/v1/admin/menu-items/page")
+            .header("Authorization","Bearer " + manager))
+            .andReturn().getResponse().getContentAsString().contains(photo));
+
+        // Old clients omit imageUrl: preserve photo while changing other fields.
+        String legacy="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":19000,
+             "availability":"AVAILABLE","expectedRevision":2}
+            """.formatted(category);
+        assertEquals(200,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(legacy))
+            .andReturn().getResponse().getStatus());
+        assertEquals(photo,jdbc.queryForObject("SELECT image_url FROM menu_items WHERE id=?",
+            String.class,item));
+
+        String foreign="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":19000,
+             "availability":"AVAILABLE","expectedRevision":3,
+             "imageUrl":"https://evil.example/image.png"}
+            """.formatted(category);
+        assertEquals(400,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(foreign))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(patch(path).header("Authorization","Bearer " + cashier)
+            .contentType(MediaType.APPLICATION_JSON).content(legacy))
+            .andReturn().getResponse().getStatus());
+        assertEquals(photo,jdbc.queryForObject("SELECT image_url FROM menu_items WHERE id=?",
+            String.class,item));
+
+        String clear="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":19000,
+             "availability":"AVAILABLE","expectedRevision":3,"imageUrl":""}
+            """.formatted(category);
+        assertEquals(200,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(clear))
+            .andReturn().getResponse().getStatus());
+        assertNull(jdbc.queryForObject("SELECT image_url FROM menu_items WHERE id=?",
+            String.class,item));
     }
 }

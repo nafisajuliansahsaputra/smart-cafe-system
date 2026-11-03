@@ -535,3 +535,15 @@ Administrators can label synthetic quarantined evidence as under investigation, 
 ## M3 synthetic unresolved attempt safety (draft PR #53)
 
 To support future independent gateway reconciliation, a new **read-only** worklist identifies stale/unresolved FAKE payment attempts, alleged success, and abnormal/unmatched claims. Its route inherits sandbox-only conditional registration, explicit independent enable flag and explicit ADMIN role checks. All data remains sourced from persisted PostgreSQL rows; a claimed SUCCEEDED event is NEVER treated as authenticated funds. The overdue predicate compares the stored expiry with the current UTC clock only and **must not** modify the persisted PENDING state or relax the one-active-attempt database constraint. Bounded allowlisted filters, 20-item pages and no-store responses prevent uncontrolled reads. No guest PII, token, signing key, idempotency key, or sensitive provider payload leaves the backend. Only a future trusted provider integration, authenticated status lookup and documented financial exception policy may decide money state.
+
+## M7 menu photo trust boundary (V31 stacked draft)
+The API accepts only uploaded raster-image delivery URLs over HTTPS
+from the single configured Cloudinary account. No arbitrary remote
+URL is fetched by Spring or Next.js; the guest browser fetches the
+public image directly and sends no authorization credential in that
+request. The image component uses `referrerPolicy=no-referrer`,
+and the server and UI each reject unapproved URL origins/paths.
+No upload API, Cloudinary secret, untrusted proxy, embedded SVG or
+image fetch transformation is introduced. Provider privacy terms,
+asset rights, media moderation and CSP image-src policy need review
+prior to a public production deployment.

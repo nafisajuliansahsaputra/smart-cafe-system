@@ -16,12 +16,12 @@ public class MenuController {
     private final JdbcTemplate jdbc;
     public MenuController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     public record MenuItem(UUID id, String name, String category, long priceIdr,
-                           Long remainingQuantity, String description) {}
+                           Long remainingQuantity, String description,String imageUrl) {}
 
     @GetMapping("/menu")
     public ApiEnvelope<List<MenuItem>> menu(HttpServletRequest request) {
         var items = jdbc.query("""
-            SELECT i.id,i.name,c.name as category,i.base_price_idr,a.limited_quantity,i.description
+            SELECT i.id,i.name,c.name as category,i.base_price_idr,a.limited_quantity,i.description,i.image_url
             FROM menu_items i
             JOIN menu_categories c ON c.id=i.category_id
             JOIN item_availability a ON a.menu_item_id=i.id
@@ -31,7 +31,7 @@ public class MenuController {
             """, (rs,n)->new MenuItem(rs.getObject("id",UUID.class),rs.getString("name"),
                 rs.getString("category"),rs.getLong("base_price_idr"),
                 rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
-                rs.getString("description")));
+                rs.getString("description"),rs.getString("image_url")));
         return ApiEnvelope.of(items,RequestIdFilter.get(request));
     }
 }

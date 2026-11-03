@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { addCartItem } from "../../actions";
+import { MenuPhoto } from "@/components/menu-photo";
 import { getCart, getMenu, getVariants, guestIdentity, idr, UUID_PATTERN } from "@/lib/guest-server";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,8 @@ export default async function MenuItemPage({ params, searchParams }: {
       ) : item && (
         <section className="guest-panel">
           <p className="guest-eyebrow">{item.category}</p><h1>{item.name}</h1>
+          <MenuPhoto src={item.imageUrl} name={item.name}
+            className="guest-menu-detail-photo" />
           {item.description && <p className="guest-menu-description">{item.description}</p>}
           <p className="guest-price">{idr(item.priceIdr)} <span>harga dasar</span></p>
           <p className="guest-subtitle">Tentukan pilihan sebelum masuk keranjang. Opsi tambahan dapat memengaruhi total.</p>

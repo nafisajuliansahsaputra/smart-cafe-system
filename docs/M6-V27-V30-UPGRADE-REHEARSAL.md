@@ -1,11 +1,11 @@
-# M6 V27 → V30 in-place PostgreSQL migration rehearsal
+# M6 V27 → V31 in-place PostgreSQL migration rehearsal
 
 ## Scope
 
 A dedicated Java 21/JUnit/PostgreSQL 17 Testcontainers test,
-`LegacyUpgradeToV30IntegrationTest`, exercises **a real in-place Flyway
+`LegacyUpgradeToV31IntegrationTest`, exercises **a real in-place Flyway
 migration of a database already containing historical money and audit records**.
-This is distinct from existing clean-start V30 CI and restore-rehearsal jobs.
+This is distinct from existing clean-start V31 CI and restore-rehearsal jobs.
 
 No remote database, permanent Docker volume, live customer, real payment
 provider or production credential is used. The PostgreSQL database is created
@@ -27,7 +27,7 @@ from scratch inside the isolated Testcontainer and destroyed after the test.
    - stable staff-attributed audit entry.
 4. Read fixed-column snapshots for each legacy row before migration.
    The cash tender is old and **has no cash_shift_id** at V27.
-5. Run Flyway V28→V30 in the **same** database, with no clear, clean,
+5. Run Flyway V28→V31 in the **same** database, with no clear, clean,
    drop, recreate or fixture replacement.
 6. Assert every pre-existing row/amount/receipt number/audit/game-loan
    and snapshot column is identical to the pre-upgrade value.
@@ -52,7 +52,7 @@ suite and also runs independently in a new `upgrade-rehearsal` job of
 
 A clean database migration proves the SQL installs successfully on an empty
 database, **not** that historic money and audit evidence survive upgrades.
-The new test directly covers the V27→V28→V29→V30 transition.
+The new test directly covers the V27→V28→V29→V30→V31 transition.
 
 ## Limitations / gates
 
@@ -67,3 +67,10 @@ independent operations/security sign-off.
 
 Never run `infra/fixtures/e2e-browser.sql` or this rehearsal's fixture SQL
 against any shared, real-cafe, or production database.
+
+
+### M7 media schema upgrade
+Flyway V31 adds only nullable `menu_items.image_url`; the rehearsal
+verifies that the old menu item has no synthetic URL and that all old
+financial, receipt, game and audit snapshots still match. V28–V30
+cash custody assertions remain unchanged.

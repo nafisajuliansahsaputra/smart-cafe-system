@@ -1,12 +1,13 @@
 import "server-only";
 
 import { dataFromEnvelope, staffApi, staffToken } from "@/lib/staff-server";
+import { isMenuImageUrl } from "@/lib/menu-images";
 
 export type MenuCategory = { id: string; name: string; slug: string; active: boolean };
 export type MenuItem = {
   id: string; categoryId: string; name: string; priceIdr: number;
   availability: "AVAILABLE" | "SOLD_OUT" | "HIDDEN"; revision: number;
-  description: string | null;
+  description: string | null; imageUrl: string | null;
 };
 export type MenuStock = { itemId: string; available: boolean; limitedQuantity: number | null; version: number };
 export type MenuOption = {
@@ -36,6 +37,7 @@ const isItem = (v: unknown): v is MenuItem =>
   number(v.priceIdr) && number(v.revision) &&
   (v.description === null || typeof v.description === "string" &&
     v.description.length <= 500) &&
+  (v.imageUrl === null || isMenuImageUrl(v.imageUrl)) &&
   ["AVAILABLE", "SOLD_OUT", "HIDDEN"].includes(String(v.availability));
 const isStock = (v: unknown): v is MenuStock =>
   object(v) && uuid(v.itemId) && typeof v.available === "boolean" &&

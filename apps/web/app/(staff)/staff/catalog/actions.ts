@@ -89,12 +89,14 @@ export async function createItem(form: FormData): Promise<never> {
   const name = label(form, "name", 120);
   const priceIdr = int(form, "priceIdr", 0, 1_000_000_000);
   const itemDescription = description(form);
+  const imageUrl = field(form, "imageUrl", 700);
   if (!categoryId || !name || priceIdr === null || itemDescription === null ||
+      imageUrl === null ||
       !yes(form, "confirm")) {
     fail(location(), "invalid");
   }
   return commit(location(), "/api/v1/admin/menu-items", "POST",
-    { categoryId, name, priceIdr, description: itemDescription }, "item-created");
+    { categoryId, name, priceIdr, description: itemDescription, imageUrl }, "item-created");
 }
 export async function editItem(form: FormData): Promise<never> {
   const itemId = id(form, "itemId");
@@ -106,12 +108,14 @@ export async function editItem(form: FormData): Promise<never> {
   const expectedRevision = int(form, "expectedRevision", 1, Number.MAX_SAFE_INTEGER);
   const availability = field(form, "availability", 10);
   const itemDescription = description(form);
+  const imageUrl = field(form, "imageUrl", 700);
   if (!categoryId || !name || priceIdr === null || expectedRevision === null ||
-      itemDescription === null ||
+      itemDescription === null || imageUrl === null ||
       !["AVAILABLE", "SOLD_OUT", "HIDDEN"].includes(availability ?? "") ||
       !yes(form, "confirm")) fail(target, "invalid");
   return commit(target, "/api/v1/admin/menu-items/" + itemId, "PATCH",
-    { categoryId, name, priceIdr, availability, expectedRevision, description: itemDescription }, "item-updated");
+    { categoryId, name, priceIdr, availability, expectedRevision,
+      description: itemDescription, imageUrl }, "item-updated");
 }
 export async function updateStock(form: FormData): Promise<never> {
   const itemId = id(form, "itemId");

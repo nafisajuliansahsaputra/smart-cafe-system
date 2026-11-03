@@ -43,7 +43,7 @@ jobs:
         working-directory: backend
         run: mvn -B -ntp verify
   upgrade-rehearsal:
-    name: V27 to V30 / existing-data PostgreSQL upgrade rehearsal
+    name: V27 to V31 / existing-data PostgreSQL upgrade rehearsal
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -60,7 +60,7 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: Run isolated historical-data migration regression
         working-directory: backend
-        run: mvn -B -ntp -Dtest=LegacyUpgradeToV30IntegrationTest test
+        run: mvn -B -ntp -Dtest=LegacyUpgradeToV31IntegrationTest test
 
   web:
     name: Next.js lint / types / build
@@ -184,6 +184,8 @@ jobs:
           cp .env.example .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-isolated-e2e-not-production/' .env
           sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=only-for-browser-ci-a-unique-disposable-hmac-key/' .env
+          # Synthetic cloud name only; no provider credentials or external uploads.
+          sed -i 's/^SCS_MENU_IMAGE_CLOUD_NAME=.*/SCS_MENU_IMAGE_CLOUD_NAME=scs-e2e/' .env
           docker compose config -q
       - name: Build and start isolated app and PostgreSQL
         run: docker compose up --build --detach
@@ -340,6 +342,8 @@ jobs:
           cp .env.example .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-edge-ephemeral-only/' .env
           sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=edge-ci-only-disposable-hmac-secret-2026/' .env
+          # Match regular browser acceptance: only an ephemeral CDN tenant name.
+          sed -i 's/^SCS_MENU_IMAGE_CLOUD_NAME=.*/SCS_MENU_IMAGE_CLOUD_NAME=scs-e2e/' .env
           mkdir -p infra/edge/local-tls
           openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
             -keyout infra/edge/local-tls/key.pem -out infra/edge/local-tls/cert.pem \
@@ -599,7 +603,7 @@ jobs:
             sh -c 'psql -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
               -c "SELECT max(version::int) FROM flyway_schema_history WHERE success"')
           echo "STAGING CHECK: latest installed Flyway version $flyway"
-          test "$flyway" = 30
+          test "$flyway" = 31
           # Database has zero published host ports, unlike the local dev Compose.
           db_port=$(docker compose --env-file "$RUNNER_TEMP/scs-staging-rehearsal.env" \
             -f infra/staging/compose.rehearsal.yaml port db 5432 2>/dev/null || true)

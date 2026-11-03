@@ -91,6 +91,25 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
       "Espresso yang kaya rasa dengan susu.",
     );
 
+    // Synthetic Cloudinary address: the system tests URL management,
+    // not file upload or the presence of external provider credentials.
+    // Block outbound CDN requests so ephemeral CI never depends on or
+    // sends traffic to an external asset provider.
+    await page.route("https://res.cloudinary.com/**", (route) => route.abort());
+    const fakeImage = "https://res.cloudinary.com/scs-e2e/image/upload/v1234567890/menu/espresso.webp";
+    await page.getByLabel("URL foto produk (Cloudinary)").fill(fakeImage);
+    await page.getByRole("checkbox", { name: "Saya telah memeriksa perubahan harga dan status publikasi" }).check();
+    await page.getByRole("button", { name: "Simpan perubahan menu" }).click();
+    await expect(page.locator("img.staff-menu-edit-photo")).toHaveAttribute("src", fakeImage);
+    await expect(page.getByLabel("URL foto produk (Cloudinary)")).toHaveValue(fakeImage);
+
+    // An explicit blank URL deletes the media link, not the product or price.
+    await page.getByLabel("URL foto produk (Cloudinary)").fill("");
+    await page.getByRole("checkbox", { name: "Saya telah memeriksa perubahan harga dan status publikasi" }).check();
+    await page.getByRole("button", { name: "Simpan perubahan menu" }).click();
+    await expect(page.getByLabel("URL foto produk (Cloudinary)")).toHaveValue("");
+    await expect(page.locator("img.staff-menu-edit-photo")).toHaveCount(0);
+
     await page.screenshot({
       path: "test-results/operational-catalog-manager.png", fullPage: true,
     });
