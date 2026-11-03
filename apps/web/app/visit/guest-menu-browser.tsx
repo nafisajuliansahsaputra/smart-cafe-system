@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MenuItem } from "@/lib/guest-server";
+import { MenuPhoto } from "@/components/menu-photo";
 
 const rupiah = new Intl.NumberFormat("id-ID", {
   style: "currency", currency: "IDR", maximumFractionDigits: 0,
@@ -79,6 +80,8 @@ export default function GuestMenuBrowser({ items }: { items: MenuItem[] }) {
             {filtered.filter((item) => item.category === category).map((item) => (
               <article className="guest-panel guest-menu-card" key={item.id}>
                 <div>
+                  <MenuPhoto src={item.imageUrl} name={item.name}
+                    className="guest-menu-card-photo" />
                   <h3>{item.name}</h3>
                   {item.description &&
                     <p className="guest-menu-description">{item.description}</p>}
