@@ -42,6 +42,12 @@ The database is the source of truth. A successful browser interaction or an unve
 6. Physical games can be allocated by serialized unit, handed over and returned, with inventory/incident review.
 7. Separate cashier shifts, summary reports and fake-payment reconciliation support operational review.
 
+The real manager portal also supports physical table registration and a draft
+offline table-QR print studio: manager/admin can produce A4 signage and
+download vector SVG for permanent `/t/{publicAlias}` destinations. Staff
+verification and temporary guest join proof remain necessary to place an order.
+This capability is not part of the client-only portfolio tour.
+
 These workflows run under disposable Docker/Chromium integration tests. QRIS/virtual accounts have **synthetic, explicitly non-payable** sandbox attempts only. No real bank settlement or WhatsApp/SMS receipt sender exists.
 
 ## Two ways to explore
@@ -65,8 +71,9 @@ The GitHub Actions full browser acceptance job captures these **synthetic-only**
 - `portfolio-demo-guest.png`
 - `portfolio-demo-kitchen.png`
 - `portfolio-demo-receipt.png`
+- `operational-table-qr.png` (real manager-only QR studio using synthetic data)
 
-To get the images: open the CI workflow run for the portfolio PR, locate its Artifacts section, and download the above artifact. These are screenshots of the portfolio tour; they are **not** screenshots proving that the integrated payment gateway works. Capture separate role-authenticated operational screenshots if the final case study needs OCC/KDS/Waiter views, using disposable test fixtures only.
+To get the images: open the CI workflow run for the portfolio PR, locate its Artifacts section, and download the above artifact. Most screenshots show the portfolio tour. The operational QR screenshot is from a role-authenticated, disposable PostgreSQL-backed table registry. None proves real payment-gateway settlement. Capture separate role-authenticated operational screenshots if the final case study needs OCC/KDS/Waiter views, using disposable test fixtures only.
 
 ## What was intentionally excluded
 

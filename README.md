@@ -48,11 +48,14 @@ mark empty tables out of service. The backend uses a row lock shared with
 waiter visit opening and refuses deactivation while a visit is active.
 See [table registry runbook](docs/M7-TABLE-REGISTRY.md).
 
-Printed QR codes should encode `https://<your-cafe-host>/t/<publicAlias>`,
-and NFC tags use the same URL. The app currently provides these **links**,
-but not a downloadable QR artwork generator. A public table link never
-contains a join credential; waiter verification and temporary proof remain
-mandatory.
+Printed QR codes encode `https://<your-cafe-host>/t/<publicAlias>`,
+and NFC tags use the same URL. A manager/admin-only **draft QR studio** at
+`/staff/tables/registry/print` now creates A4 printable batches and downloadable
+SVG QR artwork without an external generator. URLs derive from the browser's
+current origin; open from the verified public HTTPS host before printing for
+physical use, not localhost. This is a stacked development change, not yet
+released on `main`. A public table link never contains a join credential;
+waiter verification and temporary proof remain mandatory.
 
 ## What it solves
 

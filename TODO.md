@@ -772,8 +772,10 @@ the operational transaction system.
   had a stale earlier snapshot.
 - [x] Add E2E positive and negative manager/waiter flows, regular staff
   role-denial checks and mobile layout regression.
-- [ ] Complete print-ready local QR artwork generation, on-site print
-  checks, real-device NFC review and scalable table listing.
+- [ ] Verify the newly implemented manager-only A4/SVG QR studio on
+  exact-head CI, then test physical printed scanning and NFC on real devices;
+  scalable table registry pagination remains separate. The studio is currently
+  present only in the stacked draft branch, not on `main`.
 - [ ] Verify exact PR and integration head CI, human review and isolated
   hosted staging before declaring this capability released.
 

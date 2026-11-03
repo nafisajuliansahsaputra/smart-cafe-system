@@ -35,7 +35,7 @@ export default async function TableRegistry({ searchParams }: {
       <h1>Inventaris meja</h1>
       <p className="staff-muted">Daftarkan meja fisik, link QR/NFC yang permanen,
         kapasitas tempat duduk dan status operasional. Kunjungan dikelola waiter.</p>
-    </div><Link className="staff-link-button" href="/staff/tables">Kembali ke meja aktif</Link></header>
+    </div><div className="staff-actions"><Link className="staff-link-button" href="/staff/tables/registry/print">Cetak QR meja</Link><Link className="staff-link-button" href="/staff/tables">Kembali ke meja aktif</Link></div></header>
     <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span>
       <Link href="/staff/tables">Meja</Link><span>/</span><strong>Inventaris</strong></nav>
     {notice && <p className="staff-notice" role={["created", "updated"].includes(query.notice ?? "")
@@ -105,7 +105,7 @@ export default async function TableRegistry({ searchParams }: {
     <p className="staff-footnote">Link QR/NFC bukan kredensial. Setelah waiter
       membuka kunjungan, tamu tetap harus mendapatkan bukti bergabung
       sementara. Status dan kapasitas tersimpan di PostgreSQL dengan audit
-      tindakan, tetapi pembuatan/penempelan gambar QR fisik masih memerlukan
-      alat cetak tersendiri.</p>
+      tindakan. Manager dapat menggunakan Studio QR untuk mencetak atau
+      mengunduh SVG, lalu menguji pemindaian di perangkat pelanggan.</p>
   </main>;
 }
