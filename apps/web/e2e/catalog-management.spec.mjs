@@ -35,6 +35,9 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
 
     await page.getByText("Buat item menu").click();
     await page.getByLabel("Nama produk").fill("E2E Web Espresso");
+    await page.getByLabel("Deskripsi singkat (opsional)").fill(
+      "Espresso dengan susu segar, disajikan dingin.",
+    );
     await page.getByLabel("Kategori", { exact: true }).selectOption({ label: "E2E Menu Drinks" });
     await page.getByLabel("Harga dasar (IDR)").fill("19900");
     await page.getByRole("checkbox", { name: /Saya memahami item belum ditampilkan/ }).check();
@@ -49,6 +52,9 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
     await expect(row).toContainText("HIDDEN");
     await row.getByRole("link", { name: "Edit / stok / varian" }).click();
     await expect(page.getByRole("heading", { name: "E2E Web Espresso" })).toBeVisible();
+    await expect(page.getByLabel("Deskripsi menu")).toHaveValue(
+      "Espresso dengan susu segar, disajikan dingin.",
+    );
 
     await page.getByText("Tambah grup varian baru").click();
     await page.getByLabel("Nama grup").fill("E2E Milk Choice");
@@ -75,11 +81,15 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
     await expect(page.getByText("Stok berhasil diperbarui")).toBeVisible();
     await expect(page.getByText(/Sisa 12 unit/)).toBeVisible();
 
+    await page.getByLabel("Deskripsi menu").fill("Espresso yang kaya rasa dengan susu.");
     await page.getByLabel("Status penjualan").selectOption("AVAILABLE");
     await page.getByRole("checkbox", { name: "Saya telah memeriksa perubahan harga dan status publikasi" }).check();
     await page.getByRole("button", { name: "Simpan perubahan menu" }).click();
     await expect(page.getByText("Nama, harga, kategori atau publikasi item berhasil diperbarui.")).toBeVisible();
     await expect(page.getByText(/Status:.*AVAILABLE/)).toBeVisible();
+    await expect(page.getByLabel("Deskripsi menu")).toHaveValue(
+      "Espresso yang kaya rasa dengan susu.",
+    );
 
     await page.screenshot({
       path: "test-results/operational-catalog-manager.png", fullPage: true,
