@@ -254,3 +254,12 @@ search and category filtering on real server-confirmed available
 products, with mobile no-result and reset controls. It is not
 the isolated `/showcase` client-only demonstration. Checkout
 still recalculates stock and totals server-side.
+
+### Managed product photos (draft)
+Manager/admin can attach, replace or clear a product's public HTTPS
+photo URL from their configured Cloudinary account. Flyway V31 adds
+a nullable image field and preserves legacy product/financial data;
+guest menu cards and item details display approved links. Configure
+`SCS_MENU_IMAGE_CLOUD_NAME` (public account name, never an API key)
+on the API only. See `docs/M7-MENU-IMAGE-LINKS.md`. File upload and
+provider asset deletion are **not implemented**; do not claim otherwise.
