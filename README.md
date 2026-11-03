@@ -40,6 +40,20 @@ For real staff operations use the isolated full-stack environment and
 an authorized manager/admin login. QRIS/VA real merchant processing and
 phone receipt sending still require separate external integrations.
 
+## Table onboarding for actual cafe operations
+
+Managers and admins can now use `/staff/tables/registry` to register physical
+tables, reserve permanent public URL aliases, adjust seating capacity, and
+mark empty tables out of service. The backend uses a row lock shared with
+waiter visit opening and refuses deactivation while a visit is active.
+See [table registry runbook](docs/M7-TABLE-REGISTRY.md).
+
+Printed QR codes should encode `https://<your-cafe-host>/t/<publicAlias>`,
+and NFC tags use the same URL. The app currently provides these **links**,
+but not a downloadable QR artwork generator. A public table link never
+contains a join credential; waiter verification and temporary proof remain
+mandatory.
+
 ## What it solves
 
 Customers scan a table QR code or tap an NFC tag, join a live table session, enter their display name (and optionally phone number), order food/drinks, optionally request physical games delivered by staff, review the bill, and pay. Staff handle real kitchen and floor operations from protected dashboards.

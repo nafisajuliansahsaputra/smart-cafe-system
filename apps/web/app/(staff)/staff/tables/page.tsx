@@ -33,6 +33,15 @@ export default async function StaffTablesPage() {
       <nav className="staff-breadcrumb">
         <Link href="/staff">Ruang staf</Link><span>/</span><strong>Meja</strong>
       </nav>
+      {identity.staff.roles.some(role => role === "MANAGER" || role === "ADMIN") &&
+        <section className="staff-panel">
+          <h2>Inventaris fisik meja</h2>
+          <p>Daftarkan meja baru, ubah kapasitas dan tandai meja rusak sebagai
+            nonaktif tanpa memutus kunjungan yang sedang berlangsung.</p>
+          <Link className="staff-link-button" href="/staff/tables/registry">
+            Kelola inventaris meja
+          </Link>
+        </section>}
       <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=tables`} /></div>
       <form method="GET"><button className="staff-secondary" type="submit">Segarkan status meja</button></form>
       {!result.ok ? (

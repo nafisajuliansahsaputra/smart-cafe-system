@@ -761,3 +761,22 @@ The publicly accessible no-backend tour, if hosted later, is only an educational
 See `docs/M7-OPERATIONAL-CATALOG.md`. The client-only `/showcase`
 remains optional marketing collateral and must not be described as
 the operational transaction system.
+
+### M7 physical table registry from the real staff dashboard (stacked draft PR)
+
+- [x] Add manager/admin-only table registry UI with permanent public alias
+  and code, capacity and active/out-of-service controls.
+- [x] Add audited Java/PostgreSQL table creation and transactional status
+  change protected by the **same row lock** as live visit creation.
+- [x] Refuse disabling a table with an active/closing visit even if the UI
+  had a stale earlier snapshot.
+- [x] Add E2E positive and negative manager/waiter flows, regular staff
+  role-denial checks and mobile layout regression.
+- [ ] Complete print-ready local QR artwork generation, on-site print
+  checks, real-device NFC review and scalable table listing.
+- [ ] Verify exact PR and integration head CI, human review and isolated
+  hosted staging before declaring this capability released.
+
+See docs/M7-TABLE-REGISTRY.md. This is real domain/DB behavior; it does
+not make real merchant payments, external receipt dispatch or live
+production access ready.

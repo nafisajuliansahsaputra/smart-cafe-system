@@ -222,6 +222,7 @@ jobs:
             apps/web/test-results/portfolio-demo-kitchen.png
             apps/web/test-results/portfolio-demo-receipt.png
             apps/web/test-results/operational-catalog-manager.png
+            apps/web/test-results/operational-table-registry.png
           if-no-files-found: error
           retention-days: 7
       - name: Upload browser failure trace and screenshots
