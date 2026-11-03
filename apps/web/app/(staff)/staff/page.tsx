@@ -51,6 +51,14 @@ export default async function StaffPage() {
         <Link className="staff-link-button" href="/staff/catalog">Kelola katalog</Link>
       </section>}
       {isManager && <section className="staff-panel">
+        <h2>Jejak aktivitas operasional</h2>
+        <p>Telusuri perubahan pesanan, meja, stok, permainan, kas dan akun
+          yang tercatat oleh server, tanpa menampilkan data sensitif pelanggan.</p>
+        <Link className="staff-link-button" href="/staff/audit">
+          Lihat riwayat audit
+        </Link>
+      </section>}
+      {isManager && <section className="staff-panel">
         <h2>Manajemen staf</h2>
         <p>Lihat akun, nonaktifkan akses staf biasa dan lihat perubahan lewat audit. Akun admin/manager dilindungi.</p>
         <Link className="staff-link-button" href="/staff/team">Kelola staf</Link>
