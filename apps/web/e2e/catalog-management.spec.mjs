@@ -93,6 +93,9 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
 
     // Synthetic Cloudinary address: the system tests URL management,
     // not file upload or the presence of external provider credentials.
+    // Block outbound CDN requests so ephemeral CI never depends on or
+    // sends traffic to an external asset provider.
+    await page.route("https://res.cloudinary.com/**", (route) => route.abort());
     const fakeImage = "https://res.cloudinary.com/scs-e2e/image/upload/v1234567890/menu/espresso.webp";
     await page.getByLabel("URL foto produk (Cloudinary)").fill(fakeImage);
     await page.getByRole("checkbox", { name: "Saya telah memeriksa perubahan harga dan status publikasi" }).check();
