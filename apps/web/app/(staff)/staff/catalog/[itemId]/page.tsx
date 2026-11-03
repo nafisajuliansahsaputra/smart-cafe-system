@@ -73,6 +73,10 @@ export default async function CatalogItemPage({ params, searchParams }: {
           <label htmlFor="catalog-edit-name">Nama item</label>
           <input id="catalog-edit-name" name="name" defaultValue={item.name}
             maxLength={120} required/>
+          <label htmlFor="catalog-edit-description">Deskripsi menu</label>
+          <textarea id="catalog-edit-description" name="description" maxLength={500}
+            rows={3} defaultValue={item.description ?? ""}
+            placeholder="Bahan utama atau rasa yang membantu pelanggan memilih"/>
           <label htmlFor="catalog-edit-category">Kategori</label>
           <select id="catalog-edit-category" name="categoryId" required defaultValue={item.categoryId}>
             {categories.map(category => <option key={category.id} value={category.id}>
