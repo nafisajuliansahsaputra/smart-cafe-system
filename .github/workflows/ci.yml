@@ -184,6 +184,8 @@ jobs:
           cp .env.example .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-isolated-e2e-not-production/' .env
           sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=only-for-browser-ci-a-unique-disposable-hmac-key/' .env
+          # Synthetic cloud name only; no provider credentials or external uploads.
+          sed -i 's/^SCS_MENU_IMAGE_CLOUD_NAME=.*/SCS_MENU_IMAGE_CLOUD_NAME=scs-e2e/' .env
           docker compose config -q
       - name: Build and start isolated app and PostgreSQL
         run: docker compose up --build --detach
