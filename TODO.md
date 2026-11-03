@@ -738,3 +738,26 @@ required; main, real payments and hosted infrastructure remain untouched.
 - [ ] Add a featured-project card and case-study link to NATSX portfolio in a separate, approved repository change.
 
 The publicly accessible no-backend tour, if hosted later, is only an educational simulation. Its UI progression cannot be cited as evidence of API financial settlement or actual kitchen order processing. Actual acceptance is independently verified by ephemeral full-stack CI.
+
+### M7 true operational website: catalog and product administration (draft)
+
+- [x] Add MANAGER/ADMIN-only `/staff/catalog` dashboard for PostgreSQL-backed
+  category create/toggle, product creation, search and status.
+- [x] Add actual item editor for price, category, visibility, limited stock,
+  audit reason and version-controlled updates.
+- [x] Add required/optional modifier-group and option create/edit forms,
+  including per-option price adjustments and revision checks.
+- [x] Use fail-closed typed read models, backend staff bearer auth,
+  server-only mutations and no exposure of privileged tokens to clients.
+- [x] Add synthetic Playwright end-to-end positive catalog flow, cross-role
+  denial assertions and narrow mobile viewport coverage.
+- [ ] Verify exact-head CI plus image/security checks, then safely advance
+  the draft integration candidate only after all source checks pass.
+- [ ] Final full-site acceptance: larger catalog server pagination (current
+  backend cap 500), tablet/real-device UX, actual merchant payment connector,
+  authorized opt-in receipt sender, settings/incident operations, hosted
+  staging and production runbooks.
+
+See `docs/M7-OPERATIONAL-CATALOG.md`. The client-only `/showcase`
+remains optional marketing collateral and must not be described as
+the operational transaction system.

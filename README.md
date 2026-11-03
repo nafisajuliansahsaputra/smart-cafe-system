@@ -23,6 +23,23 @@ Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcas
 
 
 
+## Real operator workflows beyond the portfolio tour
+
+The actual operational website includes the authenticated cashier OCC,
+kitchen display, waiter service, cash shifts and financial reports,
+table/visit management, staff onboarding and game inventory. The next
+whole-product increment adds **manager/admin menu management** under
+`/staff/catalog`, backed by the existing Spring Boot catalog API:
+category creation/visibility, hidden item creation, price/publication edits,
+audited stock, and multiple price-adjusted modifier groups/options.
+Mutations are server-authoritative, role-gated and revision-aware. See
+[operational catalog runbook](docs/M7-OPERATIONAL-CATALOG.md).
+
+These screens are **not available on the no-backend /showcase tour**.
+For real staff operations use the isolated full-stack environment and
+an authorized manager/admin login. QRIS/VA real merchant processing and
+phone receipt sending still require separate external integrations.
+
 ## What it solves
 
 Customers scan a table QR code or tap an NFC tag, join a live table session, enter their display name (and optionally phone number), order food/drinks, optionally request physical games delivered by staff, review the bill, and pay. Staff handle real kitchen and floor operations from protected dashboards.

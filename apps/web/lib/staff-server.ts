@@ -42,7 +42,7 @@ export function dataFromEnvelope(payload: unknown): unknown {
 // Fixed, server-owned backend paths only. This is not an open proxy.
 export async function staffApi(
   path: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   token?: string,
   body?: Record<string, unknown>,
   idempotencyKey?: string,

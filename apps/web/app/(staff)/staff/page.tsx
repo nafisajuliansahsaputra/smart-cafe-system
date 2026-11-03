@@ -45,6 +45,12 @@ export default async function StaffPage() {
         </Link>
       </section>}
       {isManager && <section className="staff-panel">
+        <h2>Menu, harga &amp; stok</h2>
+        <p>Kelola kategori, publikasi menu, perubahan harga, stok terbatas,
+          dan grup varian dengan validasi server serta riwayat audit.</p>
+        <Link className="staff-link-button" href="/staff/catalog">Kelola katalog</Link>
+      </section>}
+      {isManager && <section className="staff-panel">
         <h2>Manajemen staf</h2>
         <p>Lihat akun, nonaktifkan akses staf biasa dan lihat perubahan lewat audit. Akun admin/manager dilindungi.</p>
         <Link className="staff-link-button" href="/staff/team">Kelola staf</Link>
