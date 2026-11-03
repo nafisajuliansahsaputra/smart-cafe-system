@@ -56,8 +56,9 @@ test("manager can review immutable server audit entries from real table creation
 test("audit records are not exposed to cashier, kitchen, waiter or guests", async ({ browser }) => {
   const anonymous = await browser.newPage({ baseURL: BASE });
   try {
-    const response = await anonymous.goto("/staff/audit");
-    expect(response?.status()).toBe(307);
+    await anonymous.goto("/staff/audit");
+    await expect(anonymous).toHaveURL(/\/staff\/login/);
+    await expect(anonymous.getByRole("heading", { name: "Masuk sebagai staf" })).toBeVisible();
   } finally {
     await anonymous.close();
   }
