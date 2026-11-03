@@ -54,7 +54,7 @@ export default async function PrintableTableQrs({ searchParams }: {
     <p className="staff-notice" role="status">Menampilkan halaman inventaris
       {tables.data.page + 1}: {printable.length} dari {tables.data.total} meja yang cocok.
       Navigasi halaman untuk mengambil batch meja lainnya dari database.</p>
-    <form method="GET" className="staff-catalog-search">
+    <form method="GET" className="staff-catalog-search scs-qr-studio-search">
       <label htmlFor="qr-print-search">Cari kode meja atau alias</label>
       <div><input type="search" id="qr-print-search" name="q" maxLength={60}
         pattern="[A-Za-z0-9_-]*" defaultValue={q.slice(0, 60)}
