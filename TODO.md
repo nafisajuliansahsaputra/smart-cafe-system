@@ -761,3 +761,16 @@ The publicly accessible no-backend tour, if hosted later, is only an educational
 See `docs/M7-OPERATIONAL-CATALOG.md`. The client-only `/showcase`
 remains optional marketing collateral and must not be described as
 the operational transaction system.
+
+### M7 operational table administration (stacked draft PR)
+
+- [x] Authenticated manager/admin table master CRUD subset: create and list, adjust capacity, enable/disable; no destructive delete.
+- [x] Validate unique public QR alias, capacity and table code at Spring backend; reject a duplicate.
+- [x] Enforce row lock and conflict when an ACTIVE/CLOSING visit exists, so table changes cannot race with visit opening.
+- [x] Write audited create/update events in the same database transaction.
+- [x] Add staff-only Next.js /staff/table-settings route and server actions with fail-closed validation and role checks; link from authenticated operations dashboard.
+- [x] Add Java/Testcontainers and Playwright authorization, state, audit and mobile regression tests.
+- [ ] Require all exact-head CI gates and candidate-to-main workflows before accepting into the integration candidate.
+- [ ] Printed QR production assets, table-layout visual builder, large-table pagination and hosted pilot still outstanding.
+
+See [docs/M7-TABLE-ADMINISTRATION.md](docs/M7-TABLE-ADMINISTRATION.md). This is a real operational feature; the separate client-only /showcase is not a substitute.
