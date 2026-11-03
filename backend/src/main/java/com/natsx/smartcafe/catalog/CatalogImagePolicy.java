@@ -29,6 +29,11 @@ public class CatalogImagePolicy {
     /** Null means omit/keep on PATCH; blank means explicitly clear. */
     public String validate(String candidate) {
         if (candidate == null) return null;
+        // Reject control bytes before trimming so newline/tab suffixes cannot
+        // be normalized into an otherwise approved remote address.
+        if (candidate.codePoints().anyMatch(Character::isISOControl)) {
+            throw invalid("Invalid menu image URL");
+        }
         String input = candidate.strip();
         if (input.isEmpty()) return "";
         if (cloudName.isEmpty()) {
