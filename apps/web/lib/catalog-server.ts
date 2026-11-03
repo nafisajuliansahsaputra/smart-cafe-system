@@ -55,6 +55,14 @@ async function fetchCatalog<T>(
   return check(data) ? { ok: true, data } : { ok: false, status: 502 };
 }
 
+/** Item editor needs categories, never the legacy capped product list. */
+export async function catalogCategories(): Promise<CatalogResult<MenuCategory[]>> {
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  return fetchCatalog("/api/v1/admin/menu-categories", token,
+    (v): v is MenuCategory[] => Array.isArray(v) && v.every(isCategory));
+}
+
 export async function catalogOverview(): Promise<CatalogResult<{
   categories: MenuCategory[]; items: MenuItem[];
 }>> {
