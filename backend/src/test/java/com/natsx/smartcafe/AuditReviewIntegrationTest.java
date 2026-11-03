@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,10 +54,14 @@ class AuditReviewIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON).content(body))
             .andReturn().getResponse();
         assertEquals(200, response.getStatus(), response.getContentAsString());
-        var matcher = Pattern.compile("\\"accessToken\\":\\"([^\\"]+)\\"")
-            .matcher(response.getContentAsString());
-        assertTrue(matcher.find());
-        return matcher.group(1);
+        String responseBody = response.getContentAsString();
+        String quote = Character.toString((char) 34);
+        String marker = quote + "accessToken" + quote + ":" + quote;
+        int start = responseBody.indexOf(marker);
+        assertTrue(start >= 0, "Token field missing");
+        int end = responseBody.indexOf(quote, start + marker.length());
+        assertTrue(end > start, "Token value missing");
+        return responseBody.substring(start + marker.length(), end);
     }
 
     private void event(String operation, UUID resource, String secretReason) {
