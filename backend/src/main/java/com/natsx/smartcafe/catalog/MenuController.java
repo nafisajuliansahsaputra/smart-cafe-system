@@ -15,12 +15,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class MenuController {
     private final JdbcTemplate jdbc;
     public MenuController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
-    public record MenuItem(UUID id, String name, String category, long priceIdr,Long remainingQuantity) {}
+    public record MenuItem(UUID id, String name, String category, long priceIdr,
+                           Long remainingQuantity, String description) {}
 
     @GetMapping("/menu")
     public ApiEnvelope<List<MenuItem>> menu(HttpServletRequest request) {
         var items = jdbc.query("""
-            SELECT i.id,i.name,c.name as category,i.base_price_idr,a.limited_quantity FROM menu_items i
+            SELECT i.id,i.name,c.name as category,i.base_price_idr,a.limited_quantity,i.description
+            FROM menu_items i
             JOIN menu_categories c ON c.id=i.category_id
             JOIN item_availability a ON a.menu_item_id=i.id
             WHERE i.availability='AVAILABLE' AND c.active=true AND a.available=true
@@ -28,7 +30,8 @@ public class MenuController {
             ORDER BY c.sort_order,i.name
             """, (rs,n)->new MenuItem(rs.getObject("id",UUID.class),rs.getString("name"),
                 rs.getString("category"),rs.getLong("base_price_idr"),
-                rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity")));
+                rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
+                rs.getString("description")));
         return ApiEnvelope.of(items,RequestIdFilter.get(request));
     }
 }
