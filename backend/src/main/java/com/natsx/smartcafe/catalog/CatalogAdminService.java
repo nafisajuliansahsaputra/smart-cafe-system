@@ -95,7 +95,8 @@ public class CatalogAdminService {
         var edited=jdbc.query("""
             UPDATE menu_items
             SET category_id=?,name=?,base_price_idr=?,availability=?,
-                description=CASE WHEN ? IS NULL THEN description ELSE NULLIF(?, '') END,
+                description=CASE WHEN CAST(? AS text) IS NULL THEN description
+                                 ELSE NULLIF(CAST(? AS text), '') END,
                 revision=revision+1
             WHERE id=? AND revision=?
             RETURNING id,category_id,name,base_price_idr,availability,revision,description
