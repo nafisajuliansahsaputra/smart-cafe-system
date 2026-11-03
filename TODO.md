@@ -836,3 +836,19 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
   screenshot into the full cash-to-receipt Playwright acceptance.
 - [ ] Verify source exact-head and candidate-to-main CI, physical
   QR/NFC device UX, screen readers and human release review.
+
+### M7 catalog image links (Flyway V31, stacked draft)
+- [x] Add nullable live schema `menu_items.image_url` via forward-only
+  migration; rehearse V27→V31 with old receipts/cash/audits preserved.
+- [x] Manager/admin-only revision-controlled photo URL create/edit/remove,
+  allowed on an explicitly configured Cloudinary tenant only.
+- [x] Render approved real image links on guest cards/detail and on
+  manager item preview; no image displayed when null.
+- [x] Backend URL abuse and SQL regression tests, manager browser image
+  set/remove and 320px mobile design.
+- [ ] Review asset licensing, Cloudinary account control, CDN privacy
+  disclosures and real-device bandwidth before a public cafe pilot.
+- [ ] Build signed direct upload / media lifecycle if explicitly
+  authorized by the owner and Cloudinary account holder.
+- [ ] Require exact-head source + candidate CI and human review prior
+  to integration release; keep payment/receipt provider gates closed.
