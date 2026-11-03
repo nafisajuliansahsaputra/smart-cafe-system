@@ -342,6 +342,8 @@ jobs:
           cp .env.example .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-edge-ephemeral-only/' .env
           sed -i 's/^SCS_JOIN_THROTTLE_SECRET=.*/SCS_JOIN_THROTTLE_SECRET=edge-ci-only-disposable-hmac-secret-2026/' .env
+          # Match regular browser acceptance: only an ephemeral CDN tenant name.
+          sed -i 's/^SCS_MENU_IMAGE_CLOUD_NAME=.*/SCS_MENU_IMAGE_CLOUD_NAME=scs-e2e/' .env
           mkdir -p infra/edge/local-tls
           openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
             -keyout infra/edge/local-tls/key.pem -out infra/edge/local-tls/cert.pem \
