@@ -33,7 +33,7 @@ export default async function PrintableTableQrs() {
     publicAlias.test(table.publicAlias),
   );
 
-  return <main className="staff-shell staff-wide">
+  return <main className="staff-shell staff-wide scs-qr-print">
     <header className="staff-header"><div>
       <div className="staff-eyebrow">SMART CAFE / TABLE SIGNAGE</div>
       <h1>Cetak QR meja</h1>
