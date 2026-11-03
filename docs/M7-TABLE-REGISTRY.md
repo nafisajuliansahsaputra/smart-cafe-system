@@ -98,7 +98,7 @@ receive a denied response. Errors and invalid pages fail closed.
 The QR studio uses the same paginated projection. Managers can navigate
 database batches and print the QR sheets for each batch instead of silently
 omitting tables after the first 250. The print controls stay off the A4 output.
-A 28-row PostgreSQL integration regression verifies page boundaries,
+A 253-row PostgreSQL integration regression verifies page boundaries,
 literal search, no private fields and staff-role denial; Chromium exercises
 manager search and QR filtering with the real disposable database.
 The waiter live-floor board remains separately bounded for now.
