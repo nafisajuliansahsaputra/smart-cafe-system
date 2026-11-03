@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -26,7 +27,7 @@ public class TableRegistryQueryService {
     public record RegistryPage(int page, int pageSize, boolean hasNext,
                                long total, List<TableRow> items) {}
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RegistryPage list(int page, String query) {
         if (page < 0 || page > 1000 || query == null || query.length() > 60 ||
             !query.matches("[A-Za-z0-9_-]*")) {
