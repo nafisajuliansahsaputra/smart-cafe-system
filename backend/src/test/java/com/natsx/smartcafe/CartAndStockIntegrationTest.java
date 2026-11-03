@@ -583,4 +583,61 @@ class CartAndStockIntegrationTest {
             SELECT count(*) FROM cart_line_variant_options WHERE menu_item_id=?
             """,Integer.class,item));
     }
+
+    @Test void productDescriptionFollowsRevisionRulesAndAppearsInRealGuestMenu() throws Exception {
+        UUID item=menu(12000,5);
+        UUID category=jdbc.queryForObject(
+            "SELECT category_id FROM menu_items WHERE id=?",UUID.class,item);
+        String manager=staffSession("MANAGER");
+        String cashier=staffSession("CASHIER");
+        String path="/api/v1/admin/menu-items/" + item;
+        String withDescription="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":12000,
+             "availability":"AVAILABLE","expectedRevision":1,
+             "description":"Espresso dengan susu segar"}
+            """.formatted(category);
+        var first=mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(withDescription))
+            .andReturn().getResponse();
+        assertEquals(200,first.getStatus(),first.getContentAsString());
+        assertTrue(first.getContentAsString().contains(
+            "\"description\":\"Espresso dengan susu segar\""));
+        var menuResponse=mvc.perform(get("/api/v1/menu")).andReturn().getResponse();
+        assertEquals(200,menuResponse.getStatus());
+        assertTrue(menuResponse.getContentAsString().contains(
+            "\"description\":\"Espresso dengan susu segar\""));
+
+        // Older API clients may omit the optional field: preserve existing copy.
+        String legacy="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":13000,
+             "availability":"AVAILABLE","expectedRevision":2}
+            """.formatted(category);
+        var second=mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(legacy))
+            .andReturn().getResponse();
+        assertEquals(200,second.getStatus(),second.getContentAsString());
+        assertEquals("Espresso dengan susu segar",jdbc.queryForObject(
+            "SELECT description FROM menu_items WHERE id=?",String.class,item));
+
+        String clear="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":13000,
+             "availability":"AVAILABLE","expectedRevision":3,"description":""}
+            """.formatted(category);
+        assertEquals(403,mvc.perform(patch(path).header("Authorization","Bearer " + cashier)
+            .contentType(MediaType.APPLICATION_JSON).content(clear))
+            .andReturn().getResponse().getStatus());
+        assertEquals(200,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(clear))
+            .andReturn().getResponse().getStatus());
+        assertNull(jdbc.queryForObject(
+            "SELECT description FROM menu_items WHERE id=?",String.class,item));
+
+        String tooLong="""
+            {"categoryId":"%s","name":"Synthetic Meal","priceIdr":13000,
+             "availability":"AVAILABLE","expectedRevision":4,"description":"%s"}
+            """.formatted(category,"x".repeat(501));
+        assertEquals(400,mvc.perform(patch(path).header("Authorization","Bearer " + manager)
+            .contentType(MediaType.APPLICATION_JSON).content(tooLong))
+            .andReturn().getResponse().getStatus());
+    }
 }
