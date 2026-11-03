@@ -80,6 +80,18 @@ test("manager creates a physical table and cannot disable it during a live visit
     await expect.poll(() => manager.page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth
     )).toBeLessThanOrEqual(1);
+
+    // Search is now handled by PostgreSQL, not a truncated local array.
+    await manager.page.goto("/staff/tables/registry?q=E2E-M7");
+    await expect(manager.page.getByRole("heading", { name: "Daftar meja (1)" })).toBeVisible();
+    await expect(manager.page.locator(".staff-task-card")).toHaveCount(1);
+    await manager.page.goto("/staff/tables/registry/print?q=E2E-M7");
+    const qr = manager.page.locator("svg[data-qr-url]");
+    await expect(qr).toHaveCount(1);
+    expect(new URL(await qr.getAttribute("data-qr-url")).pathname).toBe("/t/e2e-m7");
+
+    await manager.page.goto("/staff/tables/registry?page=1001");
+    await expect(manager.page.locator("section.staff-panel[role='alert']")).toContainText("Pencarian tidak valid");
   } finally {
     await manager.context.close();
     await waiter.context.close();

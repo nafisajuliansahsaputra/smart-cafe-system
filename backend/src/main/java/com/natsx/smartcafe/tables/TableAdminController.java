@@ -13,6 +13,8 @@ import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,8 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/tables")
 public class TableAdminController {
     private final TableAdminService tables;
-    public TableAdminController(TableAdminService tables) {
+    private final TableRegistryQueryService registry;
+    public TableAdminController(TableAdminService tables, TableRegistryQueryService registry) {
         this.tables = tables;
+        this.registry = registry;
     }
 
     public record TableCreate(@NotBlank String tableCode,
@@ -36,6 +40,15 @@ public class TableAdminController {
                             @Min(1) @Max(30) int capacity,
                             @NotNull String expectedStatus,
                             @Min(1) @Max(30) int expectedCapacity) {}
+
+    @GetMapping("/registry")
+    public ResponseEntity<ApiEnvelope<TableRegistryQueryService.RegistryPage>> listRegistry(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "") String q,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(registry.list(page, q), RequestIdFilter.get(request)));
+    }
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<TableAdminService.TableInfo>> create(

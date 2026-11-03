@@ -79,3 +79,26 @@ proofs or authenticated staff URLs. A 320px browser test exercises one-table
 rendering and file download; regular cashier, waiter and kitchen accounts must
 get HTTP 404. Run the exact-head Chromium, Next.js build and security CI before
 calling this a verified release. A physical scan/print pilot is still required.
+
+## Server-side registry pagination and search (stacked follow-up)
+
+The manager-only inventory now reads `GET /api/v1/admin/tables/registry?page=&q=`
+instead of reusing the waiter floor-board endpoint (which still deliberately
+returns at most 250 operational tables). Each request fetches 25 rows from
+PostgreSQL with a stable table-code/UUID sort, a total count, and a `hasNext`
+marker. Search matches only literal code/alias substrings (case-insensitive);
+underscores are not wildcard patterns, and inputs/pages are bounded.
+
+The read projection contains **only** public table identifiers, capacity,
+status and a Boolean active-visit indicator. It cannot disclose a join proof,
+visit identifier, customer phone, staff token or payment data. Manager/admin
+roles are enforced by Spring Security and the Next.js page; ordinary staff
+receive a denied response. Errors and invalid pages fail closed.
+
+The QR studio uses the same paginated projection. Managers can navigate
+database batches and print the QR sheets for each batch instead of silently
+omitting tables after the first 250. The print controls stay off the A4 output.
+A 253-row PostgreSQL integration regression verifies page boundaries,
+literal search, no private fields and staff-role denial; Chromium exercises
+manager search and QR filtering with the real disposable database.
+The waiter live-floor board remains separately bounded for now.

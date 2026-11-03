@@ -71,7 +71,7 @@ export function QrPrintStudio({ tables }: Props) {
         setSelection(event.target.value);
         setPage(0);
       }}>
-        <option value="all">Semua meja ({tables.length}), per halaman</option>
+        <option value="all">Semua meja di batch ini ({tables.length}), per halaman</option>
         {ordered.map((table) => <option key={table.tableId} value={table.tableId}>
           Meja {table.tableCode}
         </option>)}
