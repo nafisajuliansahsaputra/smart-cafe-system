@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace, @typescript-eslint/no-unused-vars, prefer-const -- Upstream MIT-licensed QR encoder; preserve the audited vendor source. */
 /* 
  * QR Code generator library (TypeScript)
  * 
