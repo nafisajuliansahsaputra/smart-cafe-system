@@ -55,7 +55,7 @@ class AuditReviewIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON).content(body))
             .andReturn().getResponse();
         assertEquals(200, response.getStatus(), response.getContentAsString());
-        var matcher = Pattern.compile("\\\"accessToken\\\":\\\"([^\\\"]+)\\\"")
+        var matcher = Pattern.compile("\\"accessToken\\":\\"([^\\"]+)\\"")
             .matcher(response.getContentAsString());
         assertTrue(matcher.find());
         return matcher.group(1);
@@ -79,9 +79,9 @@ class AuditReviewIntegrationTest {
             .andReturn().getResponse();
         assertEquals(200, result.getStatus(), result.getContentAsString());
         var json = result.getContentAsString();
-        assertTrue(json.contains("\\"page\\":0"));
-        assertTrue(json.contains("\\"pageSize\\":25"));
-        assertTrue(json.contains("\\"hasNext\\":true"));
+        assertTrue(json.contains("\"page\":0"));
+        assertTrue(json.contains("\"pageSize\":25"));
+        assertTrue(json.contains("\"hasNext\":true"));
         assertTrue(json.contains("TABLE_AUDIT_SEARCH"));
         assertFalse(json.contains("secret-marker"));
         assertFalse(json.contains("safeBeforeAfterDiff"));
@@ -90,7 +90,7 @@ class AuditReviewIntegrationTest {
             .header("Authorization","Bearer " + manager))
             .andReturn().getResponse();
         assertEquals(200, second.getStatus(), second.getContentAsString());
-        assertTrue(second.getContentAsString().contains("\\"hasNext\\":false"));
+        assertTrue(second.getContentAsString().contains("\"hasNext\":false"));
         assertEquals(400, mvc.perform(get("/api/v1/admin/audit-events?page=1001")
             .header("Authorization","Bearer " + manager))
             .andReturn().getResponse().getStatus());
