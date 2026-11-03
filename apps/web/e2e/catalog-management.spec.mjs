@@ -40,6 +40,10 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
     await page.getByRole("checkbox", { name: /Saya memahami item belum ditampilkan/ }).check();
     await page.getByRole("button", { name: "Tambah produk sebagai HIDDEN" }).click();
     await expect(page.getByText(/Item dibuat sebagai HIDDEN/)).toBeVisible();
+    await page.getByLabel("Cari produk, kategori atau status").fill("E2E Web Espresso");
+    await page.getByRole("button", { name: "Cari", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Daftar produk (1)" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "E2E Web Espresso" })).toHaveCount(1);
 
     const row = page.getByRole("row").filter({ hasText: "E2E Web Espresso" });
     await expect(row).toContainText("HIDDEN");
@@ -84,6 +88,11 @@ test("manager can manage actual category, hidden item, modifier, stock and publi
     await expect.poll(() => page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth
     )).toBeLessThanOrEqual(1);
+
+    await page.goto("/staff/catalog?page=1001");
+    await expect(page.locator("section.staff-panel[role='alert']")).toContainText(
+      "Format pencarian atau halaman tidak valid",
+    );
   } finally {
     await context.close();
   }
