@@ -42,7 +42,7 @@ class TableAdminIntegrationTest {
     @Autowired PasswordEncoder passwords;
 
     private String value(String json, String key) {
-        var matcher=Pattern.compile("\\\"" + key + "\\\":\\\"([^\\\"]+)\\\"").matcher(json);
+        var matcher=Pattern.compile("\\"" + key + "\\":\\"([^\\"]+)\\"").matcher(json);
         assertTrue(matcher.find(), "Missing " + key);
         return matcher.group(1);
     }
@@ -55,7 +55,7 @@ class TableAdminIntegrationTest {
         jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",id,role);
         var res=mvc.perform(post("/api/v1/staff/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"login\\":\\"" + user + "\\",\\"password\\":\\"synthetic-only-secure-test\\"}"))
+            .content("{\"login\":\"" + user + "\",\"password\":\"synthetic-only-secure-test\"}"))
             .andReturn().getResponse();
         assertEquals(200,res.getStatus(),res.getContentAsString());
         return value(res.getContentAsString(),"accessToken");
@@ -67,8 +67,8 @@ class TableAdminIntegrationTest {
         var waiter=login("WAITER");
         String code="M7-" + UUID.randomUUID().toString().substring(0,8).toUpperCase();
         String alias=code.toLowerCase();
-        var body="{\\"tableCode\\":\\"" + code + "\\",\\"publicAlias\\":\\"" +
-            alias + "\\",\\"capacity\\":4}";
+        var body="{\"tableCode\":\"" + code + "\",\"publicAlias\":\"" +
+            alias + "\",\"capacity\":4}";
         assertEquals(401,mvc.perform(get("/api/v1/admin/tables"))
             .andReturn().getResponse().getStatus());
         assertEquals(403,mvc.perform(get("/api/v1/admin/tables")
@@ -95,7 +95,7 @@ class TableAdminIntegrationTest {
         var change=mvc.perform(patch("/api/v1/admin/tables/" + id)
             .header("Authorization","Bearer " + manager)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"capacity\\":6,\\"status\\":\\"OUT_OF_SERVICE\\"}"))
+            .content("{\"capacity\":6,\"status\":\"OUT_OF_SERVICE\"}"))
             .andReturn().getResponse();
         assertEquals(200,change.getStatus(),change.getContentAsString());
         assertEquals("OUT_OF_SERVICE",jdbc.queryForObject(
@@ -103,24 +103,24 @@ class TableAdminIntegrationTest {
         assertEquals(409,mvc.perform(post("/api/v1/waiter/table-visits")
             .header("Authorization","Bearer " + waiter)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"tableId\\":\\"" + id + "\\"}"))
+            .content("{\"tableId\":\"" + id + "\"}"))
             .andReturn().getResponse().getStatus());
 
         assertEquals(200,mvc.perform(patch("/api/v1/admin/tables/" + id)
             .header("Authorization","Bearer " + manager)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"capacity\\":6,\\"status\\":\\"AVAILABLE\\"}"))
+            .content("{\"capacity\":6,\"status\":\"AVAILABLE\"}"))
             .andReturn().getResponse().getStatus());
         var opened=mvc.perform(post("/api/v1/waiter/table-visits")
             .header("Authorization","Bearer " + waiter)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"tableId\\":\\"" + id + "\\"}"))
+            .content("{\"tableId\":\"" + id + "\"}"))
             .andReturn().getResponse();
         assertEquals(200,opened.getStatus(),opened.getContentAsString());
         assertEquals(409,mvc.perform(patch("/api/v1/admin/tables/" + id)
             .header("Authorization","Bearer " + manager)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"capacity\\":8,\\"status\\":\\"OUT_OF_SERVICE\\"}"))
+            .content("{\"capacity\":8,\"status\":\"OUT_OF_SERVICE\"}"))
             .andReturn().getResponse().getStatus());
         assertEquals(6,jdbc.queryForObject(
             "SELECT capacity FROM cafe_tables WHERE id=?",Integer.class,id));
@@ -134,9 +134,9 @@ class TableAdminIntegrationTest {
     void unsafeTableAliasesAndConfigurationAreRejected() throws Exception {
         var manager=login("ADMIN");
         for (String payload : new String[] {
-            "{\\"tableCode\\":\\"A 1\\",\\"publicAlias\\":\\"a-1\\",\\"capacity\\":2}",
-            "{\\"tableCode\\":\\"A1\\",\\"publicAlias\\":\\"../orders\\",\\"capacity\\":2}",
-            "{\\"tableCode\\":\\"A1\\",\\"publicAlias\\":\\"a1\\",\\"capacity\\":0}"
+            "{\"tableCode\":\"A 1\",\"publicAlias\":\"a-1\",\"capacity\":2}",
+            "{\"tableCode\":\"A1\",\"publicAlias\":\"../orders\",\"capacity\":2}",
+            "{\"tableCode\":\"A1\",\"publicAlias\":\"a1\",\"capacity\":0}"
         }) {
             assertEquals(400,mvc.perform(post("/api/v1/admin/tables")
                 .header("Authorization","Bearer " + manager)
