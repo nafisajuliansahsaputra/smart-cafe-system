@@ -111,6 +111,9 @@ export default async function CatalogPage({ searchParams }: {
               <label htmlFor="catalog-new-name">Nama produk</label>
               <input id="catalog-new-name" name="name" maxLength={120} required
                 placeholder="Contoh: Iced Latte"/>
+              <label htmlFor="catalog-new-description">Deskripsi singkat (opsional)</label>
+              <textarea id="catalog-new-description" name="description" maxLength={500}
+                rows={3} placeholder="Contoh: Espresso, susu segar, disajikan dingin"/>
               <label htmlFor="catalog-new-category">Kategori</label>
               <select id="catalog-new-category" name="categoryId" required
                 defaultValue={categories.find(item => item.active)?.id ?? categories[0]?.id}>

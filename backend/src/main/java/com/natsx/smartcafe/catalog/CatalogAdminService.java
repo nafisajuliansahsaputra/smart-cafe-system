@@ -18,7 +18,7 @@ public class CatalogAdminService {
 
     public record Category(UUID id,String name,String slug,boolean active) {}
     public record Item(UUID id,UUID categoryId,String name,long priceIdr,String availability,
-                       long revision) {}
+                       long revision,String description) {}
 
     @Transactional(readOnly=true)
     public List<Category> categories() {
@@ -54,33 +54,38 @@ public class CatalogAdminService {
     @Transactional(readOnly=true)
     public List<Item> items() {
         return jdbc.query("""
-            SELECT id,category_id,name,base_price_idr,availability,revision
+            SELECT id,category_id,name,base_price_idr,availability,revision,description
             FROM menu_items ORDER BY name,id LIMIT 500
             """,(rs,n)->readItem(rs));
     }
 
     @Transactional
-    public Item createItem(UUID categoryId,String name,long price,StaffPrincipal actor,String requestId) {
+    public Item createItem(UUID categoryId,String name,long price,String description,
+                           StaffPrincipal actor,String requestId) {
         checkName(name);
         checkPrice(price);
+        String safeDescription=validateDescription(description);
         if(categoryId==null)throw invalid("Category required");
         Integer category=jdbc.queryForObject("SELECT count(*) FROM menu_categories WHERE id=?",
             Integer.class,categoryId);
         if(category==null || category==0)throw missing();
         UUID id=UUID.randomUUID();
         jdbc.update("""
-            INSERT INTO menu_items(id,category_id,name,base_price_idr,availability)
-            VALUES (?,?,?,?,'HIDDEN')
-            """,id,categoryId,name.strip(),price);
+            INSERT INTO menu_items(id,category_id,name,description,base_price_idr,availability)
+            VALUES (?,?,?,?,?,'HIDDEN')
+            """,id,categoryId,name.strip(),
+            safeDescription == null || safeDescription.isEmpty() ? null : safeDescription,price);
         audit(actor,"MENU_ITEM_CREATED","MENU_ITEM",id,requestId);
         return detail(id);
     }
 
     @Transactional
     public Item changeItem(UUID id,UUID categoryId,String name,long price,String availability,
-                           long expectedRevision,StaffPrincipal actor,String requestId) {
+                           long expectedRevision,String description,
+                           StaffPrincipal actor,String requestId) {
         checkName(name);
         checkPrice(price);
+        String safeDescription=validateDescription(description);
         if(expectedRevision<1 || categoryId==null || availability==null ||
             !List.of("AVAILABLE","SOLD_OUT","HIDDEN").contains(availability))
             throw invalid("Invalid catalog update");
@@ -89,10 +94,14 @@ public class CatalogAdminService {
         if(category==null || category==0)throw missing();
         var edited=jdbc.query("""
             UPDATE menu_items
-            SET category_id=?,name=?,base_price_idr=?,availability=?,revision=revision+1
+            SET category_id=?,name=?,base_price_idr=?,availability=?,
+                description=CASE WHEN CAST(? AS text) IS NULL THEN description
+                                 ELSE NULLIF(CAST(? AS text), '') END,
+                revision=revision+1
             WHERE id=? AND revision=?
-            RETURNING id,category_id,name,base_price_idr,availability,revision
-            """,(rs,n)->readItem(rs),categoryId,name.strip(),price,availability,id,expectedRevision);
+            RETURNING id,category_id,name,base_price_idr,availability,revision,description
+            """,(rs,n)->readItem(rs),categoryId,name.strip(),price,availability,
+            safeDescription,safeDescription,id,expectedRevision);
         if(edited.isEmpty()){
             detail(id);
             throw conflict("Item was modified; refresh its revision");
@@ -104,7 +113,7 @@ public class CatalogAdminService {
     @Transactional(readOnly=true)
     public Item detail(UUID id) {
         var rows=jdbc.query("""
-            SELECT id,category_id,name,base_price_idr,availability,revision
+            SELECT id,category_id,name,base_price_idr,availability,revision,description
             FROM menu_items WHERE id=?
             """,(rs,n)->readItem(rs),id);
         if(rows.isEmpty())throw missing();
@@ -114,7 +123,8 @@ public class CatalogAdminService {
     private Item readItem(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Item(rs.getObject("id",UUID.class),rs.getObject("category_id",UUID.class),
             rs.getString("name"),rs.getLong("base_price_idr"),
-            rs.getString("availability"),rs.getLong("revision"));
+            rs.getString("availability"),rs.getLong("revision"),
+            rs.getString("description"));
     }
 
     private void audit(StaffPrincipal actor,String operation,String type,UUID id,String requestId) {
@@ -128,6 +138,16 @@ public class CatalogAdminService {
         if(name==null || name.isBlank() || name.strip().length()>120)
             throw invalid("Name is required (maximum 120 characters)");
     }
+    private String validateDescription(String description) {
+        if (description == null) return null; // existing clients may omit the optional field
+        String value = description.replace("\r\n", "\n").replace('\r', '\n').strip();
+        if (value.length() > 500 || value.codePoints()
+            .anyMatch(cp -> Character.isISOControl(cp) && cp != '\n')) {
+            throw invalid("Description exceeds 500 characters or contains control characters");
+        }
+        return value;
+    }
+
     private void checkPrice(long price) {
         if(price<0 || price>1_000_000_000L)
             throw invalid("Unit price is outside the allowed development range");

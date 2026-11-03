@@ -37,11 +37,13 @@ public class CatalogAdminController {
                                  @NotBlank String slug) {}
     public record CategoryToggle(@NotNull Boolean active) {}
     public record ItemCreate(@NotNull UUID categoryId,@NotBlank @Size(max=120) String name,
-                             @NotNull @PositiveOrZero Long priceIdr) {}
+                             @NotNull @PositiveOrZero Long priceIdr,
+                             @Size(max=500) String description) {}
     public record ItemEdit(@NotNull UUID categoryId,@NotBlank @Size(max=120) String name,
                            @NotNull @PositiveOrZero Long priceIdr,
                            @NotBlank String availability,
-                           @NotNull Long expectedRevision) {}
+                           @NotNull Long expectedRevision,
+                           @Size(max=500) String description) {}
 
     @GetMapping("/menu-categories")
     public ResponseEntity<ApiEnvelope<List<CatalogAdminService.Category>>> categories(HttpServletRequest req) {
@@ -94,7 +96,7 @@ public class CatalogAdminController {
         HttpServletRequest req) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(catalog.createItem(payload.categoryId(),payload.name(),
-                payload.priceIdr(),staff,RequestIdFilter.get(req)),RequestIdFilter.get(req)));
+                payload.priceIdr(),payload.description(),staff,RequestIdFilter.get(req)),RequestIdFilter.get(req)));
     }
 
     @PatchMapping("/menu-items/{id}")
@@ -104,6 +106,6 @@ public class CatalogAdminController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .body(ApiEnvelope.of(catalog.changeItem(id,payload.categoryId(),payload.name(),
                 payload.priceIdr(),payload.availability(),payload.expectedRevision(),
-                staff,RequestIdFilter.get(req)),RequestIdFilter.get(req)));
+                payload.description(),staff,RequestIdFilter.get(req)),RequestIdFilter.get(req)));
     }
 }

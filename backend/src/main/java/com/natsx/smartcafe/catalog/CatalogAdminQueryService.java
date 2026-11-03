@@ -44,7 +44,7 @@ public class CatalogAdminQueryService {
             WHERE """ + FILTER, Long.class, q, q, q, q);
         var items = jdbc.query("""
             SELECT m.id, m.category_id, m.name, m.base_price_idr,
-                   m.availability, m.revision
+                   m.availability, m.revision, m.description
             FROM menu_items m JOIN menu_categories c ON c.id=m.category_id
             WHERE """ + FILTER + """
             ORDER BY m.name, m.id
@@ -52,7 +52,8 @@ public class CatalogAdminQueryService {
             """, (rs, index) -> new CatalogAdminService.Item(
                 rs.getObject("id", UUID.class), rs.getObject("category_id", UUID.class),
                 rs.getString("name"), rs.getLong("base_price_idr"),
-                rs.getString("availability"), rs.getLong("revision")),
+                rs.getString("availability"), rs.getLong("revision"),
+                rs.getString("description")),
             q, q, q, q, PAGE_SIZE + 1, page * PAGE_SIZE);
         boolean hasNext = items.size() > PAGE_SIZE;
         return new ItemPage(page, PAGE_SIZE, count == null ? 0 : count, hasNext,

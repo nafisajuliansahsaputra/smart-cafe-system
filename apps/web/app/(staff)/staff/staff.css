@@ -12,7 +12,7 @@
 .staff-panel-header p { margin: 0; }
 .staff-form { display: grid; gap: 12px; margin-top: 20px; }
 .staff-form label, .staff-filters label, .staff-reject-form label { font-weight: 700; font-size: .89rem; }
-.staff-shell input, .staff-shell select { border: 1px solid #9aa7b0; border-radius: 9px; font: inherit; padding: 11px 12px; min-height: 46px; background: #fff; color: #192329; width: 100%; }
+.staff-shell input, .staff-shell select, .staff-shell textarea { border: 1px solid #9aa7b0; border-radius: 9px; font: inherit; padding: 11px 12px; min-height: 46px; background: #fff; color: #192329; width: 100%; }
 .staff-shell button, .staff-link-button { display: inline-flex; justify-content: center; align-items: center; cursor: pointer; text-decoration: none; font: inherit; font-weight: 700; padding: 11px 17px; min-height: 46px; border-radius: 9px; }
 .staff-primary, .staff-link-button { background: #163c48; color: #fff; border: 1px solid #163c48; }
 .staff-secondary { background: #fff; color: #192329; border: 1px solid #a2b0b7; }

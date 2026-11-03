@@ -815,3 +815,14 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
 - [ ] Verify exact-head source and integration CI plus human review before
   merging; hosted staging, real merchant QRIS/VA, approved receipt sender,
   true-device accessibility and incident rehearsals remain release blockers.
+
+### M7 customer product descriptions (stacked draft)
+- [x] Enable optional PostgreSQL-backed product description create/edit with
+  revision control and safe length/content validation.
+- [x] Return description on public menu listings and show it in guest menu
+  cards and item detail before order confirmation.
+- [x] Preserve description on omitted legacy API updates; explicit empty
+  edit clears it; test role isolation, guest visibility and browser edits.
+- [ ] Verify exact-head CI, real-device display and editorial menu copy.
+- [ ] Add authorized product-image management and independently reviewed
+  allergen/ingredient information before real-cafe production.

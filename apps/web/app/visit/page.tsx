@@ -58,6 +58,7 @@ export default async function VisitPage({ searchParams }: {
           <div className="guest-menu-grid">{menu.data.filter((i) => i.category === category).map((item) => (
             <article className="guest-panel guest-menu-card" key={item.id}>
               <div><h3>{item.name}</h3>
+                {item.description && <p className="guest-menu-description">{item.description}</p>}
                 <p className="guest-price">{idr(item.priceIdr)} <span>harga mulai</span></p>
                 {item.remainingQuantity !== null && <small>Sisa {item.remainingQuantity} porsi</small>}
               </div>

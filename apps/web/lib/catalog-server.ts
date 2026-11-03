@@ -6,6 +6,7 @@ export type MenuCategory = { id: string; name: string; slug: string; active: boo
 export type MenuItem = {
   id: string; categoryId: string; name: string; priceIdr: number;
   availability: "AVAILABLE" | "SOLD_OUT" | "HIDDEN"; revision: number;
+  description: string | null;
 };
 export type MenuStock = { itemId: string; available: boolean; limitedQuantity: number | null; version: number };
 export type MenuOption = {
@@ -33,6 +34,8 @@ const isCategory = (v: unknown): v is MenuCategory =>
 const isItem = (v: unknown): v is MenuItem =>
   object(v) && uuid(v.id) && uuid(v.categoryId) && typeof v.name === "string" &&
   number(v.priceIdr) && number(v.revision) &&
+  (v.description === null || typeof v.description === "string" &&
+    v.description.length <= 500) &&
   ["AVAILABLE", "SOLD_OUT", "HIDDEN"].includes(String(v.availability));
 const isStock = (v: unknown): v is MenuStock =>
   object(v) && uuid(v.itemId) && typeof v.available === "boolean" &&

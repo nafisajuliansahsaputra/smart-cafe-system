@@ -82,3 +82,25 @@ reconciliation, opt-in phone receipt dispatch and sender approval,
 production-grade hosted HTTPS isolation and backups, accessibility
 testing on physical devices, and staged operator pilot/recovery drills.
 A static showcase landing is not a substitute for any of these.
+
+## Menu descriptions for real guest ordering (stacked follow-up)
+
+The existing PostgreSQL `menu_items.description` field is now used across
+manager create/edit, the public available-menu API and customer list/detail
+screens. Managers can enter up to 500 characters; server validation permits
+newlines but rejects other control characters. React displays this as text,
+not HTML. No third-party CMS, external image URL or database migration is
+introduced.
+
+Descriptions do not affect totals, pricing snapshots, stock checks,
+modifiers or receipt generation. They are versioned together with item
+edits and audited using the existing item-change event; stale revisions
+are rejected. A missing description field from an older PATCH client
+preserves current text, while an explicit empty string clears it. An
+unpublished/sold-out item still obeys the preexisting customer visibility
+rules. Testcontainers and browser acceptance verify persistence, redaction,
+role denial, backend description projection and edits.
+
+Product imagery, real-device readability and verified allergen warnings
+remain separate future work. A description is not a medical allergen
+guarantee.

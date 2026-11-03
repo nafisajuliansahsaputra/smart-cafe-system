@@ -12,6 +12,12 @@ function field(form: FormData, key: string, max: number): string | null {
   if (typeof v !== "string" || v.length > max || /[\x00-\x1f\x7f]/.test(v)) return null;
   return v.trim();
 }
+function description(form: FormData): string | null {
+  const value = form.get("description");
+  if (typeof value !== "string") return null;
+  const clean = value.replace(/\r\n?/g, "\n").trim();
+  return clean.length <= 500 && !/[\x00-\x09\x0b-\x1f\x7f]/.test(clean) ? clean : null;
+}
 function label(form: FormData, key: string, max: number): string | null {
   const v = field(form, key, max);
   return v && v.length <= max ? v : null;
@@ -82,11 +88,13 @@ export async function createItem(form: FormData): Promise<never> {
   const categoryId = id(form, "categoryId");
   const name = label(form, "name", 120);
   const priceIdr = int(form, "priceIdr", 0, 1_000_000_000);
-  if (!categoryId || !name || priceIdr === null || !yes(form, "confirm")) {
+  const itemDescription = description(form);
+  if (!categoryId || !name || priceIdr === null || itemDescription === null ||
+      !yes(form, "confirm")) {
     fail(location(), "invalid");
   }
   return commit(location(), "/api/v1/admin/menu-items", "POST",
-    { categoryId, name, priceIdr }, "item-created");
+    { categoryId, name, priceIdr, description: itemDescription }, "item-created");
 }
 export async function editItem(form: FormData): Promise<never> {
   const itemId = id(form, "itemId");
@@ -97,11 +105,13 @@ export async function editItem(form: FormData): Promise<never> {
   const priceIdr = int(form, "priceIdr", 0, 1_000_000_000);
   const expectedRevision = int(form, "expectedRevision", 1, Number.MAX_SAFE_INTEGER);
   const availability = field(form, "availability", 10);
+  const itemDescription = description(form);
   if (!categoryId || !name || priceIdr === null || expectedRevision === null ||
+      itemDescription === null ||
       !["AVAILABLE", "SOLD_OUT", "HIDDEN"].includes(availability ?? "") ||
       !yes(form, "confirm")) fail(target, "invalid");
   return commit(target, "/api/v1/admin/menu-items/" + itemId, "PATCH",
-    { categoryId, name, priceIdr, availability, expectedRevision }, "item-updated");
+    { categoryId, name, priceIdr, availability, expectedRevision, description: itemDescription }, "item-updated");
 }
 export async function updateStock(form: FormData): Promise<never> {
   const itemId = id(form, "itemId");
