@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { isMenuImageUrl } from "@/lib/menu-images";
 
 export const GUEST_COOKIE = "scs_guest_session";
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -9,7 +10,7 @@ export const TABLE_ALIAS = /^[a-zA-Z0-9_-]{1,120}$/;
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number };
 export type GuestVisit = { guestId: string; visitId: string; tableCode: string; displayName: string };
 export type TableEntry = { tableCode: string; activeVisit: boolean };
-export type MenuItem = { id: string; name: string; category: string; priceIdr: number; remainingQuantity: number | null; description: string | null };
+export type MenuItem = { id: string; name: string; category: string; priceIdr: number; remainingQuantity: number | null; description: string | null; imageUrl: string | null };
 export type VariantOption = { id: string; label: string; priceDeltaIdr: number };
 export type VariantGroup = { id: string; name: string; required: boolean; options: VariantOption[] };
 export type CartLine = {
@@ -124,7 +125,8 @@ function isMenuItem(data: unknown): data is MenuItem {
     typeof data.category === "string" && isNonnegativeMoney(data.priceIdr) &&
     nullableQuantity(data.remainingQuantity) &&
     (data.description === null || typeof data.description === "string" &&
-      data.description.length <= 500);
+      data.description.length <= 500) &&
+    (data.imageUrl === null || isMenuImageUrl(data.imageUrl));
 }
 export function getMenu(): Promise<Result<MenuItem[]>> {
   return getData("/api/v1/menu", (data): data is MenuItem[] =>
