@@ -826,3 +826,13 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
 - [ ] Verify exact-head CI, real-device display and editorial menu copy.
 - [ ] Add authorized product-image management and independently reviewed
   allergen/ingredient information before real-cafe production.
+
+### M7 guest menu search and category navigation (stacked draft)
+- [x] Add browser search across published, available menu names,
+  categories and descriptions, keeping payment/cart backend authority.
+- [x] Add keyboard-friendly category filters, visible result count,
+  clear/reset controls and no-match state without browser storage.
+- [x] Integrate actual guest join, 320px responsive search and synthetic
+  screenshot into the full cash-to-receipt Playwright acceptance.
+- [ ] Verify source exact-head and candidate-to-main CI, physical
+  QR/NFC device UX, screen readers and human release review.
