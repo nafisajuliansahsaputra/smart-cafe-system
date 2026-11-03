@@ -84,7 +84,7 @@ export async function catalogListing(page: number, q: string): Promise<CatalogRe
   categories: MenuCategory[]; listing: MenuItemPage;
 }>> {
   if (!Number.isInteger(page) || page < 0 || page > 1000 ||
-    q.length > 80 || /[\\x00-\\x1f\\x7f]/.test(q)) {
+    q.length > 80 || /[\x00-\x1f\x7f]/.test(q)) {
     return { ok: false, status: 400 };
   }
   const token = await staffToken();
