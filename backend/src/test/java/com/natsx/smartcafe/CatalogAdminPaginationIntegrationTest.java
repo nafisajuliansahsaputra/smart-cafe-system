@@ -96,7 +96,11 @@ class CatalogAdminPaginationIntegrationTest {
         assertTrue(list(token,0,"hidden").path("total").asInt() >= 505);
 
         jdbc.update("INSERT INTO menu_items(id,category_id,name,base_price_idr) VALUES (?,?,?,?)",
-            UUID.randomUUID(),prefix + "_SPECIAL",category,10000);
+            UUID.randomUUID(),category,prefix + "_SPECIAL",10000);
+        JsonNode literal=list(token,0,"_SPECIAL");
+        assertEquals(1,literal.path("total").asInt());
+        assertEquals(prefix + "_SPECIAL",literal.path("items").get(0).path("name").asText());
+        assertEquals(0,list(token,0,"%").path("total").asInt());
     }
 
     @Test
