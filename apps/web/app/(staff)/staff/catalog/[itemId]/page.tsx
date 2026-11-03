@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { catalogItemDetail, catalogCategories } from "@/lib/catalog-server";
+import { MenuPhoto } from "@/components/menu-photo";
 import { idr, staffIdentity } from "@/lib/staff-server";
 import {
   createGroup, createOption, editGroup, editItem, editOption, updateStock,
@@ -77,6 +78,14 @@ export default async function CatalogItemPage({ params, searchParams }: {
           <textarea id="catalog-edit-description" name="description" maxLength={500}
             rows={3} defaultValue={item.description ?? ""}
             placeholder="Bahan utama atau rasa yang membantu pelanggan memilih"/>
+          {item.imageUrl && <MenuPhoto src={item.imageUrl} name={item.name}
+            className="staff-menu-edit-photo" />}
+          <label htmlFor="catalog-edit-image">URL foto produk (Cloudinary)</label>
+          <input id="catalog-edit-image" name="imageUrl" type="url" maxLength={700}
+            defaultValue={item.imageUrl ?? ""}
+            placeholder="https://res.cloudinary.com/.../image/upload/...jpg" />
+          <small className="staff-muted">Tautan HTTPS akun Cloudinary yang disetujui.
+            Kosongkan untuk menghapus foto. Perubahan dicatat bersama revisi item.</small>
           <label htmlFor="catalog-edit-category">Kategori</label>
           <select id="catalog-edit-category" name="categoryId" required defaultValue={item.categoryId}>
             {categories.map(category => <option key={category.id} value={category.id}>
