@@ -97,6 +97,19 @@ class TableRegistryPaginationIntegrationTest {
         assertEquals(0,afterLast.path("items").size());
         assertFalse(afterLast.path("hasNext").asBoolean());
 
+        // Explicitly exceed the old 250-table waiter-board cap, then prove the
+        // final manager page and QR batch are still reachable through the API.
+        for (int i=29;i<=253;i++) {
+            String code=group + "-" + String.format(Locale.ROOT,"%03d",i);
+            jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
+                UUID.randomUUID(), code,code.toLowerCase(Locale.ROOT),4);
+        }
+        var beyondLimit=page(manager,10,group);
+        assertEquals(253,beyondLimit.path("total").asInt());
+        assertEquals(3,beyondLimit.path("items").size());
+        assertFalse(beyondLimit.path("hasNext").asBoolean());
+        assertTrue(beyondLimit.path("items").get(2).path("tableCode").asText().endsWith("-253"));
+
         jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
             UUID.randomUUID(),group + "_SPECIAL",group.toLowerCase(Locale.ROOT) + "-special",4);
         var literal=page(manager,0,"_SPECIAL");
