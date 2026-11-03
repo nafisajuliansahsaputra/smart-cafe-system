@@ -155,3 +155,11 @@
   .staff-catalog-details { padding: 10px; }
   .staff-catalog-variant { padding: 13px; }
 }
+
+/* Only the authorized print studio is stripped down for physical A4 signage. */
+@media print {
+  .scs-qr-print.staff-shell { max-width: none; margin: 0; padding: 0; }
+  .scs-qr-print .staff-header,
+  .scs-qr-print .staff-breadcrumb,
+  .scs-qr-print .staff-notice { display: none !important; }
+}
