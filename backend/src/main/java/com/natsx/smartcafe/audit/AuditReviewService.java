@@ -50,7 +50,7 @@ public class AuditReviewService {
                    OR lower(a.resource_type) LIKE ? ESCAPE '!'
                    OR lower(COALESCE(s.login, a.actor_type)) LIKE ? ESCAPE '!'
                 """;
-            String pattern = "%" + keyword + "%";
+            String pattern = "%" + keyword.replace("_", "!_") + "%";
             params.add(pattern);
             params.add(pattern);
             params.add(pattern);
