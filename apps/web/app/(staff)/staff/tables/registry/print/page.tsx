@@ -63,7 +63,7 @@ export default async function PrintableTableQrs({ searchParams }: {
         {q && <Link href="/staff/tables/registry/print">Reset</Link>}
       </div>
     </form>
-    <QrPrintStudio tables={printable.map((table) => ({
+    <QrPrintStudio key={page + ':' + q} tables={printable.map((table) => ({
       tableId: table.tableId, tableCode: table.tableCode, publicAlias: table.publicAlias,
     }))}/>
     <nav className="staff-breadcrumb" aria-label="Halaman batch QR">
