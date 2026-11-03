@@ -43,7 +43,7 @@ jobs:
         working-directory: backend
         run: mvn -B -ntp verify
   upgrade-rehearsal:
-    name: V27 to V30 / existing-data PostgreSQL upgrade rehearsal
+    name: V27 to V31 / existing-data PostgreSQL upgrade rehearsal
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -60,7 +60,7 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: Run isolated historical-data migration regression
         working-directory: backend
-        run: mvn -B -ntp -Dtest=LegacyUpgradeToV30IntegrationTest test
+        run: mvn -B -ntp -Dtest=LegacyUpgradeToV31IntegrationTest test
 
   web:
     name: Next.js lint / types / build
