@@ -247,3 +247,10 @@ Authenticated backend cursor waits now use cancellation-aware Servlet DeferredRe
 ## M4 Physical Game Loans (Draft PR #19)
 
 Guests can request physical UNO/board-game types during an active QR/NFC table visit. Staff assign a serialized copy, confirm code at physical handover and inspected return; outstanding requests and units block table close even after payment. Unique PostgreSQL constraints prevent allocating the same unit twice. Manager/admin can register game types and copies. First vertical slice is **free of fees/deposits**, with manual refresh; damages/losses and live notifications remain future work. See [M4 game loans](docs/M4-PHYSICAL-GAME-LOANS.md).
+
+### Guest menu discovery (stacked draft)
+The authenticated operational `/visit` menu supports immediate
+search and category filtering on real server-confirmed available
+products, with mobile no-result and reset controls. It is not
+the isolated `/showcase` client-only demonstration. Checkout
+still recalculates stock and totals server-side.
