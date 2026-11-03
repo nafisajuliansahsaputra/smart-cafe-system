@@ -96,3 +96,9 @@
 @media print {
   .guest-menu-discovery { display: none !important; }
 }
+
+.menu-photo { display: block; width: 100%; max-width: 100%; height: auto;
+  aspect-ratio: 4 / 3; object-fit: cover; background: #edf3ef;
+  border: 1px solid #d7e0df; border-radius: 12px; }
+.guest-menu-card-photo { margin: 0 0 16px; }
+.guest-menu-detail-photo { margin: 14px 0 20px; }
