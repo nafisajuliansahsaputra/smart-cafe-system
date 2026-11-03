@@ -9,7 +9,7 @@ export const TABLE_ALIAS = /^[a-zA-Z0-9_-]{1,120}$/;
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number };
 export type GuestVisit = { guestId: string; visitId: string; tableCode: string; displayName: string };
 export type TableEntry = { tableCode: string; activeVisit: boolean };
-export type MenuItem = { id: string; name: string; category: string; priceIdr: number; remainingQuantity: number | null };
+export type MenuItem = { id: string; name: string; category: string; priceIdr: number; remainingQuantity: number | null; description: string | null };
 export type VariantOption = { id: string; label: string; priceDeltaIdr: number };
 export type VariantGroup = { id: string; name: string; required: boolean; options: VariantOption[] };
 export type CartLine = {
@@ -122,7 +122,9 @@ export function getTableEntry(alias: string): Promise<Result<TableEntry>> {
 function isMenuItem(data: unknown): data is MenuItem {
   return isRecord(data) && isId(data.id) && typeof data.name === "string" &&
     typeof data.category === "string" && isNonnegativeMoney(data.priceIdr) &&
-    nullableQuantity(data.remainingQuantity);
+    nullableQuantity(data.remainingQuantity) &&
+    (data.description === null || typeof data.description === "string" &&
+      data.description.length <= 500);
 }
 export function getMenu(): Promise<Result<MenuItem[]>> {
   return getData("/api/v1/menu", (data): data is MenuItem[] =>
