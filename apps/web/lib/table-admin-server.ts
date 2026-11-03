@@ -19,7 +19,8 @@ function validTable(item: unknown): item is AdminTable {
   if (!item || typeof item !== "object" || Array.isArray(item)) return false;
   const t = item as Record<string, unknown>;
   return typeof t.id === "string" && UUID.test(t.id) &&
-    typeof t.tableCode === "string" && /^[A-Z0-9][A-Z0-9-]{0,39}$/.test(t.tableCode) &&
+    typeof t.tableCode === "string" && t.tableCode.length > 0 &&
+    t.tableCode.length <= 40 && !/[\x00-\x1f\x7f]/.test(t.tableCode) &&
     typeof t.publicAlias === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t.publicAlias) &&
     typeof t.capacity === "number" && Number.isInteger(t.capacity) &&
     t.capacity >= 1 && t.capacity <= 100 &&
