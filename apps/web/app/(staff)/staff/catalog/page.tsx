@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { catalogOverview } from "@/lib/catalog-server";
+import { catalogListing } from "@/lib/catalog-server";
 import { idr, staffIdentity } from "@/lib/staff-server";
 import { createCategory, createItem, toggleCategory } from "./actions";
 
@@ -28,24 +28,21 @@ export default async function CatalogPage({ searchParams }: {
     <Link href="/staff">Kembali</Link>
   </main>;
   if (!identity.staff.roles.some(r => r === "ADMIN" || r === "MANAGER")) notFound();
-  const result = await catalogOverview();
-  if (!result.ok && result.status === 401) redirect("/staff/login?status=expired");
   const query = await searchParams;
+  const search = typeof query.q === "string" ? query.q.trim() : "";
+  const validPage = typeof query.page === "undefined" ||
+    /^(0|[1-9][0-9]{0,3})$/.test(query.page);
+  const requested = validPage ? Number(query.page ?? "0") : -1;
+  const result = await catalogListing(requested, search);
+  if (!result.ok && result.status === 401) redirect("/staff/login?status=expired");
   const notice = typeof query.notice === "string" && Object.hasOwn(notices, query.notice)
     ? notices[query.notice] : null;
-  const search = typeof query.q === "string" ? query.q.trim().slice(0, 80) : "";
-  const requested = typeof query.page === "string" && /^(0|[1-9]\d{0,3})$/.test(query.page)
-    ? Math.min(999, Number(query.page)) : 0;
   const categories = result.ok ? result.data.categories : [];
-  const all = result.ok ? result.data.items : [];
-  const filtered = all.filter(item => {
-    const category = categories.find(entry => entry.id === item.categoryId);
-    return !search || [item.name, category?.name ?? "", item.availability]
-      .some(value => value.toLocaleLowerCase("id-ID").includes(search.toLocaleLowerCase("id-ID")));
-  });
-  const pageSize = 20;
-  const page = Math.min(requested, Math.max(0, Math.ceil(filtered.length / pageSize) - 1));
-  const visible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const listing = result.ok ? result.data.listing : null;
+  const visible = listing?.items ?? [];
+  const page = listing?.page ?? 0;
+  const total = listing?.total ?? 0;
+  const hasNext = listing?.hasNext ?? false;
   const searchQuery = (n: number) => "/staff/catalog?" + new URLSearchParams({
     ...(search ? { q: search } : {}), page: String(n),
   }).toString();
@@ -64,8 +61,9 @@ export default async function CatalogPage({ searchParams }: {
         query.notice?.endsWith("updated") ? "status" : "alert"}>{notice}</p>}
     {!result.ok && <section className="staff-panel" role="alert">
       <h2>Data katalog tidak tersedia</h2>
-      <p>Server belum mengonfirmasi daftar kategori dan produk. Tindakan dinonaktifkan,
-        bukan menganggap katalog kosong.</p>
+      <p>{result.status === 400
+        ? "Format pencarian atau halaman tidak valid. Gunakan maksimal 80 karakter."
+        : "Server belum mengonfirmasi daftar kategori dan produk. Tindakan dinonaktifkan, bukan menganggap katalog kosong."}</p>
     </section>}
 
     {result.ok && <>
@@ -130,12 +128,13 @@ export default async function CatalogPage({ searchParams }: {
           </details>}
       </section>
       <section className="staff-panel" aria-labelledby="catalog-items-title">
-        <h2 id="catalog-items-title">Daftar produk ({all.length})</h2>
-        <p className="staff-muted">Harga dan status berasal langsung dari backend;
-          maksimum 500 produk ditampilkan oleh API saat ini.</p>
+        <h2 id="catalog-items-title">Daftar produk ({total})</h2>
+        <p className="staff-muted">Pencarian dan pagination dilakukan langsung di
+          PostgreSQL. Setiap halaman menampilkan paling banyak 20 produk,
+          termasuk item yang berada di luar 500 produk pertama.</p>
         <form method="GET" className="staff-catalog-search">
           <label htmlFor="catalog-search">Cari produk, kategori atau status</label>
-          <div><input id="catalog-search" type="search" name="q" value={search}
+          <div><input id="catalog-search" type="search" name="q" defaultValue={search.slice(0, 80)}
             placeholder="Cari nama produk" maxLength={80}/>
             <button className="staff-secondary" type="submit">Cari</button>
             {search && <Link href="/staff/catalog">Reset</Link>}
@@ -156,8 +155,8 @@ export default async function CatalogPage({ searchParams }: {
           </table></div>}
         <nav className="staff-breadcrumb" aria-label="Halaman katalog">
           {page > 0 && <Link href={searchQuery(page - 1)}>Sebelumnya</Link>}
-          <span>Halaman {page + 1} dari {Math.max(1, Math.ceil(filtered.length / pageSize))}</span>
-          {(page + 1) * pageSize < filtered.length &&
+          <span>Halaman {page + 1} dari {Math.max(1, Math.ceil(total / 20))}</span>
+          {hasNext && page < 1000 &&
             <Link href={searchQuery(page + 1)}>Selanjutnya</Link>}
         </nav>
       </section>
