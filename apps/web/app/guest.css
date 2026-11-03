@@ -63,3 +63,6 @@
 
 .guest-live-line { margin: 10px 0 16px; }
 .guest-live-line .staff-live-indicator { display: inline-block; font-size: .8rem; font-weight: 600; padding: 6px 12px; border: 1px solid currentColor; border-radius: 999px; }
+
+.guest-menu-description { color: #44545b; font-size: .94rem; line-height: 1.6;
+  white-space: pre-line; overflow-wrap: anywhere; margin: 8px 0 12px; }
