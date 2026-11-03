@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MenuItem } from "@/lib/guest-server";
 
-const ALL = "Semua menu";
 const rupiah = new Intl.NumberFormat("id-ID", {
   style: "currency", currency: "IDR", maximumFractionDigits: 0,
 });
@@ -15,13 +14,13 @@ const rupiah = new Intl.NumberFormat("id-ID", {
  */
 export default function GuestMenuBrowser({ items }: { items: MenuItem[] }) {
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState(ALL);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const categories = useMemo(() =>
     Array.from(new Set(items.map((item) => item.category))), [items]);
   const filtered = useMemo(() => {
     const words = query.trim().toLocaleLowerCase("id-ID").split(/\s+/).filter(Boolean);
     return items.filter((item) => {
-      if (activeCategory !== ALL && item.category !== activeCategory) return false;
+      if (activeCategory !== null && item.category !== activeCategory) return false;
       const haystack = [item.name, item.category, item.description ?? ""]
         .join(" ").toLocaleLowerCase("id-ID");
       return words.every((word) => haystack.includes(word));
@@ -46,8 +45,8 @@ export default function GuestMenuBrowser({ items }: { items: MenuItem[] }) {
         </div>
         <div className="guest-category-tabs" role="group" aria-label="Filter kategori menu">
           <button type="button" className="guest-category-filter"
-            aria-pressed={activeCategory === ALL}
-            onClick={() => setActiveCategory(ALL)}>
+            aria-pressed={activeCategory === null}
+            onClick={() => setActiveCategory(null)}>
             Semua menu
           </button>
           {categories.map((category) => <button key={category} type="button"
@@ -59,7 +58,7 @@ export default function GuestMenuBrowser({ items }: { items: MenuItem[] }) {
         </div>
         <p className="guest-menu-count" role="status" aria-live="polite">
           {filtered.length} dari {items.length} menu tersedia
-          {activeCategory !== ALL ? ` · ${activeCategory}` : ""}
+          {activeCategory !== null ? ` · ${activeCategory}` : ""}
         </p>
       </section>
 
@@ -70,7 +69,7 @@ export default function GuestMenuBrowser({ items }: { items: MenuItem[] }) {
             dapat dipesan berdasarkan stok server yang ditampilkan.</p>
           <button className="guest-secondary" type="button" onClick={() => {
             setQuery("");
-            setActiveCategory(ALL);
+            setActiveCategory(null);
           }}>Tampilkan semua menu</button>
         </section>
       ) : shownCategories.map((category) => (
