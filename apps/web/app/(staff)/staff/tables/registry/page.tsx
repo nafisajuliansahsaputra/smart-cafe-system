@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { staffIdentity, staffTables } from "@/lib/staff-server";
+import { staffIdentity } from "@/lib/staff-server";
+import { tableRegistry } from "@/lib/table-registry-server";
 import { createTable, editTable } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ const messages: Record<string, string> = {
   offline: "Penyimpanan belum dapat dikonfirmasi. Periksa daftar sebelum mencoba lagi.",
 };
 export default async function TableRegistry({ searchParams }: {
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; q?: string; page?: string }>;
 }) {
   const identity = await staffIdentity();
   if (identity.kind === "signed-out") redirect("/staff/login?status=expired");
@@ -25,8 +26,15 @@ export default async function TableRegistry({ searchParams }: {
     <Link href="/staff/tables">Kembali</Link>
   </main>;
   if (!identity.staff.roles.some(role => role === "MANAGER" || role === "ADMIN")) notFound();
-  const [result, query] = await Promise.all([staffTables(), searchParams]);
+  const query = await searchParams;
+  const q = typeof query.q === "string" ? query.q.trim() : "";
+  const validPage = typeof query.page === "undefined" ||
+    /^(0|[1-9][0-9]{0,3})$/.test(query.page);
+  const page = validPage ? Number(query.page ?? "0") : -1;
+  const result = await tableRegistry(page, q);
   if (!result.ok && result.status === 401) redirect("/staff/login?status=expired");
+  const pageUrl = (n: number) => "/staff/tables/registry?" +
+    new URLSearchParams({ page: String(n), ...(q ? { q } : {}) }).toString();
   const notice = query.notice && Object.hasOwn(messages, query.notice) ? messages[query.notice] : null;
 
   return <main className="staff-shell staff-wide">
@@ -42,7 +50,9 @@ export default async function TableRegistry({ searchParams }: {
       ? "status" : "alert"}>{notice}</p>}
     {!result.ok ? <section className="staff-panel" role="alert">
       <h2>Inventaris belum dapat dimuat</h2>
-      <p>Gagal memverifikasi data dari backend. Penambahan dan perubahan meja dinonaktifkan.</p>
+      <p>{result.status === 400
+        ? "Pencarian tidak valid. Gunakan huruf, angka, garis bawah, atau tanda hubung."
+        : "Gagal memverifikasi data dari backend. Penambahan dan perubahan meja dinonaktifkan."}</p>
     </section> : <>
       <section className="staff-panel" aria-labelledby="registry-create-heading">
         <h2 id="registry-create-heading">Tambah meja fisik</h2>
@@ -66,11 +76,23 @@ export default async function TableRegistry({ searchParams }: {
         </form>
       </section>
       <section className="staff-panel" aria-labelledby="registry-list-heading">
-        <h2 id="registry-list-heading">Daftar meja ({result.data.length})</h2>
+        <h2 id="registry-list-heading">Daftar meja ({result.data.total})</h2>
         <p className="staff-muted">Menonaktifkan meja yang memiliki kunjungan aktif akan ditolak
           oleh backend, sekalipun status halaman belum sempat diperbarui.</p>
-        {result.data.length === 0 ? <p role="status">Belum ada meja.</p> :
-          <div className="staff-task-grid">{result.data.map(table => <article
+        <form method="GET" className="staff-catalog-search">
+          <label htmlFor="table-registry-search">Cari kode meja atau alias publik</label>
+          <div>
+            <input id="table-registry-search" name="q" type="search"
+              defaultValue={q.slice(0, 60)} maxLength={60}
+              pattern="[A-Za-z0-9_-]*" placeholder="Contoh: VIP-03"/>
+            <button type="submit" className="staff-secondary">Cari meja</button>
+            {q && <Link href="/staff/tables/registry">Reset</Link>}
+          </div>
+        </form>
+        <p className="staff-muted">Halaman {result.data.page + 1}, maksimum
+          {result.data.pageSize} meja per halaman.</p>
+        {result.data.items.length === 0 ? <p role="status">Tidak ada meja yang cocok.</p> :
+          <div className="staff-task-grid">{result.data.items.map(table => <article
             className="staff-panel staff-task-card" key={table.tableId}>
             <div className="staff-task-head"><h3>Meja {table.tableCode}</h3><strong>
               {table.tableStatus === "AVAILABLE" ? "TERSEDIA" : "NONAKTIF"}
@@ -100,6 +122,15 @@ export default async function TableRegistry({ searchParams }: {
               <button type="submit" className="staff-secondary">Simpan status / kapasitas</button>
             </form>
           </article>)}</div>}
+        <nav className="staff-breadcrumb" aria-label="Halaman inventaris">
+          {result.data.page > 0 && <Link className="staff-link-button"
+            href={pageUrl(result.data.page - 1)}>Halaman sebelumnya</Link>}
+          <span>Halaman {result.data.page + 1}</span>
+          {result.data.hasNext && result.data.page < 1000 &&
+            <Link className="staff-link-button" href={pageUrl(result.data.page + 1)}>
+              Halaman berikutnya
+            </Link>}
+        </nav>
       </section>
     </>}
     <p className="staff-footnote">Link QR/NFC bukan kredensial. Setelah waiter
