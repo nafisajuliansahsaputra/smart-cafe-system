@@ -163,3 +163,7 @@
   .scs-qr-print .staff-breadcrumb,
   .scs-qr-print .staff-notice { display: none !important; }
 }
+
+@media print {
+  .scs-qr-print .scs-qr-studio-search { display: none !important; }
+}
