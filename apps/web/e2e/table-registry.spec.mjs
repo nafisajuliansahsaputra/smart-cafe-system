@@ -38,7 +38,7 @@ test("manager creates a physical table and cannot disable it during a live visit
     await expect(card.getByRole("link", { name: "/t/e2e-m7" })).toHaveAttribute("href", "/t/e2e-m7");
 
     await card.getByLabel("Kapasitas", { exact: true }).fill("6");
-    await card.getByLabel("Status").selectOption("OUT_OF_SERVICE");
+    await card.getByLabel("Status", { exact: true }).selectOption("OUT_OF_SERVICE");
     await card.getByRole("checkbox", { name: /Saya telah memeriksa status meja/ }).check();
     await card.getByRole("button", { name: "Simpan status / kapasitas" }).click();
     await expect(manager.page.getByText("Kapasitas atau status meja berhasil diperbarui.")).toBeVisible();
@@ -46,7 +46,7 @@ test("manager creates a physical table and cannot disable it during a live visit
     await expect(updated).toContainText("Kapasitas: 6");
     await expect(updated).toContainText("NONAKTIF");
 
-    await updated.getByLabel("Status").selectOption("AVAILABLE");
+    await updated.getByLabel("Status", { exact: true }).selectOption("AVAILABLE");
     await updated.getByRole("checkbox", { name: /Saya telah memeriksa status meja/ }).check();
     await updated.getByRole("button", { name: "Simpan status / kapasitas" }).click();
     await expect(manager.page.locator(".staff-task-card").filter({
@@ -69,7 +69,7 @@ test("manager creates a physical table and cannot disable it during a live visit
     const managerCard = manager.page.locator(".staff-task-card").filter({
       hasText: "Meja E2E-M7",
     });
-    await managerCard.getByLabel("Status").selectOption("OUT_OF_SERVICE");
+    await managerCard.getByLabel("Status", { exact: true }).selectOption("OUT_OF_SERVICE");
     await managerCard.getByRole("checkbox", { name: /Saya telah memeriksa status meja/ }).check();
     await managerCard.getByRole("button", { name: "Simpan status / kapasitas" }).click();
     await expect(manager.page.getByText(/meja masih dipakai/)).toBeVisible();
