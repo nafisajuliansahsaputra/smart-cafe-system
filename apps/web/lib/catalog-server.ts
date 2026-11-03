@@ -26,7 +26,7 @@ const object = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const uuid = (v: unknown) => typeof v === "string" &&
   /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v);
-const number = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v);
+const number = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v);
 const isCategory = (v: unknown): v is MenuCategory =>
   object(v) && uuid(v.id) && typeof v.name === "string" &&
   typeof v.slug === "string" && typeof v.active === "boolean";
