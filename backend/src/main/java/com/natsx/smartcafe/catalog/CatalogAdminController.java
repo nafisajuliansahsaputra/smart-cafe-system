@@ -44,7 +44,8 @@ public class CatalogAdminController {
                            @NotNull @PositiveOrZero Long priceIdr,
                            @NotBlank String availability,
                            @NotNull Long expectedRevision,
-                           @Size(max=500) String description) {}
+                           @Size(max=500) String description,
+                           @Size(max=700) String imageUrl) {}
 
     @GetMapping("/menu-categories")
     public ResponseEntity<ApiEnvelope<List<CatalogAdminService.Category>>> categories(HttpServletRequest req) {
