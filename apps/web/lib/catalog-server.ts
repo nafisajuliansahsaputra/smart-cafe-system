@@ -16,6 +16,10 @@ export type MenuGroup = {
   id: string; itemId: string; name: string; required: boolean;
   active: boolean; revision: number; options: MenuOption[];
 };
+export type MenuItemPage = {
+  page: number; pageSize: number; total: number; hasNext: boolean;
+  items: MenuItem[];
+};
 export type CatalogResult<T> = { ok: true; data: T } | { ok: false; status: number };
 
 const object = (v: unknown): v is Record<string, unknown> =>
@@ -65,6 +69,35 @@ export async function catalogOverview(): Promise<CatalogResult<{
   if (!categories.ok) return categories;
   if (!items.ok) return items;
   return { ok: true, data: { categories: categories.data, items: items.data } };
+}
+
+/** Manager inventory search runs in PostgreSQL, beyond the legacy 500-row cap. */
+export async function catalogListing(page: number, q: string): Promise<CatalogResult<{
+  categories: MenuCategory[]; listing: MenuItemPage;
+}>> {
+  if (!Number.isInteger(page) || page < 0 || page > 1000 ||
+    q.length > 80 || /[\\x00-\\x1f\\x7f]/.test(q)) {
+    return { ok: false, status: 400 };
+  }
+  const token = await staffToken();
+  if (!token) return { ok: false, status: 401 };
+  const params = new URLSearchParams({ page: String(page), q });
+  const validPage = (value: unknown): value is MenuItemPage =>
+    object(value) && value.page === page && value.pageSize === 20 &&
+    number(value.total) && value.total >= 0 &&
+    typeof value.hasNext === "boolean" &&
+    Array.isArray(value.items) && value.items.length <= 20 &&
+    value.items.every(isItem) &&
+    !(value.items.length === 0 && value.hasNext) &&
+    value.items.length <= value.total;
+  const [categories, listing] = await Promise.all([
+    fetchCatalog("/api/v1/admin/menu-categories", token,
+      (v): v is MenuCategory[] => Array.isArray(v) && v.every(isCategory)),
+    fetchCatalog("/api/v1/admin/menu-items/page?" + params.toString(), token, validPage),
+  ]);
+  if (!categories.ok) return categories;
+  if (!listing.ok) return listing;
+  return { ok: true, data: { categories: categories.data, listing: listing.data } };
 }
 
 export async function catalogItemDetail(id: string): Promise<CatalogResult<{
