@@ -753,8 +753,7 @@ The publicly accessible no-backend tour, if hosted later, is only an educational
   denial assertions and narrow mobile viewport coverage.
 - [ ] Verify exact-head CI plus image/security checks, then safely advance
   the draft integration candidate only after all source checks pass.
-- [ ] Final full-site acceptance: larger catalog server pagination (current
-  backend cap 500), tablet/real-device UX, actual merchant payment connector,
+- [ ] Final full-site acceptance: tablet/real-device UX, actual merchant payment connector,
   authorized opt-in receipt sender, settings/incident operations, hosted
   staging and production runbooks.
 
@@ -805,3 +804,14 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
 - [ ] Confirm exact-head CI and real-device QR/NFC print checks before merge.
 - [ ] Independently scale waiter floor-board listing and validate physical
   cafe UX in a separately authorized hosted environment.
+
+### M7 scalable catalog management (stacked draft)
+- [x] Add a separate protected PostgreSQL `/api/v1/admin/menu-items/page`
+  API with 20-row server pagination, literal name/category/status search,
+  total count and stable UUID ordering. Keep the legacy 500-item API
+  for backward compatibility, but do not use it on the manager page.
+- [x] Add repeatable-read snapshot consistency, input limits, Java
+  Testcontainers with 505 products and browser search/invalid-page checks.
+- [ ] Verify exact-head source and integration CI plus human review before
+  merging; hosted staging, real merchant QRIS/VA, approved receipt sender,
+  true-device accessibility and incident rehearsals remain release blockers.
