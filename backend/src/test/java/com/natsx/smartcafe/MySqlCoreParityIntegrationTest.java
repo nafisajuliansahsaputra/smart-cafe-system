@@ -846,10 +846,21 @@ class MySqlCoreParityIntegrationTest {
             jdbc.update("UPDATE cash_drawer_shifts SET closing_reason='changed' WHERE id=?", first));
         assertThrows(DataAccessException.class, () ->
             jdbc.update("DELETE FROM cash_drawer_shifts WHERE id=?", first));
+        String second=id();
         jdbc.update("""
             INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
             VALUES (?,?,?,?)
-            """, id(), staff, 30000L, "open-" + id());
+            """, second, staff, 30000L, "open-" + second);
+        // Leave no active till for other isolated tests; the completed row
+        // itself remains immutable, which is also the intended audit rule.
+        jdbc.update("""
+            UPDATE cash_drawer_shifts
+            SET closed_at=CURRENT_TIMESTAMP(6),closed_by=?,close_key=?,
+                counted_cash_idr=30000,recorded_cash_idr=0,
+                expected_drawer_idr=30000,difference_idr=0,
+                closing_reason='Second synthetic test shift closed'
+            WHERE id=?
+            """,staff,"close-"+second,second);
     }
 
     @Test
