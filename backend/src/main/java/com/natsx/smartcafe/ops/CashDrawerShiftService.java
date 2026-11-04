@@ -159,7 +159,7 @@ public class CashDrawerShiftService {
                 recorded_cash_idr=?,expected_drawer_idr=?,difference_idr=?,
                 closing_reason=?
             WHERE id=? AND closed_at IS NULL
-            """, dbUtc(cutoff), actor.staffId(), key, counted,
+            """, dbUtc(cutoff), dbUuid(actor.staffId()), key, counted,
             gross, expected, difference, reason.strip(), dbUuid(id));
         if (updated != 1) throw conflict("Shift changed during closure");
         audit(actor.staffId(), "CASH_SHIFT_CLOSED", id, reason.strip(), requestId,
@@ -235,12 +235,23 @@ public class CashDrawerShiftService {
         int changed=jdbc.update(handoffUpdate,
             dbUuid(actor.staffId()),key,dbUuid(tenderId),dbUuid(shiftId));
         if (changed!=1) throw conflict("Cash handoff was changed");
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
-                resource_id,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
-                jsonb_build_object('shiftId',CAST(? AS text),'netCashIdr',CAST(? AS bigint)))
-            """,actor.staffId(),tenderId,requestId,shiftId.toString(),handoff.net());
+        String handoffAudit = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
+                    jsonb_build_object('shiftId',CAST(? AS text),'netCashIdr',CAST(? AS bigint)))
+                """;
+            case MYSQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
+                    JSON_OBJECT('shiftId',?,'netCashIdr',?))
+                """;
+        };
+        jdbc.update(handoffAudit,
+            dbUuid(actor.staffId()),dbUuid(tenderId),requestId,
+            shiftId.toString(),handoff.net());
         return new ReceivedHandoff(tenderId,shiftId,handoff.net(),"RECEIVED");
     }
 
@@ -278,14 +289,25 @@ public class CashDrawerShiftService {
 
     private void audit(UUID actor, String operation, UUID shiftId, String reason,
                        String requestId, long opening, Long counted, Long difference) {
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
-                                   reason,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',? ,?,'CASH_DRAWER_SHIFT',?,?,?,
-                    jsonb_build_object('openingFloatIdr',CAST(? AS bigint),
-                        'countedCashIdr',CAST(? AS bigint),
-                        'differenceIdr',CAST(? AS bigint)))
-            """,actor,operation,shiftId,reason,requestId,opening,counted,difference);
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String statement = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
+                                       reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',? ,?,'CASH_DRAWER_SHIFT',?,?,?,
+                        jsonb_build_object('openingFloatIdr',CAST(? AS bigint),
+                            'countedCashIdr',CAST(? AS bigint),
+                            'differenceIdr',CAST(? AS bigint)))
+                """;
+            case MYSQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
+                                       reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,?, 'CASH_DRAWER_SHIFT',?,?,?,
+                    JSON_OBJECT('openingFloatIdr',?,'countedCashIdr',?,'differenceIdr',?))
+                """;
+        };
+        jdbc.update(statement,dbUuid(actor),operation,dbUuid(shiftId),reason,
+            requestId,opening,counted,difference);
     }
 
     private void allowed(StaffPrincipal actor) {
