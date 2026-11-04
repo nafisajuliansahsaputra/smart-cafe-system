@@ -6,7 +6,7 @@ CREATE TABLE live_table_signals (
   outbox_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
   visit_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   table_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  event_type VARCHAR(120) NOT NULL
+  event_type VARCHAR(120) COLLATE utf8mb4_bin NOT NULL
     CHECK (event_type IN (
       'TABLE_VISIT_OPENED','TABLE_JOIN_PROOF_ROTATED','TABLE_VISIT_CLOSED')),
   published_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
