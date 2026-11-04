@@ -53,6 +53,33 @@ ssl-ca=C:/Users/you/AppData/Local/SmartCafe/ca.pem
 Do not downgrade to `ssl-mode=DISABLED` or remove hostname validation to
 make a failed connection pass.
 
+## Fast path: guided Windows connection to your Aiven Free service
+
+The Aiven dashboard must show **Free-1-1gb** and service status
+**Running** before connecting. "Rebalancing" is the plan-change
+transition, not a successful MySQL connection.
+
+From a checkout of this branch on a Windows PC with MySQL 8 CLI installed,
+download the **Aiven CA certificate** from Overview > Connection
+information into the private Windows directory
+`$env:LOCALAPPDATA\SmartCafe\ca.pem`. Then run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-aiven-review-windows.ps1 `
+  -HostName "YOUR_SERVICE_HOST.aivencloud.com" `
+  -Port YOUR_SERVICE_PORT `
+  -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
+```
+
+It interactively prompts for the Aiven password using the official MySQL
+client editor, stores it in a dedicated local login-path and performs only
+**read-only** TLS/version/trigger-setting checks. It never runs Flyway or
+uses merchant records. If the read-only test passes, rerun with
+`-RunWriteProbe` and type `SCRATCH-ONLY` at the explicit
+confirmation to test isolated CREATE TRIGGER and strict CHECK enforcement.
+The random scratch database is dropped after the test. If cleanup fails,
+do not run it again blindly; examine the named scratch schema first.
+
 ## Windows setup: MySQL login-path (preferred)
 
 After the service status is **Running** and you confirm the **Free**
