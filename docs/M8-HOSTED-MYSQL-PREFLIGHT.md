@@ -141,6 +141,36 @@ insecure connection or cleanup errors. If cleanup fails, it prints the
 precise isolated schema name to remove manually. Never target a production
 server or use your existing cafe database to run this probe.
 
+## Real Aiven Free read-only acceptance (2026-11-05 WIB)
+
+Owner-supplied Windows PowerShell output confirms the service is MySQL
+**8.4.11**, an authenticated connection with the correct Aiven CA under
+`--ssl-mode=VERIFY_IDENTITY`, active negotiated cipher
+`TLS_AES_128_GCM_SHA256`, `log_bin=1`, and
+`log_bin_trust_function_creators=1`. The preflight printed
+`PASS: read-only server and TLS checks.` The owner separately
+confirmed Aiven's `Free-1-1gb` service plan.
+
+**This proves ONLY remote connection + TLS + basic server variables.**
+Trigger creation, CHECK enforcement, hosted V1–V31 Flyway migrations,
+full MySQL SQL/financial transaction parity, backend first-admin login,
+public frontend and backend deployment remain **UNVERIFIED**.
+Never interpret the successful read-only check as merchant readiness.
+
+The next review acceptance step uses the saved *local* MySQL login-path;
+no password is included in a script or committed:
+
+```powershell
+# Run only against the disposable, empty Aiven Free review service.
+# This explicitly creates, tests, and deletes a random scs_probe_* database.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 -LoginPath smartcafe_review -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem" -ExpectedHost "YOUR_SERVICE_HOST.aivencloud.com" -RunWriteProbe
+```
+
+Capture the non-secret output and stop if the host rejects CREATE DATABASE,
+CREATE TRIGGER, or the strict financial CHECK. Do not alter protected
+money/stock triggers as a workaround. An unsuccessful probe is **not**
+a reason to copy PostgreSQL/Neon data or switch the backend to MySQL.
+
 ## Acceptance and follow-on gates
 
 | Gate | Acceptance evidence |
