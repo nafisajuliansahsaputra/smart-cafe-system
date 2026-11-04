@@ -97,9 +97,9 @@ public class CartService {
     }
 
     private CartRow findCart(GuestPrincipal guest,boolean lock) {
-        jdbc.update("""
-            INSERT INTO carts(guest_id,visit_id) VALUES (?,?) ON CONFLICT (guest_id) DO NOTHING
-            """,guest.guestId(),guest.visitId());
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureGuestCart(
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
+            guest.guestId(),guest.visitId());
         var rows=jdbc.query("SELECT id,version FROM carts WHERE guest_id=? AND visit_id=?"
             +(lock?" FOR UPDATE":""),(rs,n)->new CartRow(
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getLong("version")),guest.guestId(),guest.visitId());
