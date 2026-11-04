@@ -1,0 +1,38 @@
+name: Hosted MySQL Preflight Script Safety
+
+on:
+  pull_request:
+    paths:
+      - "scripts/test-mysql-host-preflight.ps1"
+      - "docs/M8-HOSTED-MYSQL-PREFLIGHT.md"
+      - ".github/workflows/mysql-host-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse-powershell:
+    name: PowerShell preflight syntax (no network, no credentials)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate PowerShell AST syntax without connecting to a host
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "scripts/test-mysql-host-preflight.ps1",
+            [ref]$tokens,
+            [ref]$parseErrors
+          )
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "PASS: PowerShell parser accepted the host preflight script."
