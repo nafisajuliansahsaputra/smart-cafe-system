@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# Only the newest PR head needs syntax verification.
+# Avoid piling up obsolete runs while iterating on the Windows preflight.
+concurrency:
+  group: mysql-host-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
 jobs:
   parse-powershell:
     name: PowerShell preflight syntax (no network, no credentials)
