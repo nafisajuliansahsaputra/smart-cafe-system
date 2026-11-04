@@ -133,3 +133,19 @@ PostgreSQL until complete parity.
   Free is only a proposed provider pending separate owner signup and
   verification that its plan does not require a card.
 - No separate public Smart Cafe full-stack review URL exists yet.
+
+
+## Remote free-host compatibility gate (added in M8 review)
+
+Before choosing an Aiven MySQL Free review service, run the **read-only**
+host check and then explicitly authorize its disposable trigger/CHECK probe:
+[hosted MySQL preflight](M8-HOSTED-MYSQL-PREFLIGHT.md).
+The script at `scripts/test-mysql-host-preflight.ps1` requires a separately
+stored local MySQL client option file with hostname-verified TLS; no secrets
+are committed. It creates and removes only a random `scs_probe_*` database
+when `-RunWriteProbe` is explicitly specified.
+
+Passing this check confirms the *remote host prerequisites only*. It is not
+proof of MySQL application readiness, full V1-V31 Flyway migration, financial
+transaction parity, deployment authorization or unrestricted free uptime.
+Keep `MySqlPortReadinessGuard` in place until all those separate gates pass.
