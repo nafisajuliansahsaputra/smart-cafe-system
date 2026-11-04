@@ -21,7 +21,8 @@ $mysqlArgs = @(
     "--batch",
     "--raw",
     "--skip-column-names",
-    "--connect-timeout=10"
+    "--connect-timeout=10",
+    "--ssl-mode=VERIFY_IDENTITY"
 )
 
 function Invoke-SafeMySql {
@@ -31,6 +32,9 @@ function Invoke-SafeMySql {
         [string]$ExpectedError = ""
     )
 
+    # Windows PowerShell 5.1 can elevate native stderr to a terminating error
+    # when ErrorActionPreference=Stop; inspect the process exit code ourselves.
+    $ErrorActionPreference = "Continue"
     $output = @(& $mysqlExe @mysqlArgs "--execute=$Sql" 2>&1)
     $exitCode = $LASTEXITCODE
     $result = ($output | ForEach-Object { [string]$_ }) -join "`n"
