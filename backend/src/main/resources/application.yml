@@ -12,7 +12,8 @@ spring:
   flyway:
     enabled: true
 server:
-  port: 8080
+  # Honour the platform-assigned listening port; local Docker remains 8080.
+  port: ${PORT:8080}
   error:
     include-message: never
     include-stacktrace: never
