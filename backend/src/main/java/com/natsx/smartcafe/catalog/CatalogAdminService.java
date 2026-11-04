@@ -27,7 +27,7 @@ public class CatalogAdminService {
     @Transactional(readOnly=true)
     public List<Category> categories() {
         return jdbc.query("SELECT id,name,slug,active FROM menu_categories ORDER BY sort_order,name",
-            (rs,n)->new Category(rs.getObject("id",UUID.class),rs.getString("name"),
+            (rs,n)->new Category(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
                 rs.getString("slug"),rs.getBoolean("active")));
     }
 
@@ -51,7 +51,7 @@ public class CatalogAdminService {
         if(changed==0)throw missing();
         audit(actor,active?"CATEGORY_ENABLED":"CATEGORY_DISABLED","MENU_CATEGORY",id,requestId);
         return jdbc.queryForObject("SELECT id,name,slug,active FROM menu_categories WHERE id=?",
-            (rs,n)->new Category(rs.getObject("id",UUID.class),rs.getString("name"),
+            (rs,n)->new Category(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
                 rs.getString("slug"),rs.getBoolean("active")),id);
     }
 
@@ -130,7 +130,7 @@ public class CatalogAdminService {
     }
 
     private Item readItem(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new Item(rs.getObject("id",UUID.class),rs.getObject("category_id",UUID.class),
+        return new Item(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "category_id"),
             rs.getString("name"),rs.getLong("base_price_idr"),
             rs.getString("availability"),rs.getLong("revision"),
             rs.getString("description"),rs.getString("image_url"));
