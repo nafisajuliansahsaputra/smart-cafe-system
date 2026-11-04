@@ -10,15 +10,17 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL stage 1 is implemented:** opt-in `db/mysql/V1-V5`
+- **MySQL stage 1-2 is implemented:** opt-in `db/mysql/V1-V10`
   foundational tables, staff/guest revocable sessions, table-visit unique
   active-visit constraint, immutable order financial snapshots, immutable
-  paid-only receipts. MySQL expressions/trigger syntax are native MySQL 8.
+  paid-only receipts, limited-stock triggers, cart/variant groups and
+  HMAC-only guest join throttles. MySQL expressions/trigger syntax are native MySQL 8.
 - Added `mysql-connector-j`, `flyway-mysql` and MySQL 8.4 Testcontainers.
 - `MySqlCoreParityIntegrationTest` creates a disposable MySQL instance,
   migrates it using `classpath:db/mysql`, and rejects duplicate active
   table visits, invalid FK/capacity, unpaid or mismatched receipts, and
-  mutable issued receipt/order financial data.
+  mutable issued receipt/order financial data. It also verifies the
+  automatic item-stock trigger and case-insensitive unique item variants.
 - **Runtime default remains PostgreSQL; MySQL backend is fail-closed before
   Flyway.** It must not be pointed at Aiven/other public MySQL yet.
 
@@ -38,9 +40,21 @@ The portfolio must not describe MySQL as operational until proven.
 7. All session tokens are hashed, join proof expiring, no static QR ordering.
 8. No customer/real payment data in migration fixtures or test screenshots.
 
+## Trigger privilege prerequisite for hosted MySQL
+
+MySQL 8 with binary logging and `log_bin_trust_function_creators=0`
+rejects creating triggers without administrative privileges (error 1419).
+The disposable Testcontainers instance uses
+`--log-bin-trust-function-creators=1` solely for CI. On a managed
+provider such as Aiven Free, verify `SHOW VARIABLES LIKE
+'log_bin_trust_function_creators';` and `SHOW GRANTS;` using a dedicated
+empty test schema **before selecting the provider**. The host must permit
+immutable-money and stock/audit triggers. Never replace the triggers
+with unprotected API-only checks to bypass hosting limitations.
+
 ## Required before an actual MySQL deployment
 
-- Port MySQL equivalents of **V6-V31** in the exact order and preserve
+- Port MySQL equivalents of **V11-V31** in the exact order and preserve
   unique, foreign key, check, append-only and concurrency behavior.
   Several PG partial unique indexes need generated nullable columns.
 - Replace PG-specific SQL in backend services, e.g. advisory transaction
