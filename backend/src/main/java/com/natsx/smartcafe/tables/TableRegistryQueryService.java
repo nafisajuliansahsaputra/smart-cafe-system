@@ -55,7 +55,7 @@ public class TableRegistryQueryService {
             ORDER BY t.table_code, t.id
             LIMIT ? OFFSET ?
             """, (rs, index) -> new TableRow(
-                rs.getObject("id", UUID.class), rs.getString("table_code"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("table_code"),
                 rs.getString("public_alias"), rs.getInt("capacity"),
                 rs.getString("status"), rs.getBoolean("active_visit")),
             keyword, keyword, keyword, PAGE_SIZE + 1, page * PAGE_SIZE);
