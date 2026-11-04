@@ -14,7 +14,7 @@ ALTER TABLE live_game_signals
       'GAME_LOAN_HANDED_OVER','GAME_LOAN_RETURN_REQUESTED',
       'GAME_LOAN_RETURNED','GAME_LOAN_CANCELLED'))
     OR (game_id IS NOT NULL AND event_type='GAME_INVENTORY_CHANGED'));
-CREATE INDEX idx_outbox_live_inventory_pending
-  ON outbox_events(aggregate_type,live_published_at,created_at,id);
+-- V11's idx_outbox_live_pending already covers all aggregate types here.
+-- Do not duplicate the same four-column outbox index on free-tier storage.
 CREATE INDEX idx_live_game_inventory_signals_game
   ON live_game_signals(game_id,sequence_id);
