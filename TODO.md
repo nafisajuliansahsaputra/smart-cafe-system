@@ -1,6 +1,6 @@
 # TODO.md — Smart Cafe System Execution Roadmap
 
-**Status ledger as of 2026-10-29.** Checkboxes reflect verified repository work, not aspirations. Document-only initialization does **not** mean the application exists.
+**Status ledger as of 2026-10-29; M1 scaffold verified via CI on a development branch, pending review/merge.** Checkboxes reflect verified repository work, not aspirations. Document-only initialization does **not** mean the application exists.
 
 ## M0 — Product and contract foundation
 
@@ -13,29 +13,33 @@
 - [ ] Decide project license.
 - [ ] Confirm cash tender policy, receipt messaging provider and game fee rules with owner before implementation dependent on them.
 
-## M1 — Executable skeleton (NOT STARTED)
+## M1 — Executable skeleton (CI VERIFIED ON FEATURE BRANCH)
 
-- [ ] Create apps/web Next.js TypeScript application with route groups and design foundation.
-- [ ] Create backend Spring Boot Java application with modular package boundaries.
-- [ ] Add Docker Compose PostgreSQL and development environment template.
-- [ ] Add Flyway baseline migrations, DB constraints, example fake fixtures.
-- [ ] Add API OpenAPI generation, error envelope and health endpoints.
-- [ ] Add local formatting, static checks, unit/integration test commands and PR CI.
-- [ ] Prove clean clone -> local startup -> migration -> tests.
+- [x] Create apps/web Next.js TypeScript application with route groups and design foundation.
+- [x] Create backend Spring Boot Java application with modular package boundaries.
+- [x] Add Docker Compose PostgreSQL and development environment template.
+- [x] Add Flyway baseline migrations, DB constraints, example fake fixtures.
+- [x] Add API OpenAPI generation, error envelope and health endpoints.
+- [x] Add local formatting, static checks, unit/integration test commands and PR CI.
+- [x] Prove clean clone -> local startup -> migration -> tests.
 
-## M2 — Cash ordering vertical slice (NOT STARTED)
+M1 evidence: [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242) passed Java/JUnit, Testcontainers/PostgreSQL/Flyway V1, Next.js lint/typecheck/build with npm ci, and clean-clone Docker Compose + OpenAPI + security deny + web -> API -> DB smoke. [Verification record](docs/M1-VERIFICATION.md). All checkmarks apply to the feature branch only; no merge, deployment, or business feature is implied.
 
-- [ ] Staff login with roles and session revocation.
+## M2 — Cash ordering vertical slice (BACKEND FUNCTIONAL; FULL UI IN PROGRESS)
+
+- [x] Staff login API with roles and session revocation (PostgreSQL/MockMvc verified; staff browser login UI pending).
 - [ ] Table management, alias creation and visit open/close.
 - [ ] QR URL table entry, guest join proof and scoped session.
 - [ ] Catalog, categories, variants and availability.
-- [ ] Guest cart, server pricing and idempotent checkout.
-- [ ] Cash order and staff approval lifecycle with audit.
+- [x] Guest cart, server pricing and idempotent checkout (PostgreSQL cart v6, atomic limited stock, idempotency replay and race tests in CI).
+- [x] Cash order submission and cashier approval lifecycle with audit (API/DB verified; OCC staff UI still pending).
 - [ ] **Order Control Center** queue/search/detail/approve/exception tools.
 - [ ] Kitchen display admission and preparation states.
 - [ ] Waiter delivery and verified cash tender capture.
 - [ ] Guest status + in-session finalized receipt.
 - [ ] E2E cash happy path, unauthorized cases, duplicate checkout and closure rules.
+
+M2 progress: server-authoritative guest cash checkout with idempotency and immutable snapshots; staff auth and guest visit scoping; backend OCC/KDS/waiter lifecycle, audited tender and paid-only receipt. Backend integration tests passed 30/30 on [CI run 40749892835](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40749892835); further modifier tests require PR-head CI verification. Staff/guest operational browser UIs, ingredient inventory, cashier exception/reconciliation workflows, payment adapters, production hardening and full browser E2E remain incomplete. See [M2 engineering record](docs/M2-CASH-DOMAIN.md).
 
 ## M3 — Reliability and payment sandbox (NOT STARTED)
 
@@ -83,3 +87,854 @@
 ## Maintenance rule
 
 Only mark checked when code/docs exist on the target branch **and** the item's acceptance tests/evidence exist. List blockers in relevant PR/issue, do not add optimistic completion claims. Update this file together with changes.
+
+### M2 inventory follow-up
+
+V6 provides guest cart and limited menu-item quantities; V7 tracks per-order stock allocations so rejection can release stock once. Role-guarded manager stock adjustments and cashier pre-kitchen rejection are implemented and tested on this feature branch. This is **not** ingredient-level or expiry-aware inventory. See [cart and stock controls](docs/M2-CART-INVENTORY.md).
+
+### Catalog/backend follow-up
+
+Manager/admin category and item API writes with audit and revision checks have been introduced. Flyway V8 adds single-choice variant groups/options and a selected option on cart lines. Server-priced variant selection and immutable order snapshots are covered by tests in the [PR #2 checks](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2/checks). The original M2 catalog checkbox remains open because multi-group modifiers, catalog browser management and other product rules are not complete. See [M2 catalog variants](docs/M2-CATALOG-VARIANTS.md).
+
+### M2 modifier groups V9
+
+V9 removes the old one-group-per-item limit and introduces normalized `cart_line_variant_options` while preserving the old `variantOptionId` client input for a single choice. The new `variantOptionIds` input accepts one choice per active group, with all required groups present (maximum eight groups). The backend canonicalizes options for idempotency, computes all deltas in checked integer IDR, and stores the combined label and immutable options array in the order snapshot. Public `/menu/{item}/variant-groups` lists all active groups. The singular legacy lookup refuses a multi-group item instead of omitting required choices. Multi-group options do **not** imply arbitrary topping quantities, per-option stock, or multiple differently customized cart lines for the same menu item. M2 catalog remains open until browser management and remaining rules pass full acceptance.
+
+
+### M2 staff browser follow-up (stacked PR #3)
+
+A first staff browser implementation is proposed on `feat/m2-staff-oc-browser`: server-side staff auth bridge (HttpOnly SameSite=Strict cookie), role-gated staff homepage, server-rendered OCC queue/filter/detail, and server-only approve/reject actions. Backend still performs authorization and transactional state transitions. The UI is **read/snapshot on reload**, not realtime. Staff sessions, cash lifecycle and rejection correctness are provided by PR #2.
+
+Keep the OCC and M2 full-flow checkboxes unchecked until the stacked PR passes final-head CI plus authenticated operator E2E, denial/CSRF checks, and full waiter/kitchen/receipt coverage. Manual browser acceptance is recorded in [docs/M2-STAFF-BROWSER.md](docs/M2-STAFF-BROWSER.md).
+
+
+### M2 kitchen/waiter browser follow-up (stacked PR #4)
+
+A new backend waiter tasks projection restricts regular waiters to their own table visits; supervisor roles can read all. The first operational `/staff/kitchen` and `/staff/waiter` screens now submit authenticated, server-authoritative start/ready/served/cash-tender commands via Next.js Server Actions, with explicit physical-handover and physical-cash confirmations. Cash amounts and recorded change are returned from database projections rather than frontend estimates.
+
+The M2 KDS/waiter/full cash-E2E checkboxes remain open until authenticated browser E2E, accessibility, deployed-origin security checks, table management UX and closed-visit cases pass. This PR adds no provider connection or production money handling. See [docs/M2-FULFILLMENT-UI.md](docs/M2-FULFILLMENT-UI.md).
+
+### M2 customer browser follow-up (stacked PR #5)
+
+Customer UI now includes active-table join proof, visit-scoped HttpOnly session, menu and modifier selection, server-priced versioned cart, cash checkout and status tracking, backend guest logout, and paid-only own receipt reads by order ID. Integration tests cover receipt visibility and session revocation. **Keep the full guest journey and M2 acceptance checkboxes open** until authenticated browser end-to-end, join abuse rate limiting and real-origin cookie/CSRF checks are complete. See [docs/M2-GUEST-ORDERING.md](docs/M2-GUEST-ORDERING.md).
+
+### M2 staff table-management UI (draft PR #6)
+
+Added first role-protected table inventory and browser actions to open visits, rotate short-lived proof, and close visits after paid/served checks. Ordinary waiters only see manageable visit IDs for visits they opened; supervisors can manage all. Proofs are shown only once in the result of a privileged POST, not through GET or QR/NFC links. M2 acceptance remains **OPEN** pending authenticated staff/guest E2E, real browser and network checks, rate-limiting of guest joins, and actual operational trial. See [docs/M2-TABLE-MANAGEMENT.md](docs/M2-TABLE-MANAGEMENT.md).
+
+### M2 guest join security guard (stacked draft PR #7)
+
+Added a PostgreSQL V10 fixed-window HMAC-keyed rate limiter with safe HTTP 429 and 10-minute Retry-After behavior, separate committed throttle transaction, bounded peer/table/pair attempt budgets, stale-counter cleanup and negative integration tests. This hardens the backend but **does not close the public launch security gate**: the Next.js server-to-server join means socket IP can be shared; a trusted edge per-client rate limiter plus network/origin hardening and malformed-body controls are still required before internet exposure. See [docs/M2-GUEST-JOIN-THROTTLE.md](docs/M2-GUEST-JOIN-THROTTLE.md).
+
+### M2 Chromium real browser E2E (stacked draft PR #8)
+
+Added isolated Chromium workflow with ephemeral synthetic PostgreSQL fixture and independent waiter/cashier/kitchen/guest sessions, covering the full cash/receipt/table lifecycle. Role isolation, unauthorized cross-guest read, cookie security attributes, modifier pricing and non-PAID-before-cash also covered. **Do not mark production acceptance complete**: actual proxy/origin/CSRF/TLS, manual mobile/a11y, payment policy and external provider remain open. See [docs/M2-BROWSER-E2E.md](docs/M2-BROWSER-E2E.md).
+
+
+### M2 origin/role boundary (draft PR #9)
+
+Implemented explicit staff-role requirement for staff identity/logout as defense-in-depth; the existing guest bearer filter already excludes staff paths, plus Java regression assertions. Server Action body size capped at 32KB; new Chromium negative tests attack forged Origin and large payload, and assert unsettled table cannot close. **Remain open:** real HTTPS reverse-proxy forwarded-host/Origin review, trusted edge request limits, native mobile/accessibility and external money/PII approval. See [docs/M2-ORIGIN-ROLE-HARDENING.md](docs/M2-ORIGIN-ROLE-HARDENING.md).
+
+### M2 HTTPS edge staging acceptance (draft PR #10)
+
+Added an isolated nginx:1.27-alpine HTTPS edge, strict localhost Host handling, forwarded-header overwrite, direct-peer POST-only login/join throttling and full browser acceptance CI through a self-signed TLS endpoint. **Public deployment remains blocked** on actual trusted certificate/domain/SNI configuration, authenticated staging topology, real-client limiter behind the real CDN/LB chain, CSP/HSTS and payments/privacy approval. See [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](docs/M2-HTTPS-EDGE-ACCEPTANCE.md).
+
+### M2 live update slice (draft PR #11)
+
+Implemented BFF-authorized, bounded, change-only SSE and server-render refresh across OCC/KDS/waiter/tables/guest orders. Browser tests verify cross-role updates without reload and foreign guest stream denial. Still open: event-driven outbox dispatcher, connection budgeting and load tests, production proxy and accessibility acceptance. See docs/M2-LIVE-UPDATES.md.
+
+### M2 durable live relay (draft PR #12)
+
+Added V11 live signals, transaction-locked multi-instance-safe outbox relay and commit-only PG NOTIFY hints with idempotent replay/rollback tests. **Still needed before real push:** authenticated event cursor/LISTEN consumer, waiter/guest per-object scoping, late-subscriber replay, bounded connection pool and production load testing; plus poison-event quarantine and retention/monitoring policy. SSE from PR #11 remains snapshot-based until those are complete. See docs/M2-DURABLE-LIVE-RELAY.md.
+
+### M2 scoped durable subscriber (draft PR #13)
+
+Added shared PostgreSQL LISTEN wakeup, scoped durable cursor query, bounded 48-request backend long-poll, revocation rechecks and BFF SSE bridge for OCC, Kitchen, Waiter and guest orders/receipts. Only event-change notifications leave Next.js, with no token/PII. Table status watcher still polls. **Production open:** async concurrency/load tests, request executor sizing, proxy failure recovery and metrics, poison-event retries/quarantine, outbox retention, mobile/accessibility, real TLS setup and payment rules. See docs/M2-LIVE-EVENT-SUBSCRIBER.md.
+
+### M2 table lifecycle event subscriber (draft PR #14)
+
+Completed transactional TABLE_VISIT open, rotate and close events, V12 separate durable signal table, shared relay and scoped waiter `tables` cursor. A second staff browser tab validates live occupancy updates without reload. **Still open:** async subscriber capacity/soak tests, admin inventory events, offline and multi-replica recovery, poison-event monitoring, public HTTPS and live financial/consent policies. See docs/M2-TABLE-LIVE-EVENTS.md.
+
+### M2 live capacity and safe observability (draft PR #15)
+
+Added per-guest (2) and per-staff (6) long-poll identity limits within global cap (48), idempotent permit release, configurable bounded validation, aggregate Micrometer metrics for capacity/denials/listener/backlog, read-only PostgreSQL backlog sampling and virtual-thread race tests. Still open: servlet async executor, multi-instance distributed admission, load/soak benchmarks, measured p95 latency and DB connection headroom, metrics exporter/alerts, poison event quarantine and production approval. See docs/M2-LIVE-CAPACITY.md.
+
+### M2 async cursor and measured admission gate (draft PR #16)
+
+Moved live-cursor waits with an `after` parameter to Spring MVC asynchronous Callable + JDK virtual threads, retaining the global and per-principal resource budgets from PR #15. Added integration async-dispatch checks and an independent synthetic multi-identity load CI measuring concurrent accepted/rejected waits, health responsiveness, elapsed duration and p50/p95. **Still open:** measured distributed/multi-replica soak and network-disconnect behavior, DB pool sizing, secured telemetry dashboards/alerts, p95 customer notification SLA, production TLS and ingress gates. See docs/M2-ASYNC-LIVE-LOAD.md.
+
+### M2 two-replica live event recovery (draft PR #17)
+
+Added real two-container / shared-PostgreSQL integration acceptance: simultaneous table long-polls receive one committed open event; replica B misses a join-proof rotation while stopped, then reads the durable cursor after restart, receives a subsequent close event and retains role gates. This establishes **one bounded recovery scenario**, not production multi-node availability. Still needed: failed-over DB primary, actual network interruption and abort semantics, real CDN/proxy and distributed rate-limit decisions, multi-hour load/soak, alert delivery and approved data-retention policy. See docs/M2-MULTIREPLICA-RECOVERY.md.
+
+### M2 cancel/reconnect resilience (draft PR #18)
+
+Added explicit cancellable DeferredResult live cursor workers, idempotent interrupt, no abandoned fake success, tested release of per-user/global slots on cancellation; browser offline/visibility SSE close, capped reconnect backoff, latest-state re-sync on return. Chromium tests miss a cashier approval while kitchen is offline then recover without a reload. **Remaining:** actual half-open client/proxy disconnect test, production CDN/LB, cancellation timings under load, multi-hour soak, distributed admission, secured metrics and alerts. See docs/M2-DISCONNECT-RECOVERY.md.
+
+### M4 physical game loans initial vertical slice (stacked draft PR #19)
+
+Added V13 serialized game inventory, request/assign/handover/return/cancel status machine, active-copy and active-visit uniqueness, responsible-waiter restrictions, manager/admin catalog registration, guest/staff pages, guest session and close-visit protection, synthetic concurrency/browsers tests. **Still open for full M4:** damaged/lost/maintenance/incident policy; guest return-pending; event-driven live task notifications; production UI/accessibility and physical staff acceptance; complete catalog/admin edit/inactive management; fees/deposits only after owner approval. See docs/M4-PHYSICAL-GAME-LOANS.md and ADR-0007. Do not mark the original M4 checklist fully completed.
+
+### M4 game loan live event follow-up (stacked draft PR #20)
+
+V14 adds durable GAME_LOAN live signals and same-transaction outbox publication
+for request/assign/handover/return/cancel. Guest live cursors are scoped to
+**the owning guest and visit**; waiter cursors only to visits opened by that
+waiter, with supervisor override. Guest/staff game pages refresh authorized
+server data from change-only SSE, including offline snapshot recovery.
+CI verification pending. Catalog-only inventory edits still require manual
+refresh and M4 damage/loss/maintenance, guest return request and staff physical
+acceptance are not done. See docs/M4-PHYSICAL-GAME-LOANS.md.
+
+### M4 guest return-pending slice (stacked draft PR #21)
+
+Added V15 return request state with an owner-scoped guest API and UI, durable
+game update event, waiter inspection workflow, allocation exclusivity, table
+close guard and PostgreSQL/Chromium tests. An accepted pickup request is
+**not** a return: the physical copy remains assigned until staff verifies
+its serial. CI acceptance pending. Damage/loss, maintenance, guest disputes
+and policy-dependent fees remain unimplemented.
+
+### M4 quarantine & inspected restock (stacked draft PR #22)
+
+V16 history table records every condition change with staff ID, copy ID,
+optional returned loan and required reason. A verified damaged return
+atomically marks loan RETURNED and copy DAMAGED; stock stays unavailable
+until manager/admin inspection restores AVAILABLE. Manager may also
+quarantine an idle copy, but no role can change an assigned unit.
+Unauthorized, invalid and replayed actions are rejected; Java/PostgreSQL
+and HTTP/HTTPS browser acceptance gate this slice. No damage charge,
+refund, guest liability, lost-property or disposal resolution has been
+approved or implemented. Inventory-only updates are manually refreshed.
+
+### M4 copy-condition history screen (stacked draft PR #23)
+
+Manager/admin inventory dashboard now exposes the 100 latest immutable
+inspection/quarantine/restoration history entries through a separate
+role-gated no-store API; waiter/cashier/kitchen cannot read the notes.
+Historical reasons cannot be altered from the UI; no guest or financial
+data is included. Next still needed: paginated operational history,
+owner-approved LOST/RETIRED incident policy, inventory realtime updates,
+staff field trials, security review before a public pilot.
+
+### M4 automatic catalogue/stock refresh (stacked draft PR #24)
+
+V17 adds game-inventory change markers to existing scoped `games` SSE
+without another connection. Catalogue creation, unit addition,
+allocation, inspected return, and manager quarantine/restoration now
+publish safe same-transaction events for all authenticated viewers.
+Private loan events stay identity-scoped; copy serial, audit notes and
+customer/financial data never enter live messages. PostgreSQL and
+HTTP/HTTPS browser tests cover cross-table stock updates. Production
+release still needs physical-device testing, operational inventory
+paging/notifications, additional damaged/lost policy and security review.
+
+### M4 indexed copy search and paging (stacked draft PR #25)
+
+Manager/admin game inventory now has backend-powered, case-insensitive
+game-name/serial search, condition filters, 25-item pages and
+previous/next navigation, rather than the initial unpaged 250-copy
+view. V18 adds a copy-condition/code index, keeps legacy API
+compatibility and adds PostgreSQL/Testcontainers and Chromium tests.
+Server validates all filters and caps expensive pagination; no new
+guest serial exposure, fee, loss liability or automatic maintenance
+resolution. Large-scale cursor pagination and history paging may be
+needed after real operational data is available.
+
+### M4 condition audit search + pagination (stacked draft PR #26)
+
+Manager/admin can now search all physical-copy condition history by
+unit, game, staff or reason and filter outcome DAMAGED/AVAILABLE in
+25-entry pages, instead of relying on only the latest 100 entries.
+V19 includes sort/filter indexes, the legacy API stays compatible and
+read-only audit records cannot be rewritten. History and unit filters
+have separate page states in the staff UI. PostgreSQL and HTTP/HTTPS
+browser tests cover old records, access denial and query validation.
+Still open: operational policy for truly LOST/RETIRED copies, incident
+ownership, high-volume keyset pagination, manager field trials and
+production security gates.
+
+### M4 missing game incident report and manager verification (draft PR #27)
+
+Added staff missing-copy report with reviewable OPEN incident, manager-only
+dismiss/confirm actions, exact-unit verification, durable incident/audit
+records and scoped change-only signals. OPEN reports do not free
+stock, permit table closure, or silently imply theft. Confirmed LOST
+atomically retires the active loan and removes the copy from inventory
+without fees or guest liability. Dismissal resumes normal physical
+handover/return workflow. PostgreSQL security/transition and browser
+acceptance added. Still requires approved LOST copy recovery/claims
+policy, manager incident paging, staff/mobile acceptance, retention
+rules and operational incident review before a public pilot.
+
+
+### M4 recovered LOST copies, verified quarantine and restock (draft PR #28)
+
+A manager can now record a found LOST serialized copy with an exact
+physical code and discovery reason; server requires a prior confirmed
+LOST incident and quarantines as DAMAGED without changing the old loan
+or incident. A second inspected restoration is needed before stock
+becomes AVAILABLE. Both steps have permanent per-copy condition
+history/audit and scoped inventory live marker. PostgreSQL and
+HTTP/HTTPS browser checks cover full workflow. Still open: formal
+claims/retention policy, paging for loss incidents, physical field
+testing, manager incident notification and commercial rollout gates.
+
+
+### M4 manager incident search/paging + OPEN backlog (stacked draft PR #29)
+
+Added full-DB manager-only incident search by game, serial, table,
+reporter and notes, exact state filters, OPEN-first pagination
+(25/page; max page 2000) and independent outstanding-review count on
+the staff dashboard. Flyway V22 OPEN-first sort index, strict backend
+validation, and PostgreSQL/Chromium regression coverage added.
+Legacy 100-entry API unchanged. Future work: keyset paging at scale,
+manager role-specific operational alert entry points, field usability,
+record retention/appeal rules and security/production review.
+
+
+### M4 manager dashboard incident alert (stacked draft PR #30)
+
+Main staff home now shows manager/admin-only OPEN incident totals,
+three newest minimal previews and a direct review-queue link.
+The existing game SSE revalidates server-rendered status in real time
+and after tab visibility resumes, without new polling or push
+infrastructure. An unavailable incident summary shows a warning.
+PostgreSQL role/data-minimization tests and Chromium HTTP/HTTPS
+0→1→0 manager notification lifecycle added. Remaining pilot work:
+operational review by staff, accessibility/mobile testing, incident
+record retention/appeals and authorized production rollout.
+
+
+### M4 manager-only audit evidence for physical game incidents (draft PR #31)
+
+A read-only per-incident manager screen now presents reporter and
+reviewer staff identities and timestamps, original notes, event audit
+operations, and request correlation IDs from existing transactional
+`audit_logs`. Both backend and UI enforce manager/admin access,
+with 404 for missing incidents and fail-closed unavailable state.
+PostgreSQL/Chromium integration validates report → explicit review
+audit attribution and no guest/payment data leakage. No migration or
+production configuration changes. Remaining: incident evidence
+retention and appeals policy, explicit incident staff shift handoff,
+mobile field usability/accessibility checks, and release security
+review before a real-world cafe pilot.
+
+
+### M4 phone/tablet staff accessibility pilot (draft PR #32)
+
+Improved staff-only CSS for 320–768px phone/tablet layouts, safe
+long-serial/note/audit-ID wrapping, keyboard focus visibility,
+44px+ touch targets, mobile-width actions and separated risky
+decision forms. Manager OPEN notification, incident search, copy
+inventory and audit history now use anchored navigation to reduce
+long scrolling after filter/reset/next-page actions. Synthetic
+Chromium mobile tests verify responsive overflow, interactive
+target size, keyboard focus and evidence timeline semantics on
+HTTP and HTTPS. Still required: hands-on touch/zoom/assistive
+technology testing on real Android/iOS before a cafe field pilot.
+
+
+### M6 isolated PostgreSQL backup and restore proof (draft PR #33)
+
+The clean-start Docker CI job now exercises a **guarded** `pg_dump -Fc`
+and `pg_restore --exit-on-error` on a second, newly created DB with
+synthetic staff/game/audit data. Tests compare table counts, schema
+constraint identity/type/validation, index structure/partial filter values,
+restored CHECK/FK rejection, six representative content fingerprints,
+Flyway migrations and the audit actor-to-unit relationship. Unsafe
+invocation or existing destination is refused; the source is never
+overwritten. This is one CI rehearsal, **not** the completion of
+production backups, RPO/RTO, PITR, encrypted offsite retention,
+multi-hour soak, or payment reconciliation release gates.
+
+
+### M6 security baseline in CI (stacked draft PR #34)
+
+Added a separate fail-closed tracked-tree secret scanner with six
+self-tests and safe file/line-only findings. First-party browser
+source cannot add local/session token storage, raw HTML injection
+or dynamic eval without an explicit security review and removal.
+`npm audit --omit=dev --audit-level=high` now gates known
+high/critical production frontend advisories. Original seven
+integration/browser jobs remain; full Java dependency/SAST,
+historical secret scanning, runtime image scanning, real security
+incident drill and branch protection remain release blockers.
+
+
+### M6 CodeQL and Java/Maven vulnerability scanning (stacked draft PR #35)
+
+Added CodeQL `java-kotlin` and `javascript-typescript` extended
+security scans with Java 21 Maven instrumentation, and OSV Maven
+`pom.xml` advisory scanning for **new PR vulnerabilities** plus
+full weekly/main scans. Scanners upload Code Scanning results and
+do not receive deployment credentials. Passing CodeQL job is not
+proof of zero alerts; an OSV PR pass cannot clear inherited
+vulnerabilities. Still required: triage all findings, security
+release policy, dependency update SLAs, container scanning,
+privileged auth review, real pilot testing and branch protection.
+
+
+### M6 container runtime least privilege (stacked draft PR #36)
+
+Restricted API, web and second API replica Compose services to
+non-root users, read-only rootfs, `cap_drop: ALL`, disabled
+privilege escalation, bounded pids and volatile tmpfs for
+`/tmp` and Next.js runtime cache. Added effective Docker
+inspection + active write-denial probes in clean-start and
+two-replica CI, while leaving PostgreSQL and localhost Nginx
+startup untouched. Still open for production: image CVE scanning,
+deployment topology hardening, DB/edge least privilege, egress
+control, cache policy, secrets delivery, memory/CPU stress and
+real restore/incident drills.
+
+
+### M6 container image vulnerability review (stacked draft PR #37)
+
+Added a separate Trivy image scan workflow for actual API and web
+runtime images, with OS + library HIGH/CRITICAL SARIF output,
+five tests of the scanner result policy and CI failure for
+fixable high/critical advisories. Weekly/main scanning is included
+to discover new vendor advisories. Unfixed alerts stay visible
+for mandatory manual triage; registry provenance, signatures,
+digest pinning, PostgreSQL/Nginx image scans and production
+security approval remain open.
+
+### M5 in-session receipt print increment (draft PR #38)
+
+A guest-scoped PAID receipt HTML detail and browser print/Save as PDF action are added on top of the cash vertical slice, with negative Chromium checks for unpaid/foreign orders. This is a **partial** M5 improvement, not final download-link, phone-delivery, financial-reporting or public production readiness. Do not mark M5 complete before authenticated CI results and the remaining requirements pass.
+
+
+### M5: first daily cash report (draft PR #39)
+
+A WIB daily cash gross report and top-ten item summary are implemented on a stacked development branch with a role-protected /staff/reports screen for cashiers/managers/admins. The source is finalized immutable CASH receipts, not unpaid orders. Date validation, no-store, access denial and synthetic PostgreSQL/Chromium coverage are added. This is **partial** daily operations reporting: no bank/drawer reconciliation, QRIS/VA, refunds, reporting exports, receipt messaging or production pilot. Await exact-head CI; keep the original M5 checkbox open until complete.
+
+
+### M5 staff account lifecycle (draft PR #40)
+
+Manager/admin read-only staff directory and safely audited enable/disable of ordinary staff (WAITER, CASHIER, KITCHEN, or no role) are implemented on a stacked branch. Disabling instantly invalidates existing sessions and revokes their tokens. Manager/admin targets and self-disablement are forbidden by the backend to avoid lockout; password reset, user creation, role assignment, privileged-account recovery and MFA remain unimplemented. Synthetic PostgreSQL/Chromium authorization and replay-conflict tests are included; not production-ready until exact-head CI passes.
+
+### M5: admin-only ordinary staff provisioning (draft PR #41)
+
+The ADMIN role can provision a **disabled** WAITER/KITCHEN/CASHIER with normalized login, BCrypt password and audit reason, without granting manager/admin roles. Enabling remains a separate audited step. Synthetic PostgreSQL tests cover 401/403, rejected escalated roles, weak password, duplicate/login case, disabled authentication, first activation and audit integrity; Chromium acceptance covers manager exclusion and admin creation/activation. This is a **partial** M5 increment, not a complete staff lifecycle: password reset/rotation, invitation delivery, operator recovery, MFA and authorization policy remain open. Await PR-head CI; no main merge, external secrets or production activity.
+
+### M5: staff self-service password rotation (stacked draft PR #42)
+
+Authenticated WAITER/KITCHEN/CASHIER/MANAGER/ADMIN can replace their own
+password after verifying the current password. The new password follows the
+16–72 printable-ASCII BCrypt-safe policy. V23 persists a five-failure/15-minute
+per-account throttle; successful rotation atomically updates the password,
+revokes **all** staff sessions and records a secret-free audit event. Login
+serializes on the staff row to prevent an in-flight old-password login from
+creating a surviving token. The protected /staff/account browser form clears
+the HttpOnly cookie on success and requires a fresh login. PostgreSQL negative,
+revocation, throttle and race tests plus isolated Chromium browser acceptance
+are proposed; verify exact-head CI before marking this increment accepted.
+**Still open:** enforced first-login rotation, password reset/recovery, secure
+credential distribution, MFA, operational account policy and production review.
+
+### M3 payment adapter and attempt persistence foundation (draft PR #44)
+
+Introduced typed PaymentGateway (QRIS/VA) and deterministic **non-payable** process-local fake adapter plus V24 digital payment attempt metadata with PostgreSQL foreign keys, scoped idempotency, one-pending-attempt constraint, matching method/amount and immutable financial identity. Java unit tests exercise invalid payloads, concurrency, idempotency, fake expiry and non-payable QR/VA; Testcontainers tests validate digital attempt constraints against synthetic QRIS and CASH intents. No gateway endpoint, frontend payment method, webhook, provider network, receipt, or payment PAID transition was activated. This does **not** close M3 and is not a production payment integration.
+
+### M3 sandbox attempt coordination (draft stacked PR)
+
+Guest-scoped, transaction-locked, internal SandboxDigitalAttemptService now persists non-payable QRIS/VA fake attempts into Flyway V24 with stable idempotent replay and collision-safe single active attempt. It requires a synthetic pre-existing PENDING digital intent; public digital checkout is NOT implemented. Testcontainers checks guest isolation, bad key/method/cash/closed/paid denials, expired terminal retry, same-key concurrent replay, two-key race and no financial or fulfillment mutation. M3 remains open, pending CI and future digital checkout, authenticated payment notifications, external sandbox adapter and reconciliation.
+
+### M3 guarded digital checkout method selection (draft PR #46)
+
+POST /api/v1/orders now parses optional paymentMethod, preserving implicit CASH. QRIS/VA is permitted only with two explicit sandbox controls and creates a server-priced SUBMITTED order plus PENDING QRIS/VA intent (0 paid); no gateway attempt, webhook, payment settlement, receipt or kitchen release. A method-bound hash rejects same-key cash/QRIS/VA switching. Testcontainers checks QRIS/VA, direct lines and stored carts, replay after cart consumption, wrong-method conflicts, other-guest read denial, no premature financial fulfillment, and default disabled/invalid method rejection. Still needed: dispatch fake gateway attempt, safe guest instructions, reconciled webhook authority, true provider sandbox and end-to-end payment UI. M3 remains OPEN.
+
+### M3 guest sandbox attempt integration (draft PR #47)
+
+Added a non-payable POST/GET attempt API scoped to authenticated guest+visit, with double backend guard for explicit sandbox environment and feature flag. Guest order detail now exposes server payment method; Next.js shows optional visibly fake checkout choices and pending attempt history only when its own sandbox flags are set. Synthetic PostgreSQL/MockMvc tests verify ownership, no-store, cross-guest denials, replay and different-key collision, cash rejection, and payment/receipt/kitchen immutability. Default-deployment tests confirm no sandbox endpoint. NO real gateway, money movement, verified webhook, reconciliation, automatic success or production deployment. Next: CI exact-head, real end-to-end browser with sandbox flags, durable callback event verification and financial exceptions/reconciliation; M3 still open.
+
+### M3 isolated end-to-end sandbox browser proof (draft PR #48)
+
+Added a dedicated disposable GitHub Actions sandbox-browser-e2e job, separate two-flag Docker override and Playwright QRIS/VA acceptance. Covers real waiter join proof, two guest identities, pending QRIS/VA checkout, fake reference creation, exact-key replay, conflicting key rejection, cross-guest access denial, unpaid receipt, and unclosable unpaid visit. The job independently queries PostgreSQL to reject any digital PAID money, receipt or kitchen ticket. Default cash/HTTPS tests skip this sandbox-only spec. Pending exact-head CI verification; digital payment production remains explicitly blocked by missing genuine provider verification, event dedupe and reconciliation.
+
+### M3 immutable sandbox event quarantine (draft PR #49)
+
+Added Flyway V25 `sandbox_payment_event_inbox`, a non-bean internal `SandboxPaymentEventInbox` test-only writer with bounded synthetic claims, durable event-ID dedupe, canonical payload fingerprint, classified mismatches/late success and immutable records. It deliberately cannot settle a payment, change an attempt, issue a receipt or release a kitchen ticket. PostgreSQL Testcontainers tests cover invalid/duplicate/tampered/concurrent/late fake observations and verify zero payment mutations. This is **not** a real webhook, cryptographic provider verification, signature acceptance, reconciliation or a paid transition. Production M3 stays OPEN pending provider requirements and owner-reviewed implementation.
+
+### M3 admin-only read-only payment evidence review (draft PR #50)
+
+Added dual-gated sandbox-only GET /api/v1/admin/payments/sandbox-events and /staff/reconciliation for ADMIN to inspect quarantined FAKE event evidence, classification filters, 20-item pagination and aggregate counts, with explicit no-settlement warning. Spring exposes no route in normal deployment; MANAGER is denied even though admin routing normally allows MANAGER. All data is from immutable inbox V25, with no write/approve/PAID/receipt actions. PostgreSQL/MockMvc tests check role denial, malformed filters/pages, pagination and unchanged financial state. Still needed: real signed provider adapter, status API reconciliation, late success and charge dispute/void workflows, verified-only ledger settlement, controlled deployment.
+
+### M3 signed synthetic callback entry (draft PR #51)
+
+Added a **sandbox-only** dual-gated HMAC-SHA256 event endpoint which authenticates timestamp + raw request bytes using a local test key, then deposits observations into immutable event inbox V25 with 202 QUARANTINED_NOT_PAYMENT. Missing/weak key, stale/forged signature, tampered bodies, oversized payload, extra JSON fields and conflicting event replays are rejected. Tests check raw HMAC, five-minute freshness, default environment absent route, flag-off deny, signed HTTP to database, identical replay, conflicting signed payload and verified no PAID/receipts/kitchen activity. The route is **not** the signature protocol for any real provider and must never be used with production merchant credentials. Next: official gateway sandbox adapter/signature, merchant/order/amount validation from status API, durable reconciliation and finance approval policy. M3 remains unfinished.
+
+### M3 immutable administrative triage annotations (draft PR #52)
+
+Added Flyway V26 append-only sandbox_payment_triage_actions, transaction-serialized ADMIN-only triage endpoint and clearly marked sandbox UI for INVESTIGATE / REQUEST_PROVIDER_REVIEW / ESCALATE. Triage stores actor identity and stable idempotency; original event V25 cannot be updated/deleted, and no PAID/receipt/ticket financial write is available. GET review now surfaces latest investigation action/time/actor. Java/Testcontainers and sandbox browser tests cover role denial, forged paid action, duplicate/replayed keys, concurrent append, update/delete denial, and no money change. Separate production provider authentication, independent status confirmation, exception resolution policy and actual settlement remain OPEN.
+
+### M3 non-mutating overdue digital attempt review (draft PR #53)
+
+Created ADMIN-only sandbox unresolved FAKE attempt worklist (GET /api/v1/admin/payments/sandbox-events/attempts) with derived overdue flag, alleged-success/flagged-claim counts, no-evidence filtering, 20-row pagination and no-store response. Added /staff/reconciliation/attempts monitoring page and link from admin quarantine dashboard. This does NOT expire attempts or override paid status; an apparently expired gateway attempt may still settle late and must remain locked pending trusted reconciliation. Java/PostgreSQL, default-env denial and Chromium acceptance added. Still blocked for real QRIS/VA: official provider selection/credentials, verified merchant scope, status API lookup, independent reconciliation, late-payment exception handling and audited settlement policy.
+
+### M5 safe CSV download for daily cash reporting (stacked draft PR #54)
+
+Cashier/manager/admin may export the existing WIB daily CASH receipt
+report via a server-only CSV route with no-store headers and no bearer
+tokens in browser JavaScript. Unauthenticated and other-role requests,
+duplicate date parameters and invalid dates fail closed. UTF-8 item
+labels are quoted and spreadsheet formula prefixes neutralized.
+Synthetic browser acceptance covers paid cash totals, item names,
+missing guest PII and access denials. **M5 remains unfinished**:
+no cash drawer reconciliation, QRIS/VA settlement, refunds/net revenue,
+receipt phone messaging, or production deployment. Check exact-HEAD CI.
+
+### M5 bounded CASH receipt ledger (stacked draft PR #55)
+
+Added a receipt-backed read-only, WIB-filtered per-transaction ledger for
+CASHIER/MANAGER/ADMIN via /api/v1/ops/reports/cash-daily/receipts.
+The /staff/reports view shows 20 newest receipts per page with stable
+tie-breaking, no customer PII, no-store responses, 0–1000 bounded page
+validation, immutable gross receipts and a supporting Flyway V27 index.
+Testcontainers proves 22 receipts across two pages and WIB day boundaries;
+cash lifecycle and Chromium test authorization, filtering and privacy.
+**Still open:** exact-head CI review, cash drawer reconciliation, refund
+policy, provider-backed QRIS/VA, phone receipt messaging, production gates.
+M5 is not complete and no public environment is deployed.
+
+### M5 provisional single-till cash shift closure (draft PR #56)
+
+A protected /staff/cash-shifts page and /api/v1/ops/cash-shifts API
+now support opening a single active cash drawer shift, entering opening
+physical float, viewing server-recorded cash net of change, and closing
+with manually counted cash, discrepancy and reason. PostgreSQL V28
+enforces at most one active shift, persisted safe replay keys, immutable
+completed reconciliation records, and audit actor attribution. Only
+CASHIER/MANAGER/ADMIN may access; ordinary cashiers close only their own
+shift, while supervisors may close any. Synthetic PostgreSQL tests plus
+Chromium cover tender inclusion, variance and access denial. This is NOT
+real bank reconciliation: waiter handoff custody, concurrent tender
+freeze/close coordination, in-person till audit and refund policy are
+still open before any pilot. No cash tender or PAID state is modified by
+closing a shift. Exact-head CI required; M5 remains unfinished.
+
+### M5 waiter-to-cashier custody and shift close fence (draft PR #57)
+
+Cash tender capture now assigns an active drawer-shift ID and shares
+the same PostgreSQL transaction advisory fence with shift closure and
+handoff receipt. After the first shift exists, captures with no active
+shift fail closed. Waiter-only tenders create pending custody records,
+which a CASHIER/MANAGER/ADMIN must explicitly acknowledge after physical
+cash verification. Closure rejects any unresolved handoff, and the
+UI hides its close form while custody remains pending. Idempotent
+confirmation and append-only audit preserve evidence, no PAID status
+is changed by handoff. V29 adds the tender/shift association and handoff
+constraints. Existing money before the first-ever shift is unassigned
+and not part of shift reconciliation. This is still single-till,
+synthetic-only and needs exact-head CI and operational controls.
+
+### M5 closed cash variance investigation (stacked draft PR #58)
+
+Closed, nonzero discrepancy shifts may now be reviewed in the manager/admin
+dashboard at /staff/cash-shifts/investigations. Flyway V30 creates immutable
+append-only action records (REQUEST_RECOUNT / DOCUMENT_EVIDENCE / ESCALATE)
+with idempotency, staff attribution and a supporting audit_logs entry.
+Backend validates manager roles, closed/nonzero shift status and printable
+review notes; the existing payment, cash, and receipt records are never
+updated. The interface paginates 20 discrepancy cases with a 100-action
+history limit per case, secure server-only staff BFF and no-store responses.
+Testing includes synthetic manager recount, cashier/waiter denial, replay,
+invalid inputs and immutable-case assertions. Manual recount policy,
+financial settlement, genuine gateway integration, production authorization
+and exact-head CI remain outstanding.
+
+### M6 dependency-stack / synthetic staging release preflight (draft PR #59)
+
+Repository audit on 2026-11-01 found 57 open dependency-stacked
+draft PRs from PR #1 to PR #58, all forming one linear base/head
+chain ending at main. Features remain unmerged and undeployed.
+Added a read-only GitHub PR-chain checker with optional real Git
+commit ancestry checks; an offline Docker Compose staging-config
+safety guard requiring private DB, loopback ingress, sandbox-only
+digital payment flags, restricted API docs, no dev-bootstrap,
+read-only app containers; negative Node tests; a separate PR/manual
+release-readiness GitHub Actions workflow; and an explicit
+integration/merge runbook at docs/M6-RELEASE-STAGING-READINESS.md.
+This **does not create or deploy an actual staging server**.
+Next gates: protected integration branch decision, reviewed
+parent-first merge/rebase, synthetic upgrade rehearsal, separately
+authorized hosted staging, backup/restore with realistic RPO/RTO,
+real payment-provider review, and actual-cafe operational policy.
+
+### M6 existing-data Flyway upgrade regression (stacked draft PR #60)
+
+A dedicated PostgreSQL 17 Testcontainers/JUnit test now migrates an
+actual synthetic database V1..V27, seeds a legacy fully PAID cash tender,
+immutable receipt, order, physical game loan and staff audit, and
+upgrades that same database in place to V30. It compares before/after
+financial and operational snapshots; confirms the old tender is not
+backfilled into a shift; proves that V28/V29/V30 constraints enforce
+exclusive open drawers, valid physical custody, immutable closed
+snapshots and append-only manager review; and verifies repeat migration
+is a no-op. CI has an independent V27→V30 upgrade-rehearsal job in
+addition to the full Java suite. This does NOT claim production-like
+staging, merchant integration, live/large-volume migration or
+deployment readiness. See docs/M6-V27-V30-UPGRADE-REHEARSAL.md.
+
+### M6 consolidated candidate provenance guard (stacked draft PR #62)
+
+Release review PR #61 is a draft direct-to-main snapshot of the entire
+existing stack. A new fail-closed `scripts/integration-candidate.mjs` gate
+requires it to match the exact head SHA of one other draft source PR in
+the linear stack, validates that source's full dependency ancestry
+and checks current main commit ancestry by immutable SHA. Candidate
+modifications that bypass the stacked source, non-draft candidate status,
+forked or missing parent links, and mismatched SHA are rejected.
+Negative tests run on every PR; the read-only live provenance check
+runs when a PR head is `integration/`. No branch merge, deployment
+or production financial mutation occurs. See
+`docs/M6-INTEGRATION-CANDIDATE.md`.
+
+### M6 financial-evidence backup/restore gate (stacked draft PR #63)
+
+CI smoke backup/restore now includes **actual synthetic paid-cash evidence**:
+served order, PAID payment, Rp50,000 collected / Rp15,000 change for
+Rp35,000 net, Rp10,000 float, explicit waiter-to-manager handoff,
+immutable receipt, closed Rp45,000 expected/Rp44,000 counted drawer and
+-1,000 variance review. The rehearsal refuses missing evidence, requires
+table row counts plus 17 content fingerprints to match across the source
+and a brand-new restored PostgreSQL database, and proves paid receipt,
+handoff, closed shift and review mutation triggers remain enforced
+AFTER restoration. No real data, production restore, or provider
+integration; PITR, RPO/RTO and separate hosted staging remain open.
+See docs/M6-FINANCIAL-RESTORE-REHEARSAL.md.
+
+### M6 disposable isolated staging runtime (stacked draft PR #64)
+
+Separate `infra/staging/compose.rehearsal.yaml` boots actual Spring
+Boot/PostgreSQL 17/Next.js in CI with an internal no-ingress DB network,
+separate disposable volume and random credentials, API/web localhost
+ports only, read-only app containers, sandbox digital checkout but no
+webhook key, no bootstrap staff or public Swagger docs. A strict
+`scripts/isolated-staging-preflight.mjs` plus negative tests reject
+external DB, mounts/networks, public host ports, dev bootstrap and
+non-sandbox configurations. An additional CI job builds and boots the
+services, verifies Flyway V30 and healthy frontend/API while denying
+unauthorized staff and API docs, then destroys all ephemeral resources.
+This is NOT hosted/public staging and does not handle real payment.
+`main` branch protection remains disabled; the available GitHub
+connector cannot edit repository rulesets. See
+`docs/M6-ISOLATED-STAGING-REHEARSAL.md`.
+
+### M6 staging capability and resource fence (stacked draft PR)
+
+Tightened the CI-only isolated staging Compose validator against adding
+Linux capabilities after cap_drop: ALL, disabling seccomp via extra
+security options, inheriting host namespaces/devices, Docker volume
+inheritance, shared-volume mounts, custom host/DNS mappings and
+unexpected Docker network/volume identities. API/web must use only the
+existing no-new-privileges profile, and DB must mount its one dedicated
+writable project volume at the PostgreSQL data directory. Negative Node
+tests now explicitly reject these unsafe mutations. This is a release
+rehearsal hardening increment, **not** approval to merge, host publicly,
+use actual customer data, activate a merchant or mark M6 complete.
+
+### M6 runtime Docker Engine staging acceptance (stacked draft PR)
+
+Added verification of actual running isolated staging Docker Engine
+containers and networks, beyond the static Compose preflight.
+The runtime inspector checks project ownership, expected members, ports,
+private DB and dedicated writable volume, unprivileged/read-only API/web
+containers, no capability/host attachment escalation and bounded tmpfs.
+CI also probes permissible temporary writes and refuses image-root writes.
+Synthetic negative tests prevent false acceptance of unsafe runtime
+conditions. Docker inspect output is handled as ephemeral secret-bearing
+data and is deleted without artifact upload. **Exact-head CI and review
+are required before accepting this increment.** This is not public staging
+or production approval.
+
+### M6 disable default Spring Security development credential (stacked draft PR)
+
+Removed the unwanted framework-generated in-memory user by introducing
+an explicit fail-closed UserDetailsService. This does not alter the real
+staff JSON login, database verification, session revocation or bearer-only
+API security. Integration regressions cover nonexistent framework users,
+HTTP Basic rejection with valid synthetic staff credentials, and continued
+successful staff login. The CI-only isolated staging run now fails closed
+if API startup logs reveal a generated developer password/account. Logs
+remain temporary and are never uploaded. **Do not mark M6 complete without
+exact-head tests, human review, branch protection, operational credential
+policy and separately approved hosted staging.**
+
+### M6 explicit local-only first-admin bootstrap guard (stacked draft PR)
+
+The `dev-bootstrap` profile now also requires an exact, opt-in local
+acknowledgement before it is allowed to write the first ADMIN account.
+The guard refuses combined/production profiles, any database URL outside
+the dedicated local `smart_cafe` PostgreSQL addresses, non-disabled
+payment environments, fake sandbox checkout and webhook keys. Plaintext
+credentials are never included in error messages. Unit regressions
+exercise permitted local profiles and deny remote DBs, unexpected database
+names, active payments, missing acknowledgements and mixed profiles.
+The local Compose env mapping and bootstrap instructions now document
+the explicit opt-in and mandatory cleanup after the first startup.
+This is additional guardrail for disposable development only; it does
+not certify that a host named `db` is physically private, grant
+production staff provisioning, or satisfy hosted staging gates.
+
+### M6 bootstrap effective-connection fail-closed check (PR #68 follow-up)
+
+The first-ADMIN local-only bootstrap now checks both the declared
+`DB_URL` and the JDBC URL reported by the **live Spring DataSource**.
+The two must match the same strictly allowlisted local target; a
+higher-precedence `SPRING_DATASOURCE_URL` or Spring property override
+can no longer silently redirect the privileged initial-account insert.
+Unit regression covers a safe-looking `DB_URL` with a remote effective
+connection, missing connection metadata and differing local destinations.
+This safeguard runs before ADMIN insertion, but **not before Flyway
+startup migrations**. A `db` hostname alone is not evidence of local
+network isolation. Never run `dev-bootstrap` against valuable or
+remote databases, and retain owner review plus the normal release gates.
+
+The check additionally enforces the resolved Spring payment environment, sandbox checkout toggle and webhook-secret presence, so system property overrides cannot bypass harmless-looking environment flags. Negative tests exercise these effective configuration mismatches.
+
+### M6 dev-bootstrap pre-Flyway fail-closed gate (stacked draft PR #69)
+
+A profile-scoped Spring `BeanFactoryPostProcessor` now checks the
+opt-in local ADMIN bootstrap guard **before Flyway migrations or other
+normal singleton initialization**. It compares the resolved Spring JDBC
+target, effective payment mode/sandbox callback settings, the exact one
+active dev profile and explicit acknowledgement. The existing bootstrap
+runner still verifies live JDBC metadata before privileged account insert.
+Unit tests exercise unsafe effective destinations, payment overrides,
+mixed profiles and failure before a simulated migration-like singleton.
+Exact-head CI and human security review are pending for this increment.
+Nothing is merged or deployed and `main` branch protections, true hosted
+staging and operational controls remain unimplemented.
+
+### M6 runtime image SBOM evidence for CI review (stacked draft PR #70)
+
+The existing Trivy runtime image CVE workflow now also generates a
+CycloneDX SBOM for each built API/web image, records the exact PR head
+source SHA and local Docker image ID, hashes the runtime Dockerfile and
+SBOM, validates the inventory/manifest with negative unit tests and
+retains a seven-day artifact on successful scans. Checkout is tied to
+the immutable PR HEAD rather than a synthetic merge ref. The guard
+fails for malformed/empty inventories, source/tag/ID mismatches and a
+substituted component/Dockerfile. This is **unsigned CI evidence**, not
+registry publication, immutable deployment digest, reproducible build,
+SLSA supply-chain provenance or production readiness. See
+docs/M6-RUNTIME-SBOM-EVIDENCE.md. Exact-head CI and human review remain
+required; main, real payments and hosted infrastructure remain untouched.
+
+### Portfolio readiness: editorial landing, isolated demo and visual evidence (stacked draft PR)
+
+- [x] Replace the public diagnostic home screen with a responsive editorial introduction, clear staff navigation and explicit non-merchant disclaimer.
+- [x] Implement a standalone client-only `/showcase` product tour with order item controls, a separate OCC cash approval state, KDS preparation, waiter handover, simulated cash receipt and an explicitly non-fiscal customer receipt. It does not create persistent users, orders or payments.
+- [x] Add automated Playwright assertions for the static demo lifecycle, cash state distinction, mobile overflow, keyboard-operated role selector and no localStorage token storage.
+- [x] Capture synthetic desktop/mobile landing and demo screenshots as a 7-day CI artifact after success.
+- [x] Add full-stack portfolio case study, current-status README guidance, and accurate SEO/social metadata.
+- [ ] Validate all changes at the exact feature PR head, including successful portfolio screenshot artifacts and candidate-to-main workflows.
+- [ ] Conduct design/accessibility review with real devices and adjust editorial tone based on portfolio direction.
+- [ ] Integrate the reviewed draft dependency stack into a protected main branch only after owner-approved merge plan.
+- [ ] Provision an isolated hosted read-only/public-safe demo through a separately authorized environment and TLS; never expose synthetic staff login fixtures or a writable cash/merchant database publicly.
+- [ ] Gather and inspect CI-generated real operational screenshots of the full
+  authenticated OCC/KDS/Waiter/paid-receipt journey using a disposable
+  PostgreSQL environment. Screenshot code and artifact paths are added in
+  stacked PR #82; exact-head passing evidence and image review still required.
+- [ ] Add a featured-project card and case-study link to NATSX portfolio in a separate, approved repository change.
+
+The publicly accessible no-backend tour, if hosted later, is only an educational simulation. Its UI progression cannot be cited as evidence of API financial settlement or actual kitchen order processing. Actual acceptance is independently verified by ephemeral full-stack CI.
+
+### M7 true operational website: catalog and product administration (draft)
+
+- [x] Add MANAGER/ADMIN-only `/staff/catalog` dashboard for PostgreSQL-backed
+  category create/toggle, product creation, search and status.
+- [x] Add actual item editor for price, category, visibility, limited stock,
+  audit reason and version-controlled updates.
+- [x] Add required/optional modifier-group and option create/edit forms,
+  including per-option price adjustments and revision checks.
+- [x] Use fail-closed typed read models, backend staff bearer auth,
+  server-only mutations and no exposure of privileged tokens to clients.
+- [x] Add synthetic Playwright end-to-end positive catalog flow, cross-role
+  denial assertions and narrow mobile viewport coverage.
+- [ ] Verify exact-head CI plus image/security checks, then safely advance
+  the draft integration candidate only after all source checks pass.
+- [ ] Final full-site acceptance: tablet/real-device UX, actual merchant payment connector,
+  authorized opt-in receipt sender, settings/incident operations, hosted
+  staging and production runbooks.
+
+See `docs/M7-OPERATIONAL-CATALOG.md`. The client-only `/showcase`
+remains optional marketing collateral and must not be described as
+the operational transaction system.
+
+### M7 physical table registry from the real staff dashboard (stacked draft PR)
+
+- [x] Add manager/admin-only table registry UI with permanent public alias
+  and code, capacity and active/out-of-service controls.
+- [x] Add audited Java/PostgreSQL table creation and transactional status
+  change protected by the **same row lock** as live visit creation.
+- [x] Refuse disabling a table with an active/closing visit even if the UI
+  had a stale earlier snapshot.
+- [x] Add E2E positive and negative manager/waiter flows, regular staff
+  role-denial checks and mobile layout regression.
+- [ ] Verify the newly implemented manager-only A4/SVG QR studio on
+  exact-head CI, then test physical printed scanning and NFC on real devices;
+  waiter floor-board scaling and on-site QR scanning remain separate.
+  The QR studio is currently present only in the stacked draft branch, not on `main`.
+- [ ] Verify exact PR and integration head CI, human review and isolated
+  hosted staging before declaring this capability released.
+
+See docs/M7-TABLE-REGISTRY.md. This is real domain/DB behavior; it does
+not make real merchant payments, external receipt dispatch or live
+production access ready.
+
+### M7 real operational audit review (stacked draft PR)
+
+- [x] Add MANAGER/ADMIN-only, read-only PostgreSQL audit history projection with 25-row pagination, operation/resource/staff query and no raw diff, free-form reason or correlation ID.
+- [x] Add role-gated authenticated Next.js `/staff/audit`, search, pagination and explicit offline/invalid states.
+- [x] Add backend Testcontainers security/redaction/pagination tests and browser end-to-end manager/cross-role tests with synthetic screenshot evidence.
+- [ ] All source exact-head CI and integration-candidate workflow gates must pass before release review.
+- [ ] Operational readiness still needs audit retention/index review, controlled staging, release merge approval, merchant QRIS/VA, authorized external receipt sender and operator rehearsal.
+
+See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; it does not turn the separate marketing showcase into live operations.
+
+
+### M7 manager table registry pagination (stacked draft)
+
+- [x] Add backend-bound 25-row manager/admin registry pagination, literal
+  code/alias search and safe active-visit-only read projection.
+- [x] Connect manager inventory and QR print studio to the paginated API
+  so tables beyond the old 250-row waiter board limit remain reachable.
+- [x] Add synthetic PostgreSQL 253-row boundaries, invalid input and role
+  denial checks, plus browser search and QR-filter regression.
+- [ ] Confirm exact-head CI and real-device QR/NFC print checks before merge.
+- [ ] Independently scale waiter floor-board listing and validate physical
+  cafe UX in a separately authorized hosted environment.
+
+### M7 scalable catalog management (stacked draft)
+- [x] Add a separate protected PostgreSQL `/api/v1/admin/menu-items/page`
+  API with 20-row server pagination, literal name/category/status search,
+  total count and stable UUID ordering. Keep the legacy 500-item API
+  for backward compatibility, but do not use it on the manager page.
+- [x] Add repeatable-read snapshot consistency, input limits, Java
+  Testcontainers with 505 products and browser search/invalid-page checks.
+- [ ] Verify exact-head source and integration CI plus human review before
+  merging; hosted staging, real merchant QRIS/VA, approved receipt sender,
+  true-device accessibility and incident rehearsals remain release blockers.
+
+### M7 customer product descriptions (stacked draft)
+- [x] Enable optional PostgreSQL-backed product description create/edit with
+  revision control and safe length/content validation.
+- [x] Return description on public menu listings and show it in guest menu
+  cards and item detail before order confirmation.
+- [x] Preserve description on omitted legacy API updates; explicit empty
+  edit clears it; test role isolation, guest visibility and browser edits.
+- [ ] Verify exact-head CI, real-device display and editorial menu copy.
+- [ ] Add authorized product-image management and independently reviewed
+  allergen/ingredient information before real-cafe production.
+
+### M7 guest menu search and category navigation (stacked draft)
+- [x] Add browser search across published, available menu names,
+  categories and descriptions, keeping payment/cart backend authority.
+- [x] Add keyboard-friendly category filters, visible result count,
+  clear/reset controls and no-match state without browser storage.
+- [x] Integrate actual guest join, 320px responsive search and synthetic
+  screenshot into the full cash-to-receipt Playwright acceptance.
+- [ ] Verify source exact-head and candidate-to-main CI, physical
+  QR/NFC device UX, screen readers and human release review.
+
+### M7 catalog image links (Flyway V31, stacked draft)
+- [x] Add nullable live schema `menu_items.image_url` via forward-only
+  migration; rehearse V27→V31 with old receipts/cash/audits preserved.
+- [x] Manager/admin-only revision-controlled photo URL create/edit/remove,
+  allowed on an explicitly configured Cloudinary tenant only.
+- [x] Render approved real image links on guest cards/detail and on
+  manager item preview; no image displayed when null.
+- [x] Backend URL abuse and SQL regression tests, manager browser image
+  set/remove and 320px mobile design.
+- [ ] Review asset licensing, Cloudinary account control, CDN privacy
+  disclosures and real-device bandwidth before a public cafe pilot.
+- [ ] Build signed direct upload / media lifecycle if explicitly
+  authorized by the owner and Cloudinary account holder.
+- [ ] Require exact-head source + candidate CI and human review prior
+  to integration release; keep payment/receipt provider gates closed.
+
+### M7 waiter floor scalability (stacked draft)
+- [x] Add role-gated, 25-row PostgreSQL pagination and literal code/alias
+  search for the real waiter floor board without the previous 250-row UI cap.
+- [x] Preserve waiter owner vs supervisor visit visibility, no-store response,
+  server-only bearer handling and fail-closed frontend shape validation.
+- [x] Add >250 synthetic-table backend integration, access/error tests,
+  Playwright search, invalid page and 320px mobile coverage.
+- [ ] Verify exact-head GitHub Actions Java/PostgreSQL, Chromium and security
+  gates; independent review and authorized integration before main release.
+- [ ] Run physical operator acceptance and browser accessibility checks on
+  an isolated HTTPS staging system before public use.
+
+### M7 actual role-backed portfolio visual evidence (stacked draft)
+- [x] Add conditional, local-only, credential-screen-refusing screenshots
+  after the real guest->cashier->kitchen->waiter->receipt E2E states.
+- [x] Add five explicit CI screenshot artifact paths and provenance/case study
+  documentation distinguishing functional backend views from `/showcase`.
+- [ ] Verify exact-head Java/PostgreSQL and Chromium CI plus artifact upload;
+  inspect synthetic screenshots for secrets/PII and visual quality.
+- [ ] Advance draft integration candidate and rerun candidate-to-main security
+  checks only after exact-source checks pass; remain unmerged/unhosted.
+
+### M7 PostgreSQL OCC queue scalability (stacked draft)
+- [x] Replace the real OCC browser's historical 100-item cap with a
+  bounded, role-protected PostgreSQL queue page and stable ordering.
+- [x] Preserve server-validated status/payment/table filters, no-store,
+  exact row totals and existing cash/order mutation boundaries.
+- [x] Add PostgreSQL >100-order integration coverage, role denials and
+  browser filter/invalid page/320px acceptance.
+- [ ] Verify exact-head source and integration candidate CI, human
+  financial/privacy review, real operator device usability and staging.
+- [ ] Consider cursor navigation only when actual load measurements justify it.
+
+See `docs/M7-OCC-QUEUE-PAGINATION.md`. Source is a stacked draft only,
+not yet an approved main-branch or live merchant feature.
+
+### M7 waiter task queue money-first pagination (stacked draft)
+- [x] Add server-side PostgreSQL page for real waiter delivery/cash work
+  (25 tasks/page) with first-class cash-due priority and stable sorting.
+- [x] Preserve ordinary waiter visit ownership, kitchen deny, and legacy API.
+- [x] Add 111 synthetic-order Postgres role, ordering and page-boundary
+  tests plus browser invalid-page/real-cash-flow regression coverage.
+- [ ] Verify exact-head source and candidate-to-main CI, mobile accessibility
+  and physical cash handoff procedures before owner-authorized release.
+
+See `docs/M7-WAITER-TASK-PAGINATION.md`. This changes no financial
+write path or merchant integration and does not touch `main`.
+
+### M7 real kitchen display queue without 100-ticket truncation (stacked draft)
+- [x] Add KDS role-protected PostgreSQL ticket pagination with
+  25 tickets per page and PREPARING > ACCEPTED > READY work priority.
+- [x] Preserve legacy endpoint and backend authoritative order/payment
+  transitions, with no-store server-only staff read models.
+- [x] Cover 112 synthetic kitchen tickets across five pages, cross-role
+  denial, invalid pages and real cash-flow Chromium regression.
+- [ ] Verify exact source and integration candidate CI, physical tablet
+  and accessibility usability, staging and human shift acceptance.
+
+See `docs/M7-KDS-PRIORITY-PAGINATION.md`. A verified standalone cash
+MVP is portfolio-worthy; live merchant payment and public cafe
+production remain dependent on provider and owner release approval.
+
+### M7 isolated real full-stack Windows portfolio onboarding
+- [x] First-run PowerShell 5.1/7 script creates a uniquely named loopback-only
+  Docker Compose environment with randomly generated DB/HMAC secrets, prompts
+  for a unique ADMIN secret and removes one-time bootstrap settings.
+- [x] Abort if an existing .env, Docker container or labeled volume is found;
+  no default passwords, no public listener and no live payment configuration.
+- [x] Seed twelve synthetic real menu items, six tables, multiple variant
+  options and physical serialized game copies without any personal data.
+- [x] Add dedicated CI workflow to parse PowerShell and run an actual local
+  Docker onboarding, assert data/roles/no plaintext bootstrap retention,
+  then delete only the disposable GitHub Actions containers/volume.
+- [x] Document real customer-to-OCC-to-KDS-to-waiter-to-receipt walkthrough,
+  safe restart/cleanup, and local vs merchant production boundaries.
+- [ ] Exact-head PR CI and full candidate check required before acceptance.
+- [ ] Real Windows Docker Desktop walkthrough and physical QR/NFC/tablet
+  checks require human device acceptance; do not market as public POS.
+
+See `docs/M7-LOCAL-FULLSTACK-PORTFOLIO-SETUP.md`. Existing website
+still needs merchant provider contract/integration, approved receipt
+channel, hosted staging, backup retention/PITR and an owner-signed release.

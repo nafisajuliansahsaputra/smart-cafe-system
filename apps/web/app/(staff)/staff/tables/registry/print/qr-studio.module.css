@@ -1,0 +1,44 @@
+.studio { display: grid; gap: 18px; }
+.controls { display: grid; gap: 12px; max-width: 780px; }
+.controls > label { font-weight: 750; }
+.controls select { width: min(100%, 460px); }
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.toolbar button { min-height: 44px; }
+.hint { color: #53616b; line-height: 1.5; }
+.warning { background: #fff7e7; border: 1px solid #eacb90; border-radius: 9px;
+  padding: 12px 14px; color: #523b14; }
+.sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px; align-items: stretch; }
+.card { min-width: 0; display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 23px; background: white; color: #172327;
+  border: 1px solid #d2dddf; border-radius: 12px; break-inside: avoid; page-break-inside: avoid; }
+.brand { letter-spacing: .18em; font-size: .71rem; font-weight: 850; }
+.card h2 { margin: 16px 0 12px; font-size: clamp(1.3rem, 2vw, 1.75rem); }
+.qrSymbol { display: block; width: min(100%, 245px); height: auto; margin: 3px auto 13px; }
+.url { margin: 0; font: 600 .79rem/1.5 ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere; }
+.instructions { margin: 13px 0; font-size: .9rem; line-height: 1.4; }
+.download { margin-top: auto; min-height: 44px; padding: 10px 16px;
+  border: 1px solid #66878e; border-radius: 8px; background: #fff;
+  color: #173842; font-weight: 700; cursor: pointer; }
+.download:hover { background: #eef5f5; }
+.download:focus-visible { outline: 3px solid #095978; outline-offset: 3px; }
+.printHint { color: #53616b; font-size: .85rem; }
+@media (max-width: 650px) {
+  .sheet { grid-template-columns: 1fr; }
+  .card { padding: 18px; }
+  .toolbar button { width: 100%; }
+}
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  .controls, .download, .printHint { display: none !important; }
+  .studio { display: block; }
+  .sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3mm; }
+  .card { border: 1px solid #999; box-shadow: none; border-radius: 0;
+    min-height: 121mm; padding: 6mm; }
+  .card h2 { font-size: 16pt; margin: 4mm 0; }
+  .qrSymbol { width: 56mm; height: 56mm; }
+  .url { font-size: 7.8pt; }
+  .instructions { font-size: 9pt; }
+}

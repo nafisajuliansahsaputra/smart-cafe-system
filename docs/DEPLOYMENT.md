@@ -106,3 +106,114 @@ Before real guests or money:
 - no real messaging until approved provider/consent/template conditions met.
 
 Without these, market the project as an engineering demo using sandbox data, not a live cafe POS.
+
+## 9. Local-only HTTPS edge acceptance (draft PR #10)
+
+The repository now contains an **opt-in, loopback-only** HTTPS Nginx Compose overlay for CI/browser security verification: [docs/M2-HTTPS-EDGE-ACCEPTANCE.md](M2-HTTPS-EDGE-ACCEPTANCE.md). It validates the trusted-Host, forwarded-header and POST rate-limit boundary on a disposable `https://localhost:8443` using a self-signed cert. This is **not** a production-ready reverse proxy. A public deployment would require owned DNS, trusted certificate issuance/renewal, real upstream proxy/CDN trust and rate limiting, CSP/HSTS, backups and authenticated staging sign-off. Nothing is deployed by this PR.
+
+
+## 10. Gated PostgreSQL backup and restore rehearsal (stacked draft PR #33)
+
+The clean-start Docker CI job now seeds a **disposable, synthetic**
+staff/game/menu/audit fixture and performs a real PostgreSQL custom
+archive `pg_dump -Fc` while the API is online. It verifies the dump
+contains physical inventory data, creates a **new separate** PostgreSQL
+database, restores using `pg_restore --exit-on-error`, then checks
+all public-table counts, index structure and partial-filter literals (PostgreSQL may rewrite equivalent partial WHERE expressions), plus constraint identities/types/validation, and selected
+deterministic content fingerprints for staff, roles, game copies,
+menu items, audit records and Flyway migration history. It separately
+verifies invalid game-copy conditions and orphan foreign keys are rejected after restore, and the synthetic manager audit event still links to the correct
+physical game unit and actor.
+
+`infra/verification/restore-rehearsal.sh` is explicitly gated:
+`CI=true`, `SCS_RESTORE_TEST_ISOLATED=yes`, original DB name exactly
+`smart_cafe` and recognized disposable fixtures are all required.
+It **refuses an existing destination DB**, never drops the source
+and removes only the temporary dump and the destination database it
+created. The synthetic fixture is inserted by CI independently,
+*after* smoke tests pass, never by the backup/restore script itself.
+
+This is a **single controlled CI restore rehearsal**, not an approved
+production backup solution. Outstanding pilot gates: encrypted offsite
+storage, access-controlled backup retention, staging restore on
+production-like hosting, PITR/WAL planning, measured recovery time and
+data loss windows, incident response, and real payment reconciliation.
+Never apply the disposable E2E fixtures to a real cafe database.
+
+
+## 11. Minimal CI security gate (stacked draft PR #34)
+
+An eighth required-for-review workflow job independently tests
+high-confidence committed secret detection, unsafe credential
+storage/browser injection sinks and npm production dependency
+advisories at HIGH/CRITICAL level. A failing or unreachable
+advisory source is not treated as an all-clear. The workflow
+has read-only contents permissions and uses no production keys.
+Before public release, extend coverage to Java dependency
+vulnerability scanning, proper CodeQL/SAST, GitHub secret scanning
+including history, verified build provenance, production image
+scanning, vulnerability remediation/SLA and protected branch
+status requirements. This change creates no deployment workflow.
+
+
+## 12. Static analysis and Maven dependency advisory workflows (draft PR #35)
+
+CodeQL extended security analysis now runs Java source through a
+Java 21 instrumented Maven build and JavaScript/TypeScript in a
+separate parallel job, publishing results in GitHub Code Scanning.
+A second workflow checks newly introduced Maven vulnerabilities
+on pull requests and full known Java dependency advisories weekly
+and after a main-branch push. Results are not automatically
+considered remediated when an analysis job succeeds; treat all
+alerts as release triage items. External vulnerability feeds and
+GitHub code scanning availability are environmental dependencies.
+Production release still needs reviewed high-severity alert policy,
+actual fixes and manual sign-off.
+
+
+## 13. Least-privilege API and web containers (draft PR #36)
+
+The development/CI Compose services `api`, `web` and
+`api_replica` now use read-only root filesystems, all default
+Linux capabilities removed, no-new-privileges, non-root runtime
+users and a 512-process cap. The only writable application paths
+are volatile `tmpfs` for `/tmp` (64 MiB) and the web
+`/app/.next/cache` (128 MiB). Next.js's cache does **not** persist
+through restart; a future production architecture may need an
+explicit trusted cache policy rather than a writable application
+layer. Any feature that needs persistent file storage requires a
+separate, least-privileged storage integration, never silently
+making the root filesystem writable.
+
+CI checks the effective Docker HostConfig/User and runtime write
+permissions with `scripts/verify-container-sandbox.sh`; a
+two-replica acceptance checks both Java processes. PostgreSQL and
+local Nginx edge retain their existing startup privilege model.
+Do not apply this unreviewed Compose topology to public hosting.
+Image CVE scanning, supply-chain attestation, resource-pressure
+testing, DB rootless hardening and real operations recovery are
+still required before production.
+
+
+## 14. Built runtime image CVE scanning (draft PR #37)
+
+The PR image-security workflow `.github/workflows/container-images.yml`
+builds two local Docker images (Spring Boot API and Next.js web)
+from the production Dockerfile final stages and scans each with
+Trivy for OS and library HIGH/CRITICAL CVEs. Scanner outputs SARIF
+to GitHub Code Scanning; only package/CVE/fix metadata appears
+in CI summary. The pipeline fails for fixable high/critical items
+and on scanner errors, never silently assuming an unavailable
+advisory database means zero vulnerabilities. A weekly mainline
+scan is configured to catch newly published vendor advisories.
+
+Even passing results require review of any still-unfixed advisories,
+the other upstream service images (PostgreSQL and HTTPS edge),
+image origin/digest pinning, SBOM, container registry access,
+image signing, staged rollback and operator approval. This
+workflow does not publish Docker images or deploy an application.
+
+
+## M5 report read-model limits (draft PR #39)
+
+The daily CASH gross report is a read-only operational snapshot of finalized cash receipts and their item lines; no new tables, credentials, provider calls or background jobs. Queries use timestamp range predicates with WIB boundaries and at most ten top-item groups returned. For growth, assess receipt timestamp indexes with production-like synthetic volumes, measured query plans and reporting retention before public deployment. Daily gross is **not** the authoritative reconciliation of drawer, refunds or merchant settlement. Do not use this preview report for actual accounting.

@@ -2,7 +2,81 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Status: Planning / documentation foundation.** The repository currently contains specifications, **not a running product**. Features described below are planned and must not be claimed as implemented.
+> **Current build (2026-11-05):** The actual Next.js 16 + Spring Boot/Java 21 + PostgreSQL 17 application lives in [draft integration PR #61](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/61), **not** the documentation-only `main` branch. The exact integration candidate through PR #85 passed **39 GitHub checks, 4 skipped, zero failed** on commit `554576f3247dbc4e39671ee95ab6d6dc036f3361`. Its real cash-to-paid-receipt lifecycle, role permissions, migrations, security checks and operator screens run in isolated CI. A separate local-only first-run PowerShell onboarding workflow is under stacked draft review. **Nothing is deployed for real public cafe use. QRIS/VA remains fake sandbox and no external WhatsApp/SMS receipt sender is approved or connected.** Historical notes below are development milestones, not evidence of production readiness.
+
+## Run the ACTUAL full-stack app on Windows
+
+The client-only `/showcase` tour is not the full system. For a real,
+database-backed cashier/kitchen/waiter/customer experience, use the
+isolated localhost onboarding script (available in the latest stacked
+draft candidate, not on the documentation-only default branch).
+
+```powershell
+git clone --branch integration/m6-v30-release-candidate --single-branch https://github.com/nafisajuliansahsaputra/smart-cafe-system.git
+cd smart-cafe-system
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-fullstack.ps1
+```
+
+This prompts for a unique ADMIN password, creates a private local Docker
+project, migrates PostgreSQL and seeds twelve synthetic products, six
+tables and physical game copies. The script removes one-time bootstrap
+credentials before leaving the API running. No default accounts, real
+merchant payment, live customer messages or internet-facing service is
+created. **Requires Docker Desktop and a fresh checkout with no `.env`.**
+See [Windows full-stack onboarding](docs/M7-LOCAL-FULLSTACK-PORTFOLIO-SETUP.md)
+for operational steps, test-only cash flow and safe restart instructions.
+
+## Portfolio preview
+
+- **Landing page:** `/` features a responsive editorial product introduction, separate staff portal link, and honest non-merchant status.
+- **Try-it route:** `/showcase` demonstrates a complete cash ordering journey across Customer, Cashier, Kitchen, and Waiter. This is an **in-memory UI simulation**, without API calls, database access or actual payment.
+- **Real application:** `/t/[tableAlias]` (active visit join), `/visit/*` (menu, cart, status, receipt), `/staff/*` (role-gated operational tools). These require a genuine local isolated backend, a disposable database and proper staff access.
+- **Case study and screenshots:** [Portfolio Case Study](docs/PORTFOLIO-CASE-STUDY.md), including an Actions screenshot artifact retained for seven days after passing browser acceptance.
+
+To preview the landing and interactive tour without a backend, use Node.js 22 or newer:
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcase` for the independent demonstration. The public home page and isolated tour do not contact the backend and work without a database; the full operational routes still require the API. To explore the full backend and staff system, follow [local bootstrap](docs/M2-LOCAL-BOOTSTRAP.md) and use disposable Docker/PostgreSQL data only.
+
+
+
+## Real operator workflows beyond the portfolio tour
+
+The actual operational website includes the authenticated cashier OCC,
+kitchen display, waiter service, cash shifts and financial reports,
+table/visit management, staff onboarding and game inventory. Manager/admin menu management is already implemented under
+`/staff/catalog`, backed by the real Spring Boot catalog API:
+category creation/visibility, hidden item creation, price/publication edits,
+audited stock, and multiple price-adjusted modifier groups/options.
+Mutations are server-authoritative, role-gated and revision-aware. See
+[operational catalog runbook](docs/M7-OPERATIONAL-CATALOG.md).
+
+These screens are **not available on the no-backend /showcase tour**.
+For real staff operations use the isolated full-stack environment and
+an authorized manager/admin login. QRIS/VA real merchant processing and
+phone receipt sending still require separate external integrations.
+
+## Table onboarding for actual cafe operations
+
+Managers and admins can now use `/staff/tables/registry` to search a server-paginated inventory, and register physical
+tables, reserve permanent public URL aliases, adjust seating capacity, and
+mark empty tables out of service. The backend uses a row lock shared with
+waiter visit opening and refuses deactivation while a visit is active.
+See [table registry runbook](docs/M7-TABLE-REGISTRY.md).
+
+Printed QR codes encode `https://<your-cafe-host>/t/<publicAlias>`,
+and NFC tags use the same URL. A manager/admin-only **draft QR studio** at
+`/staff/tables/registry/print` now creates A4 printable batches and downloadable
+SVG QR artwork without an external generator, with database batch navigation beyond the waiter floor-board 250-row limit. URLs derive from the browser's
+current origin; open from the verified public HTTPS host before printing for
+physical use, not localhost. This is a stacked development change, not yet
+released on `main`. A public table link never contains a join credential;
+waiter verification and temporary proof remain mandatory.
 
 ## What it solves
 
@@ -72,7 +146,7 @@ All choices are architectural targets, not assertions of existing implementation
 | [docs/decisions/0001-foundation.md](docs/decisions/0001-foundation.md) | Architecture decision record |
 | [docs/decisions/0002-receipt-channel.md](docs/decisions/0002-receipt-channel.md) | Receipt delivery decision and provider gate |
 
-## Repository layout (planned, not yet created)
+## Repository layout (M1 scaffold under review)
 
 ```text
 apps/web/                      # customer + staff protected route groups
@@ -82,6 +156,12 @@ docs/                          # engineering specs and ADRs
 .github/workflows/             # CI/CD, introduced with executable scaffold
 ```
 
+## M1 developer quickstart (verification pending)
+
+Copy `.env.example` to `.env`, set a unique local PostgreSQL password, then run `docker compose up --build` with Docker Engine + Compose installed. Visit `http://localhost:3000` to see a diagnostic frontend that calls `GET /api/v1/system/status` on the Spring Boot API, which queries the migrated PostgreSQL schema. Run `cd backend && mvn -B -ntp verify` for JUnit + Testcontainers or `cd apps/web && npm ci && npm run lint && npm run typecheck && npm run build` for the frontend.
+
+These commands have been **validated in clean GitHub Actions Ubuntu/Docker runners** (see [CI run 40739664242](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/40739664242)); local Windows testing and any public deployment are separate. See [M1 verification record](docs/M1-VERIFICATION.md). The staff/order/QR/payment surfaces are not yet functional.
+
 ## Rules before coding
 
 Read `PRD.md`, `ARCHITECTURE.md`, `AGENTS.md`, `WORKFLOW.md`, `TODO.md`, then the relevant domain spec. Keep source of truth in sync when a decision changes. **Do not invent completed status, provider credentials, transactions, or deployed environments.**
@@ -89,3 +169,118 @@ Read `PRD.md`, `ARCHITECTURE.md`, `AGENTS.md`, `WORKFLOW.md`, `TODO.md`, then th
 ## Project ownership
 
 Portfolio project by NATSX. License is **not yet selected**. A public repository does not implicitly grant an open-source license.
+
+## M2 API vertical slice (development branch only)
+
+Draft [PR #2](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/2) adds versioned auth, table visits, cash checkout, OCC/KDS/waiter commands, and paid cash receipts using the existing one-service modular monolith. **No real payment gateway, messaging, cash handling, or usable staff browser dashboard is connected.** A fresh local development database can opt into the one-time bootstrap described in [docs/M2-LOCAL-BOOTSTRAP.md](docs/M2-LOCAL-BOOTSTRAP.md). The test suite exercises synthetic actors and data; public demo use still requires a staging security review.
+
+See [M2 engineering record](docs/M2-CASH-DOMAIN.md) for implemented routes, test coverage and outstanding requirements.
+
+### Current M2 cart/stock APIs
+
+The draft M2 backend supports `GET/PUT /api/v1/me/cart`, cash checkout from either explicit lines or a cart version, finite stock constraints, `GET/PATCH /api/v1/admin/menu-items/{id}/availability`, and audited pre-kitchen cash rejection. These operations are covered by synthetic PostgreSQL tests; no staff/guest browser UI or production pilot is enabled. See [M2 cart and stock controls](docs/M2-CART-INVENTORY.md).
+
+### M2 catalogue and variants (backend preview)
+
+Managers/admins can create categories and menu items, publish or hide items, revise prices with optimistic revisions, and manage a single choice group per menu item (e.g., Size: Regular/Large). Variant adjustments and required/optional choices are validated by Spring Boot, never accepted as client-supplied price. Order/receipt projections preserve the selected label and unit-price snapshot even after catalog changes. See [catalog and variants](docs/M2-CATALOG-VARIANTS.md); the browser UI is intentionally not locked in.
+
+### Multiple modifier groups (V9 development API)
+
+For a menu with Size (required), Milk (required), and Extra (optional), clients fetch `GET /api/v1/menu/{itemId}/variant-groups`, then submit `variantOptionIds: [sizeId, milkId]` in a cart or direct-order line. The server verifies one option per active group, enforces all required selections, and stores an immutable combined snapshot. Old `variantOptionId` still works for single-choice items. No client-supplied delta/price is trusted. [Implementation and limitations](docs/M2-CATALOG-VARIANTS.md).
+
+
+## M2 staff web interface (draft PR #3)
+
+A protected Next.js staff browser layer now exists on the separate stacked [PR #3](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/3): staff login at `/staff/login`, role-aware `/staff`, and cashier/manager/admin `/staff/orders` plus order details. The web server alone stores and forwards backend bearer tokens through an HttpOnly, SameSite=Strict, path-scoped cookie; the token is never returned to browser JavaScript. Backend authorization and financial state still own all decisions. OCC filters, approve/reject cash commands and manual snapshot refresh are available. This is **not** SSE, kitchen/waiter web UI, public staging access, or a claim that cash was paid.
+
+See [staff browser verification and security notes](docs/M2-STAFF-BROWSER.md). PR #3 remains draft, unmerged, and not deployed.
+
+
+## M2 Kitchen + Waiter operational browser (stacked PR #4)
+
+Draft [PR #4](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/4) adds real API-backed `/staff/kitchen` and `/staff/waiter` views atop the staff login/Order Control Center in PR #3. Kitchen can start preparation and mark ready; waiter can acknowledge physical handover and record cash received after service. The backend calculates and persists exact change; the waiter view reads recorded amount/change from the database. A new `GET /api/v1/waiter/orders/tasks` API strictly scopes ordinary waiters to visits they opened, while cashier/manager/admin may supervise all. All mutations require a fresh active staff bearer session and backend authorization.
+
+This is an **unmerged development-only slice**, not a pilot or payments certification. No live money, actual customer data or provider integrations. Manual snapshot refresh remains until SSE. See [fulfillment implementation notes](docs/M2-FULFILLMENT-UI.md).
+
+## M2 guest ordering browser (draft PR #5)
+
+[PR #5](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/5) adds QR/NFC table entry and temporary join proof, scoped guest browser session, available menu, required/optional modifier groups, persistent/versioned cart, cash checkout, own order tracking, and paid-only in-session receipt. Tokens never enter client JavaScript; new backend guest logout revokes the bearer, and paid receipts are fetched by owning order ID.
+
+**Still draft, not deployed or commercial-ready.** Public join abuse throttling, authenticated browser E2E, TLS/CSRF review, staff QR proof UX, optional phone receipt provider and QRIS/VA are still required. See [M2 guest ordering verification](docs/M2-GUEST-ORDERING.md).
+
+## M2 table management browser (draft PR #6)
+
+[PR #6](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/6) adds an authenticated `/staff/tables` operator screen. Authorized waiters and cashier/manager/admin may open visits, rotate join credentials and close settled visits. A new role-protected `GET /api/v1/waiter/tables` exposes table availability; another waiter's active visit ID and join proof expiry are withheld. **Join proofs appear only in the staff-only response to opening/rotating a visit**, never in the table list, QR URL or browser storage. Closing a visit invokes backend settlement checks and revokes linked guest sessions.
+
+This is still an unmerged development-only slice; see [table management acceptance notes](docs/M2-TABLE-MANAGEMENT.md).
+
+## M2 guest join abuse guard (draft PR #7)
+
+A new PostgreSQL-backed, fixed-window guest join throttle limits well-formed join attempts before short-lived proof verification. Counters persist even when a proof is wrong, 429 responses are safe and no-store, and a configured HMAC key prevents raw source IPs/aliases from being stored in the throttle table. It uses the actual backend socket peer, **not untrusted X-Forwarded-For**; when using the Next.js BFF that peer can be shared by many guests. This is not a complete edge per-client abuse defense. **Configure a unique `SCS_JOIN_THROTTLE_SECRET` of at least 32 bytes** in every backend environment (the .env example contains a development-only placeholder). See [M2 guest join hardening](docs/M2-GUEST-JOIN-THROTTLE.md).
+
+## M2 browser end-to-end acceptance (draft PR #8)
+
+A real Chromium acceptance suite now exercises `/staff/tables` → `/t/e2e-01` → guest menu/modifiers/cart/checkout → cashier approve → kitchen start/ready → waiter serve/collect cash → paid-only guest receipt → settle/close visit. Playwright uses distinct waiter, cashier, kitchen and two independent guest browser contexts against an isolated Docker/PostgreSQL app, with a **synthetic CI-only fixture**. No application path or real funds are touched in testing. CI job logs/traces are the evidence; check the exact commit before treating E2E as passing.
+
+See [browser acceptance notes](docs/M2-BROWSER-E2E.md). This does not certify production HTTPS, edge anti-abuse or real payment gateways.
+
+
+## M2 cross-role and Server Action hardening (draft PR #9)
+
+[PR #9](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/9) adds defense-in-depth explicit role checks: guest bearer tokens remain unauthorized for staff `/auth/me` or `/auth/logout`. Next.js keeps its default same-origin Server Actions protection, now with a 32KB body size limit and explicit page security headers. Chromium negative acceptance covers foreign-Origin staff logout attempts, oversized form rejection and declining a waiter close while cash is unsettled. See [Origin and role security notes](docs/M2-ORIGIN-ROLE-HARDENING.md). Do not treat CI as a real public HTTPS proxy security audit.
+
+## M2 HTTPS edge integration acceptance (draft PR #10)
+
+A new **local-only** TLS reverse-proxy Compose overlay and an independent CI Chromium job exercise Next.js Server Actions through an actual HTTPS ingress, with hostile Host, X-Forwarded-Host and spoofed X-Forwarded-For tests. The edge is bound only to 127.0.0.1, uses a short-lived disposable self-signed cert and stores no keys in Git. See [HTTPS edge acceptance](docs/M2-HTTPS-EDGE-ACCEPTANCE.md). This is not a public-ready reverse proxy.
+
+## M2 live updates (draft PR #11)
+
+Authenticated OCC, KDS, waiter, table and guest order pages now subscribe to same-origin SSE signals using their existing HttpOnly cookies. Next.js observes backend-authorized snapshots every five seconds and sends only change signals, not order data or tokens. See [M2 live updates](docs/M2-LIVE-UPDATES.md); this is SSE via polling, not an outbox dispatcher.
+
+## M2 transactional outbox live relay (draft PR #12)
+
+The backend now contains a restart-safe, PostgreSQL-backed relay that converts existing committed ORDER outbox entries into durable, uniquely identified live notification signals and commit-only PG NOTIFY wake-ups. It does **not** mark unrelated business outbox deliveries processed. Docker Compose opts in; unrelated tests do not start the scheduled worker. Existing SSE/browser pages still use 5-second snapshots pending a secure cursor subscriber. See [docs/M2-DURABLE-LIVE-RELAY.md](docs/M2-DURABLE-LIVE-RELAY.md).
+
+## M2 durable event subscriber (draft PR #13)
+
+Guest and staff order SSE feeds now react to PostgreSQL NOTIFY-backed **authorized durable event cursors**, rather than repeatedly fetching entire order/kitchen/waiter projections. The backend uses one shared LISTEN connection and bounded role/ownership-scoped long polls; Next.js BFF keeps session credentials in HttpOnly cookies and emits empty change signals only. The table management watcher still uses authenticated snapshots. See [M2 live event subscriber](docs/M2-LIVE-EVENT-SUBSCRIBER.md).
+
+## M2 table occupancy events (draft PR #14)
+
+Table visit open, join-proof rotation and close now publish transactional durable events, consumed by the same authorized live cursor/SSE pipeline as ORDER. Waiters see occupancy changes without refreshing; rotation metadata is only visible to the owning waiter or supervisor, and no join proof enters notifications. See [docs/M2-TABLE-LIVE-EVENTS.md](docs/M2-TABLE-LIVE-EVENTS.md). This does not approve production capacity or deployment.
+
+## M2 live subscription admission controls (draft PR #15)
+
+Live event cursor long-polls now have both global and **per-authenticated-principal** budgets, so one session cannot take all available subscriptions. Internal privacy-safe Micrometer counters/gauges track active waits, exhausted capacity, PG LISTEN connectivity and durable outbox backlog; unknown backlog reads are marked -1, not silently healthy. See [M2 live capacity](docs/M2-LIVE-CAPACITY.md). This is a safety/test slice, **not** production load certification or public metrics exposure.
+
+## M2 asynchronous long polls and synthetic performance evidence (draft PR #16)
+
+After-cursor live requests now use Servlet async dispatch on JDK 21 virtual threads, returning the HTTP worker to the pool while waiting for a PostgreSQL event. Initial cursor reads and authorization contracts are unchanged. A dedicated disposable Docker CI benchmark checks concurrent admission/429 behavior, health responsiveness during outstanding waits, and per-staff fairness. See [M2 async live benchmark](docs/M2-ASYNC-LIVE-LOAD.md). CI observations are **not** a production throughput claim.
+
+## Two-replica live event recovery acceptance (draft PR #17)
+
+The repository now includes an isolated two-Spring-Boot-instance Compose overlay and a seventh CI job. It verifies cross-instance PostgreSQL notifications and recovery from a deliberately missed event while one backend is stopped, using the durable table cursor after restart. All actions use synthetic staff/table fixtures and loopback ports; no deployment or payment operation. See [multi-replica recovery](docs/M2-MULTIREPLICA-RECOVERY.md).
+
+## M2 offline reconnect and cancellable long-polls (draft PR #18)
+
+Authenticated backend cursor waits now use cancellation-aware Servlet DeferredResult virtual-thread workers: timeout/error/completion lifecycle callbacks interrupt abandoned waits so global/per-identity capacity is released when the container observes a disconnect. Staff and guest EventSource subscriptions close when offline or hidden, reconnect with bounded backoff and re-read latest authorized state when online. A Chromium cash-cycle regression takes kitchen offline during cashier approval and verifies automatic catch-up. See [docs/M2-DISCONNECT-RECOVERY.md](docs/M2-DISCONNECT-RECOVERY.md). Instant TCP disconnect detection is not guaranteed behind real proxies.
+
+## M4 Physical Game Loans (Draft PR #19)
+
+Guests can request physical UNO/board-game types during an active QR/NFC table visit. Staff assign a serialized copy, confirm code at physical handover and inspected return; outstanding requests and units block table close even after payment. Unique PostgreSQL constraints prevent allocating the same unit twice. Manager/admin can register game types and copies. First vertical slice is **free of fees/deposits**, with manual refresh; damages/losses and live notifications remain future work. See [M4 game loans](docs/M4-PHYSICAL-GAME-LOANS.md).
+
+### Guest menu discovery (stacked draft)
+The authenticated operational `/visit` menu supports immediate
+search and category filtering on real server-confirmed available
+products, with mobile no-result and reset controls. It is not
+the isolated `/showcase` client-only demonstration. Checkout
+still recalculates stock and totals server-side.
+
+### Managed product photos (draft)
+Manager/admin can attach, replace or clear a product's public HTTPS
+photo URL from their configured Cloudinary account. Flyway V31 adds
+a nullable image field and preserves legacy product/financial data;
+guest menu cards and item details display approved links. Configure
+`SCS_MENU_IMAGE_CLOUD_NAME` (public account name, never an API key)
+on the API only. See `docs/M7-MENU-IMAGE-LINKS.md`. File upload and
+provider asset deletion are **not implemented**; do not claim otherwise.

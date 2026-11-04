@@ -1,6 +1,6 @@
 # Data Model — Smart Cafe System
 
-**Status:** Logical schema / design proposal; Flyway SQL migrations will be created in M1. Names and indices are targets subject to reviewed migration. PostgreSQL is authoritative.
+**Status:** Logical contract plus an implemented subset on unmerged M1/M2 feature branches. Flyway V1–V5 are committed and applied successfully in CI. Future entities and indexes below remain design targets. PostgreSQL is authoritative.
 
 ## 1. Identity and tables
 
@@ -15,7 +15,7 @@ Constraint: a table has at most one visit in ACTIVE/CLOSING. Alias is not creden
 ## 2. Catalog and order
 
 - menu_categories: id; name; slug; sort_order; active.
-- menu_items: id; category_id; name; description; base_price_idr; tax_profile_id; availability; image_key nullable; revision.
+- menu_items: id; category_id; name; description; base_price_idr; tax_profile_id; availability; image_url nullable (V31, approved Cloudinary URL only); revision.
 - menu_variants: id; menu_item_id; variant_key; label; price_delta_idr; required/selection rules.
 - item_availability: menu_item_id; available; limited_quantity nullable; version; optional inventory reserve rules.
 - carts: id; guest_id; visit_id; status; updated_at; optimistic_version.
@@ -92,3 +92,43 @@ TableVisit 1 -> N GameRequest 0..1 -> GameReservation -> GameLoan -> GameCopy ->
 - audit_logs(resource_type, resource_id, occurred_at).
 
 Index choices should be measured after query shape and actual EXPLAIN plans exist.
+
+## 9. Implemented migrations (M2 development branch)
+
+- **V1**: staff, roles, tables/visits, guests, catalog base items, immutable order line snapshots, payment intents, cash tender, kitchen tickets, audit and outbox skeleton. The partial unique index prevents a second ACTIVE/CLOSING visit on the same table; composite FK ties order guest to visit.
+- **V2**: hashed revocable staff bearer sessions, case-insensitive staff login uniqueness, database-backed login throttling.
+- **V3**: short-lived join proof expiry and guest bearer sessions scoped to active visits, all stored as SHA-256 hashes of 256-bit random tokens.
+- **V4**: immutable paid-cash receipts, plus a DB trigger forbidding mutation of order financial snapshot fields.
+
+Not yet implemented: variant tables, inventory reservations, payment attempts/webhooks, serialized physical game units and loans, outbox delivery worker, receipt message dispatch and full reconciliation. A passed migration is not evidence that those future entities exist.
+
+- **V5**: Database receipt insertion guard requires matching payment intent, order, total and fully PAID status; the trigger rejects prepayment receipt creation even if application code attempts it.
+
+## 10. Cart and stock migrations
+
+- **V6** adds `carts` keyed by unique guest + visit, `cart_lines` with unique item and bounded quantity, and `item_availability` with `limited_quantity BIGINT NULL` (null is unlimited, never inferred as zero). Every menu item receives an availability row via backfill and insert trigger. DB enforces nonnegative remaining quantity.
+- **V7** adds `order_stock_allocations(order_id,menu_item_id,quantity,reserved_at,released_at)`. Checkout decrements bounded stock in the same transaction as creating the order and allocation record. A pre-kitchen rejection returns counted allocations exactly once and records the release, order transition and staff audit in one DB transaction.
+- The catalog's `menu_items.availability` status is distinct from the quantitative `item_availability` row. The public menu filters both. A stored cart is not a stock reservation.
+- This stock model is per menu-item unit, not ingredients/recipes and not yet a full warehouse ledger. Inventory adjustments during an outstanding checkout require operational reconciliation and a reviewed policy before real stock use.
+
+## 11. V8 single-choice variants
+
+- `menu_variant_groups`: id, unique menu_item_id, name, required, active, revision. One group maximum per item in this M2 version.
+- `menu_variant_options`: id, group_id, unique option_key per group, label, signed price_delta_idr with bounds, active, revision.
+- `cart_lines.variant_option_id` is nullable with FK to option; checkout also verifies it belongs to the item and enabled group. A missing choice is accepted only when no enabled required group exists. Cart still permits one line per menu item. Multiple modifier groups and multiple differently configured lines of one item require a future explicit schema migration.
+- The immutable `order_lines.variant_snapshot` captures the effective selected option metadata and signed delta while `unit_price_idr` stores final server-computed unit price. Receipt document JSON includes the option snapshot, and guest/OCC order detail exposes the selected label.
+
+## 12. V9 normalized modifier selections
+
+- V9 removes the database unique constraint on `menu_variant_groups.menu_item_id`, replacing it with a unique index on `(menu_item_id, lower(name))`. Application service currently restricts a menu to eight groups.
+- `cart_line_variant_options(cart_id,menu_item_id,option_id)` is normalized with a composite FK to cart lines, single option FK, and cascade delete when a cart line is consumed or removed. Migration backfills existing singular `cart_lines.variant_option_id` selections. Old singular column remains as a compatibility field, but the normalized junction is authoritative for new checkout.
+- Cart and direct checkout lines retain a single menu item and quantity, plus zero or more selected UUIDs, capped at eight. Required group cardinality and option-group ownership are enforced in transactional domain service, not inferred from a UI. One per active group, not unrestricted multiple toppings.
+- Order `variant_snapshot` is immutable order-time JSON. New selection objects contain `label` and `options[]` with group name, option key/label and signed IDR delta. Old historical single-option JSON can coexist; the projection label remains present in both.
+
+## V13 serialized physical games (draft PR #19)
+
+`physical_games(id,name,description,active)` is the title/catalog layer. `physical_game_copies(id,game_id,copy_code UNIQUE,condition)` holds individually identifiable units, with default AVAILABLE and future DAMAGED/LOST/RETIRED conditions (no incident UI yet). `physical_game_loans(id,visit_id,guest_id,game_id,copy_id,status,requested_at,assigned_at,handed_over_at,returned_at,assigned_by,handed_over_by,returned_by)` holds the transaction and audit actor references. A compound FK `(copy_id,game_id)` ensures unit/type consistency; a partial unique active-copy constraint allows only one ASSIGNED/IN_USE loan per unit; an active (visit,game) constraint prevents duplicate pending loans. Close checks any REQUESTED, ASSIGNED or IN_USE loan. Receipt/order tables remain unchanged.
+
+## V24 digital payment attempt foundation (draft PR #44)
+
+`digital_payment_attempts` is an isolated append/evolving-status table for **future** authorized QRIS/VA intent attempts. Columns: opaque id, payment_intent_id, method, provider_key/reference, idempotency_key, amount_idr, currency, CREATED/PENDING/SUCCEEDED/FAILED/EXPIRED/CANCELLED state, created_at/updated_at/expires_at. Uniqueness prevents the same provider reference or scoped idempotency key twice and more than one unresolved attempt per intent. A database trigger validates every attempt's selected method/amount/currency against its payment_intent and prohibits mutation of financial identity and terminal-state regression. Foreign keys and indexes are migration-managed. There is no provider callback/event history or reconciliation model yet; do not interpret this schema as a functioning QRIS/VA checkout.

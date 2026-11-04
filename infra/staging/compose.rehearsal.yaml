@@ -1,0 +1,65 @@
+# Disposable LOCAL/CI staging rehearsal only. Never expose publicly or use live data.
+name: scs-staging-rehearsal
+services:
+  db:
+    image: postgres:17-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${SCS_STAGING_DB:?Set staging-only DB name}
+      POSTGRES_USER: ${SCS_STAGING_USER:?Set staging-only DB user}
+      POSTGRES_PASSWORD: ${SCS_STAGING_PASSWORD:?Set random staging password}
+    volumes: [staging_postgres_data:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  api:
+    build: ../../backend
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m,mode=1777"]
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${SCS_STAGING_DB:?Set staging DB name}
+      DB_USERNAME: ${SCS_STAGING_USER:?Set staging DB user}
+      DB_PASSWORD: ${SCS_STAGING_PASSWORD:?Set staging password}
+      API_DOCS_ENABLED: "false"
+      SCS_JOIN_THROTTLE_SECRET: ${SCS_STAGING_JOIN_SECRET:?Set random HMAC key}
+      SCS_MENU_IMAGE_CLOUD_NAME: ${SCS_MENU_IMAGE_CLOUD_NAME:-}
+      SPRING_PROFILES_ACTIVE: ""
+      SCS_BOOTSTRAP_USERNAME: ""
+      SCS_BOOTSTRAP_PASSWORD: ""
+      SCS_PAYMENT_ENVIRONMENT: sandbox
+      SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED: "true"
+      SCS_SANDBOX_WEBHOOK_SECRET: ""
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [data, frontend]
+    ports: ["127.0.0.1:18080:8080"]
+  web:
+    build: ../../apps/web
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+      - /app/.next/cache:rw,nosuid,nodev,size=128m,mode=1777
+    environment:
+      API_INTERNAL_URL: http://api:8080
+      NODE_ENV: production
+      SCS_PAYMENT_ENVIRONMENT: sandbox
+      SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED: "true"
+    depends_on: [api]
+    networks: [frontend]
+    ports: ["127.0.0.1:13080:3000"]
+networks:
+  data: {internal: true}
+  frontend: {}
+volumes:
+  staging_postgres_data: {}

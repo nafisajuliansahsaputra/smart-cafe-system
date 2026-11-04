@@ -1,0 +1,71 @@
+name: Isolated Local Full-Stack Setup Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "scripts/start-local-fullstack.ps1"
+      - "infra/fixtures/local-portfolio-catalog.sql"
+      - ".github/workflows/local-fullstack-setup.yml"
+      - "compose.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-windows-setup:
+    name: PowerShell first-run + actual Docker/PostgreSQL synthetic fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout untrusted PR with no persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse entire Windows PowerShell script
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $issues = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts/start-local-fullstack.ps1"), [ref]$tokens, [ref]$issues
+          ) | Out-Null
+          if ($issues.Count -gt 0) {
+            $issues | Format-Table
+            throw "PowerShell syntax validation failed"
+          }
+      - name: Confirm safe check-only path does not create a database
+        shell: pwsh
+        run: |
+          ./scripts/start-local-fullstack.ps1 -CheckOnly
+          if (Test-Path .env) { throw "CheckOnly generated an environment" }
+          $existing = docker ps -a --filter "label=com.docker.compose.project=smart-cafe-local-portfolio" --quiet
+          if ($existing) { throw "CheckOnly created containers" }
+      - name: Exercise real first-run administrator and catalog on isolated Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CI=true
+          # Random, disposable secret, only provided to PowerShell's CI-only
+          # prompt replacement. Never use a real administrator credential.
+          export SCS_LOCAL_DEMO_TEST_ADMIN_PASSWORD
+          SCS_LOCAL_DEMO_TEST_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          pwsh -NoProfile -File scripts/start-local-fullstack.ps1
+          test -f .env
+          if grep -Eq '^(SPRING_PROFILES_ACTIVE|SCS_BOOTSTRAP_USERNAME|SCS_BOOTSTRAP_PASSWORD|SCS_BOOTSTRAP_LOCAL_ACK)=' .env; then
+            echo "One-time bootstrap credentials were not removed"
+            exit 1
+          fi
+          test "$(docker compose --project-name smart-cafe-local-portfolio exec -T db psql -U smart_cafe -d smart_cafe -Atc "SELECT count(*) FROM menu_items WHERE id::text LIKE '73000000-0000-4000-8000-0000000000%';")" = "12"
+          test "$(docker compose --project-name smart-cafe-local-portfolio exec -T db psql -U smart_cafe -d smart_cafe -Atc "SELECT count(*) FROM cafe_tables WHERE id::text LIKE '71000000-0000-4000-8000-0000000000%';")" = "6"
+          test "$(docker compose --project-name smart-cafe-local-portfolio exec -T db psql -U smart_cafe -d smart_cafe -Atc "SELECT count(*) FROM physical_game_copies WHERE id::text LIKE '77000000-0000-4000-8000-0000000000%';")" = "3"
+          test "$(docker compose --project-name smart-cafe-local-portfolio exec -T db psql -U smart_cafe -d smart_cafe -Atc "SELECT count(*) FROM staff_users;")" = "1"
+          curl -fsS http://127.0.0.1:3000/staff/login | grep -q 'Masuk sebagai staf'
+          curl -fsS http://127.0.0.1:8080/api/v1/system/status | grep -q '"database":"connected"'
+          echo "Real local full-stack bootstrap, catalog, and credential removal passed"
+      - name: Always tear down CI-only project and discard synthetic database
+        if: always()
+        run: |
+          if docker compose --project-name smart-cafe-local-portfolio config --quiet >/dev/null 2>&1; then
+            docker compose --project-name smart-cafe-local-portfolio down --volumes --remove-orphans || true
+          fi

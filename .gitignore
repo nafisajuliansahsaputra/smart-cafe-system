@@ -1,0 +1,27 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+
+# Java
+target/
+*.class
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local-only generated TLS keys, certs and Chromium test artifacts
+infra/edge/local-tls/
+test-results/
+playwright-report/

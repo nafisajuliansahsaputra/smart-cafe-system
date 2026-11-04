@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: smart-cafe-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/smart_cafe}
+    username: ${DB_USERNAME:smart_cafe}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+
+# Digital checkout is intentionally disabled in all normal deployments.
+# Both environment=sandbox AND explicit sandbox-digital-checkout-enabled=true
+# are required to create QRIS/VA pending orders. No real payment adapter.
+scs:
+  payments:
+    sandbox-digital-checkout-enabled: ${SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED:false}
+    environment: ${SCS_PAYMENT_ENVIRONMENT:disabled}
+    # Demo signing key only; NEVER copy to production or treat as a real
+    # provider token. Unset by default: callback intake returns 503.
+    sandbox-webhook-secret: ${SCS_SANDBOX_WEBHOOK_SECRET:}

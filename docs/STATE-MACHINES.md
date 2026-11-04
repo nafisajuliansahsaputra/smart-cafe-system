@@ -118,3 +118,35 @@ Delivery attempt states: QUEUED -> SENDING -> SENT or RETRYABLE_FAILURE -> QUEUE
 8. Customer with an expired visit token cannot reuse old QR to order.
 9. Resending a receipt does not produce duplicate charge or new order.
 10. Late digital payment success on cancelled order goes to reconciliation/exception queue; never silently fulfill or discard.
+
+## 7. M2 implementation guardrails
+
+Cash may be approved for cooking and even served while still AWAITING_CASH. In the current development-only implementation, recording the cash tender requires the order to have reached SERVED. After confirmed staff tender, cash payment and immutable receipt are committed together. V5 independently prevents receipts for unpaid intents. A waiter must have opened the visit to manage its visit/serving/cash until a proper assignment system is available. These temporary merchant policies are not approved for production use.
+
+## 8. Cash order stock release (M2 implementation)
+
+- Cart is editable until checkout and holds no stock. Cart updates use a version check; checkout revalidates server price and decrements item-limited stock atomically.
+- After cash checkout, SUBMITTED + AWAITING_CASH has tracked reserved menu units; cashier may ACCEPT, or REJECT before cooking. REJECT returns still-outstanding allocations exactly once, keeps the order immutable, and moves the uncollected intent to UNPAID.
+- A REJECTED unpaid order does not block closing a visit; a served but unpaid order still blocks closure. Rejection after acceptance, preparation or payment is rejected until a separately reviewed cancellation/refund policy is implemented.
+
+### M4 executable physical game loan state machine (draft PR #19)
+
+Guest ACTIVE visit + chosen game → REQUESTED (no assigned copy). Opening waiter/supervisor physically checks inventory → ASSIGNED (specific copy locked/reserved under unique active-copy DB index). Staff physically verifies serial code → IN_USE (handed to guest). Staff inspects the undamaged copy and confirms matching serial → RETURNED; unit may be assigned again. A REQUESTED-only request may be CANCELLED by an authorized waiter; ASSIGNED and IN_USE cannot be cancelled or falsely returned. While status is REQUESTED, ASSIGNED or IN_USE, the table cannot close, even if payment is PAID. Manager override, fee, lost/damaged and deposit workflows are not available in this initial slice, rather than silently charging or clearing a liability. See ADR-0007.
+
+### Guest pickup request (draft PR #21)
+
+An active guest may request a physical collection from IN_USE to
+RETURN_PENDING (same loan ID, idempotent on retry). This is only a
+notification/task, not an inventory release. Only physical staff
+confirmation with the exact copy serial transitions IN_USE or
+RETURN_PENDING to RETURNED. The unit stays exclusively assigned
+through RETURN_PENDING and the table cannot close. No damage policy,
+fee, override or loss handling is introduced by this change.
+
+## M3 attempt schema guardrail (draft PR #44)
+
+V24 adds `digital_payment_attempts` for future QRIS/VA workflows. Only CREATED -> PENDING/FAILED/EXPIRED/CANCELLED and PENDING -> SUCCEEDED/FAILED/EXPIRED/CANCELLED are valid state changes; a terminal status cannot transition back to PENDING or SUCCEEDED. Only one unresolved attempt per payment intent may exist at a time. Late confirmed success after EXPIRED is not silently applied: the future event processor must record and reconcile it as an exception. No existing cash status or fulfillment path changes. There is no implemented digital checkout, callback or payment settlement in this increment.
+
+## M3 quarantined fake event evidence (draft PR #49)
+
+Observation of a synthetic provider event does not transition either the digital payment attempt or payment aggregate. The immutable event inbox records QUARANTINED for an otherwise matching claim and classifies UNKNOWN_REFERENCE, FINANCIAL_MISMATCH, ENVIRONMENT_MISMATCH, LATE_SUCCESS, CONTRADICTORY_STATE or ALREADY_SETTLED without ever changing PAID status, receipts or fulfillment. Duplicate same-event ID + exact canonical fields is a no-op with the original evidence ID; conflicting same-event ID fails 409. The inbox cannot process real provider notifications and has no public callback. Authenticating a real provider, handling late success as payable money, resolving discrepancies and issuing receipts remain separate security-reviewed milestones.
