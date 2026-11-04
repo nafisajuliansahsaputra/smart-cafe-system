@@ -55,7 +55,7 @@ public class CashDrawerShiftService {
         Long total = jdbc.queryForObject("""
             SELECT count(*) FROM cash_tender_handoffs
             WHERE cash_shift_id=? AND received_at IS NULL
-            """,Long.class,shiftId);
+            """,Long.class,dbUuid(shiftId));
         var pending = jdbc.query("""
             SELECT h.tender_id,h.waiter_staff_id,u.login,t.amount_received_idr,
                    t.change_given_idr,t.recorded_at,ct.table_code
@@ -74,7 +74,7 @@ public class CashDrawerShiftService {
                 rs.getString("login"),rs.getString("table_code"),
                 Math.subtractExact(rs.getLong("amount_received_idr"),
                     rs.getLong("change_given_idr")),
-                rs.getTimestamp("recorded_at").toInstant()),shiftId);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("recorded_at"))),dbUuid(shiftId));
         return new Dashboard(present(active.getFirst()),
             closed.stream().map(this::present).toList(),total == null ? 0 : total,pending);
     }
@@ -86,7 +86,7 @@ public class CashDrawerShiftService {
         checkKey(key);
         // One global till. Serialize open/close commands; the partial unique index
         // independently rejects overlapping opens even across API replicas.
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs, n) -> 0);
+        lockShiftLifecycle();
         var repeated = jdbc.query("SELECT * FROM cash_drawer_shifts WHERE open_key=?",
             this::map, key);
         if (!repeated.isEmpty()) {
@@ -103,7 +103,7 @@ public class CashDrawerShiftService {
         jdbc.update("""
             INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
             VALUES (?,?,?,?)
-            """, id, actor.staffId(), floatIdr, key);
+            """, dbUuid(id), dbUuid(actor.staffId()), floatIdr, key);
         audit(actor.staffId(), "CASH_SHIFT_OPENED", id, null, requestId,
             floatIdr, null, null);
         return present(load(id, false));
@@ -120,7 +120,7 @@ public class CashDrawerShiftService {
             throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
                 "A printable reason between 5 and 300 characters is required");
         }
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs, n) -> 0);
+        lockShiftLifecycle();
         var old = load(id, true);
         boolean supervisor = actor.roles().contains("MANAGER") || actor.roles().contains("ADMIN");
         if (!supervisor && !old.openedBy().equals(actor.staffId())) {
@@ -137,12 +137,16 @@ public class CashDrawerShiftService {
         Long pending = jdbc.queryForObject("""
             SELECT count(*) FROM cash_tender_handoffs
             WHERE cash_shift_id=? AND received_at IS NULL
-            """,Long.class,id);
+            """,Long.class,dbUuid(id));
         if (pending == null || pending > 0) {
             throw conflict("Unconfirmed waiter cash handoffs must be received before closing");
         }
-        Instant cutoff = jdbc.queryForObject("SELECT clock_timestamp()",
-            (rs, n) -> rs.getTimestamp(1).toInstant());
+        String nowSql = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "SELECT UTC_TIMESTAMP(6)" : "SELECT clock_timestamp()";
+        Instant cutoff = jdbc.queryForObject(nowSql,
+            (rs, n) -> com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                rs.getObject(1)));
         long gross = cashCollected(id);
         long expected;
         try { expected = Math.addExact(old.opening(), gross); }
@@ -155,8 +159,8 @@ public class CashDrawerShiftService {
                 recorded_cash_idr=?,expected_drawer_idr=?,difference_idr=?,
                 closing_reason=?
             WHERE id=? AND closed_at IS NULL
-            """, Timestamp.from(cutoff), actor.staffId(), key, counted,
-            gross, expected, difference, reason.strip(), id);
+            """, dbUtc(cutoff), dbUuid(actor.staffId()), key, counted,
+            gross, expected, difference, reason.strip(), dbUuid(id));
         if (updated != 1) throw conflict("Shift changed during closure");
         audit(actor.staffId(), "CASH_SHIFT_CLOSED", id, reason.strip(), requestId,
             old.opening(), counted, difference);
@@ -169,7 +173,7 @@ public class CashDrawerShiftService {
             FROM cash_tenders t
             JOIN payment_intents p ON p.id=t.payment_intent_id
             WHERE p.method_selected='CASH' AND t.cash_shift_id=?
-            """, (rs, n) -> rs.getBigDecimal(1).longValueExact(),shiftId);
+            """, (rs, n) -> rs.getBigDecimal(1).longValueExact(),dbUuid(shiftId));
         if (amount == null || amount < 0 || amount > MAX_IDR) {
             throw conflict("Cash collection exceeds supported bound");
         }
@@ -183,22 +187,26 @@ public class CashDrawerShiftService {
         allowed(actor);
         checkMoney(counted);
         checkKey(key);
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)",(rs,n)->0);
+        lockShiftLifecycle();
         var shift = load(shiftId,true);
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String forUpdate = vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? " FOR UPDATE" : " FOR UPDATE OF h";
         var rows = jdbc.query("""
             SELECT h.cash_shift_id,h.waiter_staff_id,h.received_by,h.received_at,
                    h.acknowledgment_key,t.amount_received_idr,t.change_given_idr
             FROM cash_tender_handoffs h
             JOIN cash_tenders t ON t.id=h.tender_id
-            WHERE h.tender_id=? AND h.cash_shift_id=? FOR UPDATE OF h
-            """,(rs,n)->new HandoffRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "cash_shift_id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "waiter_staff_id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "received_by"),
-                rs.getTimestamp("received_at")==null?null:
-                    rs.getTimestamp("received_at").toInstant(),
+            WHERE h.tender_id=? AND h.cash_shift_id=?
+            """ + forUpdate,(rs,n)->new HandoffRow(
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"cash_shift_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"waiter_staff_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"received_by"),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("received_at")),
                 rs.getString("acknowledgment_key"),
                 Math.subtractExact(rs.getLong("amount_received_idr"),
-                    rs.getLong("change_given_idr"))),tenderId,shiftId);
+                    rs.getLong("change_given_idr"))),
+            dbUuid(tenderId),dbUuid(shiftId));
         if (rows.isEmpty()) throw new ApiFailureException(HttpStatus.NOT_FOUND,
             "NOT_FOUND","Cash handoff is not available in this shift");
         var handoff=rows.getFirst();
@@ -213,34 +221,55 @@ public class CashDrawerShiftService {
         if (counted!=handoff.net()) {
             throw conflict("Counted cash must match recorded net amount; investigate before accepting");
         }
-        int changed=jdbc.update("""
-            UPDATE cash_tender_handoffs
-            SET received_by=?,received_at=clock_timestamp(),acknowledgment_key=?
-            WHERE tender_id=? AND cash_shift_id=? AND received_at IS NULL
-            """,actor.staffId(),key,tenderId,shiftId);
+        String handoffUpdate = vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? """
+                UPDATE cash_tender_handoffs
+                SET received_by=?,received_at=UTC_TIMESTAMP(6),acknowledgment_key=?
+                WHERE tender_id=? AND cash_shift_id=? AND received_at IS NULL
+                """
+            : """
+                UPDATE cash_tender_handoffs
+                SET received_by=?,received_at=clock_timestamp(),acknowledgment_key=?
+                WHERE tender_id=? AND cash_shift_id=? AND received_at IS NULL
+                """;
+        int changed=jdbc.update(handoffUpdate,
+            dbUuid(actor.staffId()),key,dbUuid(tenderId),dbUuid(shiftId));
         if (changed!=1) throw conflict("Cash handoff was changed");
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
-                resource_id,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
-                jsonb_build_object('shiftId',CAST(? AS text),'netCashIdr',CAST(? AS bigint)))
-            """,actor.staffId(),tenderId,requestId,shiftId.toString(),handoff.net());
+        String handoffAudit = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
+                    jsonb_build_object('shiftId',CAST(? AS text),'netCashIdr',CAST(? AS bigint)))
+                """;
+            case MYSQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_HANDOFF_RECEIVED','CASH_TENDER',?,?,
+                    JSON_OBJECT('shiftId',?,'netCashIdr',?))
+                """;
+        };
+        jdbc.update(handoffAudit,
+            dbUuid(actor.staffId()),dbUuid(tenderId),requestId,
+            shiftId.toString(),handoff.net());
         return new ReceivedHandoff(tenderId,shiftId,handoff.net(),"RECEIVED");
     }
 
     private Stored load(UUID id, boolean lock) {
         var rows = jdbc.query("SELECT * FROM cash_drawer_shifts WHERE id=?" +
-            (lock ? " FOR UPDATE" : ""), this::map, id);
+            (lock ? " FOR UPDATE" : ""), this::map, dbUuid(id));
         if (rows.isEmpty()) throw new ApiFailureException(HttpStatus.NOT_FOUND,
             "NOT_FOUND","Cash shift not found");
         return rows.getFirst();
     }
 
     private Stored map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
-        Timestamp closed = rs.getTimestamp("closed_at");
+        Instant closed = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+            rs.getObject("closed_at"));
         return new Stored(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by"), rs.getTimestamp("opened_at").toInstant(),
-            rs.getLong("opening_float_idr"), closed == null ? null : closed.toInstant(),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by"),
+            com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("opened_at")),
+            rs.getLong("opening_float_idr"),closed,
             com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "closed_by"),
             (Long)rs.getObject("recorded_cash_idr"),
             (Long)rs.getObject("expected_drawer_idr"),
@@ -260,14 +289,25 @@ public class CashDrawerShiftService {
 
     private void audit(UUID actor, String operation, UUID shiftId, String reason,
                        String requestId, long opening, Long counted, Long difference) {
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
-                                   reason,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',? ,?,'CASH_DRAWER_SHIFT',?,?,?,
-                    jsonb_build_object('openingFloatIdr',CAST(? AS bigint),
-                        'countedCashIdr',CAST(? AS bigint),
-                        'differenceIdr',CAST(? AS bigint)))
-            """,actor,operation,shiftId,reason,requestId,opening,counted,difference);
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String statement = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
+                                       reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',? ,?,'CASH_DRAWER_SHIFT',?,?,?,
+                        jsonb_build_object('openingFloatIdr',CAST(? AS bigint),
+                            'countedCashIdr',CAST(? AS bigint),
+                            'differenceIdr',CAST(? AS bigint)))
+                """;
+            case MYSQL -> """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,
+                                       reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,?, 'CASH_DRAWER_SHIFT',?,?,?,
+                    JSON_OBJECT('openingFloatIdr',?,'countedCashIdr',?,'differenceIdr',?))
+                """;
+        };
+        jdbc.update(statement,dbUuid(actor),operation,dbUuid(shiftId),reason,
+            requestId,opening,counted,difference);
     }
 
     private void allowed(StaffPrincipal actor) {
@@ -287,6 +327,35 @@ public class CashDrawerShiftService {
                 "A stable idempotency key is required");
         }
     }
+    /**
+     * PostgreSQL uses the existing transaction-scoped advisory lock.
+     * MySQL cash capture separately locks the active shift row; close and
+     * custody receive lock that SAME row via load(id,true). Opening is also
+     * protected by the MySQL unique active_shift_slot generated index.
+     */
+    private void lockShiftLifecycle() {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive()) {
+            throw new IllegalStateException("Cash drawer commands require a database transaction");
+        }
+        if (com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.POSTGRESQL) {
+            jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs,n)->0);
+        }
+    }
+
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
+    private Object dbUtc(Instant instant) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC)
+            : Timestamp.from(instant);
+    }
+
     private ApiFailureException conflict(String message) {
         return new ApiFailureException(HttpStatus.CONFLICT, "CONFLICT", message);
     }
