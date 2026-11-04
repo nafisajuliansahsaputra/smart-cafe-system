@@ -3,14 +3,14 @@
 CREATE TABLE digital_payment_attempts (
   id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY DEFAULT (UUID()),
   payment_intent_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  method VARCHAR(20) NOT NULL CHECK (method IN ('QRIS','VA')),
+  method VARCHAR(20) COLLATE utf8mb4_bin NOT NULL CHECK (method IN ('QRIS','VA')),
   provider_key VARCHAR(40) NOT NULL,
   provider_reference VARCHAR(128) NOT NULL,
   idempotency_key VARCHAR(128) NOT NULL
     CHECK (REGEXP_LIKE(idempotency_key,'^[A-Za-z0-9_-]{8,128}$')),
   amount_idr BIGINT NOT NULL CHECK (amount_idr > 0),
-  currency CHAR(3) NOT NULL DEFAULT 'IDR' CHECK (currency='IDR'),
-  state VARCHAR(20) NOT NULL DEFAULT 'CREATED'
+  currency CHAR(3) COLLATE utf8mb4_bin NOT NULL DEFAULT 'IDR' CHECK (currency='IDR'),
+  state VARCHAR(20) COLLATE utf8mb4_bin NOT NULL DEFAULT 'CREATED'
     CHECK (state IN ('CREATED','PENDING','SUCCEEDED','FAILED','EXPIRED','CANCELLED')),
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   expires_at DATETIME(6) NOT NULL,
