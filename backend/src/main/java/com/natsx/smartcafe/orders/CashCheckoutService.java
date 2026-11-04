@@ -93,7 +93,7 @@ public class CashCheckoutService {
             WHERE i.actor_id=? AND i.scope='CASH_CHECKOUT' AND i.idempotency_key=?
             """,(rs,n)->new Existing(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("request_hash"),rs.getString("status"),rs.getLong("total_idr"),
-                rs.getString("aggregate_status")),guest.guestId(),key);
+                rs.getString("aggregate_status")),dbUuid(guest.guestId()),key);
         if(!prior.isEmpty()) {
             var found=prior.getFirst();
             if(!hash.equals(found.hash()))throw failure(HttpStatus.CONFLICT,"CONFLICT",
@@ -160,7 +160,7 @@ public class CashCheckoutService {
             WHERE i.actor_id=? AND i.scope='CASH_CHECKOUT' AND i.idempotency_key=?
             """, (rs,n)->new Existing(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("request_hash"),
                 rs.getString("status"),rs.getLong("total_idr"),rs.getString("aggregate_status")),
-            guest.guestId(),key);
+            dbUuid(guest.guestId()),key);
         if (!existing.isEmpty()) {
             var found=existing.getFirst();
             if (!found.hash().equals(hash)) throw failure(HttpStatus.CONFLICT,"CONFLICT",
@@ -170,7 +170,7 @@ public class CashCheckoutService {
 
         String visitState=jdbc.query("""
             SELECT status FROM table_visits WHERE id=? FOR SHARE
-            """,rs->rs.next()?rs.getString(1):null,guest.visitId());
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(guest.visitId()));
         if (!"ACTIVE".equals(visitState)) throw failure(HttpStatus.CONFLICT,"SESSION_CLOSED",
             "Table visit has ended");
 
@@ -183,7 +183,7 @@ public class CashCheckoutService {
                 WHERE i.id=? AND i.availability='AVAILABLE' AND c.active=true
                 FOR SHARE OF i
                 """,(rs,n)->new MenuRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
-                    rs.getLong("base_price_idr")),line.menuItemId());
+                    rs.getLong("base_price_idr")),dbUuid(line.menuItemId()));
             if(found.isEmpty()) throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
                 "Item is unavailable");
             // An UPDATE is the atomic last-unit guard. Rows also exist for unlimited items.
@@ -194,7 +194,7 @@ public class CashCheckoutService {
                     version=version+1
                 WHERE menu_item_id=? AND available=true
                   AND (limited_quantity IS NULL OR limited_quantity>=?)
-                """,line.quantity(),line.menuItemId(),line.quantity());
+                """,line.quantity(),dbUuid(line.menuItemId()),line.quantity());
             if(reserved!=1)throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
                 "Insufficient menu item stock");
             var item=found.getFirst();
@@ -218,7 +218,7 @@ public class CashCheckoutService {
         jdbc.update("""
             INSERT INTO orders(id,visit_id,guest_id,status,subtotal_idr,total_idr,pricing_policy_version)
             VALUES (?,?,?,'SUBMITTED',?,?,'M2-DEMO-UNTAXED')
-            """,orderId,guest.visitId(),guest.guestId(),subtotal,subtotal);
+            """,dbUuid(orderId),dbUuid(guest.visitId()),dbUuid(guest.guestId()),subtotal,subtotal);
         for(var item:items) {
             jdbc.update("""
                 INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
@@ -242,12 +242,12 @@ public class CashCheckoutService {
                 item.unitPrice(),item.quantity(),item.total());
             jdbc.update("""
                 INSERT INTO order_stock_allocations(order_id,menu_item_id,quantity) VALUES (?,?,?)
-                """,orderId,item.menu().id(),item.quantity());
+                """,dbUuid(orderId),dbUuid(item.menu().id()),item.quantity());
         }
         jdbc.update("""
             INSERT INTO payment_intents(order_id,method_selected,amount_due_idr,aggregate_status)
             VALUES (?,?,?,?)
-            """,orderId,selectedMethod,subtotal,
+            """,dbUuid(orderId),selectedMethod,subtotal,
             "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING");
         jdbc.update("""
             INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
@@ -270,7 +270,7 @@ public class CashCheckoutService {
             WHERE o.guest_id=? AND o.visit_id=? ORDER BY o.created_at DESC LIMIT 100
             """,(rs,n)->new Checkout(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
                 rs.getString("aggregate_status"),rs.getLong("total_idr")),
-            guest.guestId(),guest.visitId());
+            dbUuid(guest.guestId()),dbUuid(guest.visitId()));
     }
 
     /** Transaction-scoped, fail-closed checkout lock on either supported DB. */
@@ -280,6 +280,12 @@ public class CashCheckoutService {
             throw failure(HttpStatus.CONFLICT, "SESSION_CLOSED",
                 "Guest is no longer a member of this table visit");
         }
+    }
+
+    /** MySQL CHAR(36) versus PostgreSQL native UUID parameters. */
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private ApiFailureException failure(HttpStatus status,String code,String message) {
