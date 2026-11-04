@@ -14,10 +14,7 @@ public class OutboxEvents {
                               "TABLE_VISIT_CLOSED").contains(eventName)) {
             throw new IllegalArgumentException("Unknown safe table event");
         }
-        jdbc.update("""
-            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
-            VALUES ('TABLE_VISIT',?,?,'{}'::jsonb)
-            """,visitId,eventName);
+        record("TABLE_VISIT", visitId, eventName);
     }
 
     /** Only explicit physical-loan state changes are published; never serials or guest data. */
@@ -29,25 +26,38 @@ public class OutboxEvents {
                 "GAME_LOSS_DISMISSED", "GAME_LOSS_CONFIRMED").contains(eventName)) {
             throw new IllegalArgumentException("Unknown safe game loan event");
         }
-        jdbc.update("""
-            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
-            VALUES ('GAME_LOAN',?,?,'{}'::jsonb)
-            """,loanId,eventName);
+        record("GAME_LOAN", loanId, eventName);
     }
 
     /** Inventory change is public-to-authenticated-visit signal only. No serial,
      * borrower, condition note, or staff identity is sent to the live relay. */
     public void gameInventory(UUID gameId) {
-        jdbc.update("""
-            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
-            VALUES ('GAME_INVENTORY',?,'GAME_INVENTORY_CHANGED','{}'::jsonb)
-            """,gameId);
+        record("GAME_INVENTORY", gameId, "GAME_INVENTORY_CHANGED");
     }
 
     public void order(UUID orderId,String eventName) {
-        jdbc.update("""
-            INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
-            VALUES ('ORDER',?,?,'{}'::jsonb)
-            """,orderId,eventName);
+        record("ORDER", orderId, eventName);
+    }
+
+    /**
+     * Transactional outbox stays durable on both vendors. Event payload is
+     * intentionally an EMPTY safe JSON object (no customer or staff data).
+     * Never downgrade a failed insert to a best-effort network event.
+     */
+    private void record(String aggregateType, UUID aggregateId, String eventName) {
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String statement = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
+                VALUES (?,?,?,'{}'::jsonb)
+                """;
+            case MYSQL -> """
+                INSERT INTO outbox_events(aggregate_type,aggregate_id,event_type,payload_safe)
+                VALUES (?,?,?,JSON_OBJECT())
+                """;
+        };
+        jdbc.update(statement, aggregateType,
+            com.natsx.smartcafe.common.db.JdbcUuid.parameter(aggregateId, vendor),
+            eventName);
     }
 }
