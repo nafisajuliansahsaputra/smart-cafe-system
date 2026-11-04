@@ -34,7 +34,7 @@ public class CashWorkflowService {
                                    long receivedIdr,long changeGivenIdr,String paymentStatus,
                                    UUID receiptId) {}
     private record OrderRow(UUID id,String status,UUID visitId,long total) {}
-    private record PaymentRow(UUID id,String status,long due) {}
+    private record PaymentRow(UUID id,String status,String method,long due) {}
     private record TenderRow(long received,long change) {}
     private record TicketRow(UUID id,UUID orderId,String status) {}
 
@@ -235,25 +235,36 @@ public class CashWorkflowService {
             throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Invalid idempotency key");
         }
         UUID orderId=jdbc.query("SELECT order_id FROM payment_intents WHERE id=?",
-            rs->rs.next()?rs.getObject(1,UUID.class):null,intentId);
+            rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"order_id"):null,
+            dbUuid(intentId));
         if(orderId==null) throw missing();
         var order=lockOrder(orderId);
         requireWaiterOwnershipOrSupervisor(orderId, staff);
         var payment=lockPaymentByOrder(orderId);
         if(!payment.id().equals(intentId)) throw missing();
+        if(!"CASH".equals(payment.method())) {
+            throw conflict("Only cash payment intents may accept physical tender");
+        }
+
         var replay=jdbc.query("""
             SELECT amount_received_idr,change_given_idr FROM cash_tenders
             WHERE payment_intent_id=? AND idempotency_key=?
-            """,(rs,n)->new TenderRow(rs.getLong(1),rs.getLong(2)),intentId,key);
+            """,(rs,n)->new TenderRow(rs.getLong(1),rs.getLong(2)),dbUuid(intentId),key);
         if(!replay.isEmpty()) {
             var old=replay.getFirst();
             if(old.received()!=receivedIdr) throw conflict("Idempotency key reused with different amount");
-            UUID receiptId=jdbc.queryForObject(
-                "SELECT id FROM receipts WHERE payment_intent_id=?",UUID.class,intentId);
+            UUID receiptId=jdbc.query("""
+                SELECT id FROM receipts WHERE payment_intent_id=?
+                """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"):null,
+                dbUuid(intentId));
+            if(receiptId==null) throw new IllegalStateException("Paid cash tender has no receipt");
             return new CashTenderResult(intentId,orderId,old.received(),old.change(),"PAID",receiptId);
         }
-        // Cash at handover is the conservative demo-only policy until the owner confirms cash-at-cashier.
-        if(!order.status().equals("SERVED")) throw conflict("Cash capture requires actual service handover");
+
+        // Cash approval and serving are NEVER equivalent to collecting money.
+        if(!"SERVED".equals(order.status())) {
+            throw conflict("Cash capture requires actual service handover");
+        }
         com.natsx.smartcafe.payments.CashTenderQuote quote;
         try {
             quote=CashTenderCalculator.quote(payment.due(),receivedIdr,
@@ -263,47 +274,85 @@ public class CashWorkflowService {
         } catch(IllegalArgumentException ex) {
             throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR","Cash amount insufficient");
         }
-        // The advisory fence is also held by close-shift and cashier handoff.
-        // New tender commits cannot slip into a shift after its closing snapshot.
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs,n)->0);
-        UUID shiftId = jdbc.query("""
-            SELECT id FROM cash_drawer_shifts WHERE closed_at IS NULL LIMIT 1
-            """, rs -> rs.next() ? rs.getObject(1,UUID.class) : null);
-        if (shiftId == null) {
-            Integer prior = jdbc.queryForObject("SELECT count(*) FROM cash_drawer_shifts",
+
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        if (vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL &&
+            !org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive()) {
+            throw new IllegalStateException("MySQL cash tender requires a database transaction");
+        }
+
+        // PostgreSQL keeps its transaction advisory fence. MySQL instead
+        // locks the EXISTING active cash shift row through commit, which
+        // serializes this tender against shift close/handoff. Unlike a
+        // MySQL connection-lifetime GET_LOCK, no pool-level lock survives.
+        if(vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.POSTGRESQL) {
+            jdbc.queryForObject("SELECT pg_advisory_xact_lock(48725021)", (rs,n)->0);
+        }
+        String activeShiftSql = "SELECT id FROM cash_drawer_shifts WHERE closed_at IS NULL LIMIT 1"
+            + (vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+                ? " FOR UPDATE" : "");
+        UUID shiftId=jdbc.query(activeShiftSql,rs->rs.next()?
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"):null);
+
+        if(shiftId==null) {
+            // A MySQL cash tender must never be recorded without a stable
+            // till row to lock. PostgreSQL legacy first-shift demo behavior
+            // stays unchanged until the separate shift port is complete.
+            if(vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL) {
+                throw conflict("Open a cash drawer shift before recording cash");
+            }
+            Integer prior=jdbc.queryForObject("SELECT count(*) FROM cash_drawer_shifts",
                 Integer.class);
-            if (prior != null && prior > 0) {
+            if(prior!=null && prior>0) {
                 throw conflict("Open a cash drawer shift before capturing another cash payment");
             }
         }
-        UUID tenderId = jdbc.queryForObject("""
-            INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,
-                change_given_idr,idempotency_key,cash_shift_id,recorded_at)
-            VALUES (?,?,?,?,?,?,clock_timestamp()) RETURNING id
-            """, UUID.class, intentId,staff,quote.amountReceivedIdr(),
-            quote.changeGivenIdr(),key,shiftId);
-        if (shiftId != null) {
-            Boolean waiterOnly = jdbc.queryForObject("""
+
+        UUID tenderId;
+        if(vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.POSTGRESQL) {
+            tenderId=jdbc.queryForObject("""
+                INSERT INTO cash_tenders(payment_intent_id,staff_user_id,amount_received_idr,
+                    change_given_idr,idempotency_key,cash_shift_id,recorded_at)
+                VALUES (?,?,?,?,?,?,clock_timestamp()) RETURNING id
+                """,UUID.class,dbUuid(intentId),dbUuid(staff),quote.amountReceivedIdr(),
+                quote.changeGivenIdr(),key,dbUuid(shiftId));
+        } else {
+            tenderId=UUID.randomUUID();
+            int inserted=jdbc.update("""
+                INSERT INTO cash_tenders(id,payment_intent_id,staff_user_id,amount_received_idr,
+                    change_given_idr,idempotency_key,cash_shift_id,recorded_at)
+                VALUES (?,?,?,?,?,?,?,UTC_TIMESTAMP(6))
+                """,dbUuid(tenderId),dbUuid(intentId),dbUuid(staff),quote.amountReceivedIdr(),
+                quote.changeGivenIdr(),key,dbUuid(shiftId));
+            if(inserted!=1)throw new IllegalStateException("Cash tender was not recorded");
+        }
+
+        if(shiftId!=null) {
+            Boolean waiterOnly=jdbc.queryForObject("""
                 SELECT EXISTS(SELECT 1 FROM staff_role_assignments
                     WHERE staff_user_id=? AND role_key='WAITER')
                   AND NOT EXISTS(SELECT 1 FROM staff_role_assignments
                     WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
-                """,Boolean.class,staff,staff);
-            if (Boolean.TRUE.equals(waiterOnly)) {
+                """,Boolean.class,dbUuid(staff),dbUuid(staff));
+            if(Boolean.TRUE.equals(waiterOnly)) {
                 jdbc.update("""
                     INSERT INTO cash_tender_handoffs(tender_id,cash_shift_id,waiter_staff_id)
                     VALUES (?,?,?)
-                    """,tenderId,shiftId,staff);
+                    """,dbUuid(tenderId),dbUuid(shiftId),dbUuid(staff));
             }
         }
-        jdbc.update("""
+
+        int changed=jdbc.update("""
             UPDATE payment_intents SET amount_paid_idr=?,aggregate_status='PAID',version=version+1
-            WHERE id=?
-            """,payment.due(),intentId);
+            WHERE id=? AND aggregate_status='AWAITING_CASH'
+            """,payment.due(),dbUuid(intentId));
+        if(changed!=1)throw conflict("Cash payment state changed during capture");
         UUID receiptId=receipts.issueCash(intentId,orderId,payment.due());
         audit.staff(staff,"CASH_COLLECTED","PAYMENT_INTENT",intentId,requestId);
         outbox.order(orderId,"CASH_PAYMENT_PAID");
-        return new CashTenderResult(intentId,orderId,receivedIdr,quote.changeGivenIdr(),"PAID",receiptId);
+        return new CashTenderResult(intentId,orderId,receivedIdr,
+            quote.changeGivenIdr(),"PAID",receiptId);
     }
 
     private void requireWaiterOwnershipOrSupervisor(UUID orderId, UUID staffId) {
@@ -343,8 +392,9 @@ public class CashWorkflowService {
     }
     private PaymentRow lockPaymentByOrder(UUID orderId) {
         var result=jdbc.query("""
-            SELECT id,aggregate_status,amount_due_idr FROM payment_intents WHERE order_id=? FOR UPDATE
-            """,rs->rs.next()?new PaymentRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("aggregate_status"),
+            SELECT id,aggregate_status,method_selected,amount_due_idr
+            FROM payment_intents WHERE order_id=? FOR UPDATE
+            """,rs->rs.next()?new PaymentRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("aggregate_status"),rs.getString("method_selected"),
                 rs.getLong("amount_due_idr")):null,dbUuid(orderId));
         if(result==null)throw missing();
         return result;
