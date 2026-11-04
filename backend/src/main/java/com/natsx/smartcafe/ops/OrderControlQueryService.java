@@ -26,39 +26,79 @@ public class OrderControlQueryService {
                               long subtotalIdr,long taxIdr,long serviceFeeIdr,long totalIdr,
                               String paymentMethod,Instant createdAt,List<OrderLine> lines) {}
 
-    @Transactional(readOnly = true)
-    public List<QueueItem> search(String orderStatus,String paymentStatus,String tableCode,UUID orderId) {
-        StringBuilder query=new StringBuilder("""
-            SELECT o.id,t.table_code,o.status,p.aggregate_status,o.total_idr,o.created_at FROM orders o
-            JOIN table_visits v ON v.id=o.visit_id JOIN cafe_tables t ON t.id=v.table_id
-            JOIN payment_intents p ON p.order_id=o.id WHERE 1=1
-            """);
-        var arguments=new ArrayList<Object>();
-        if(orderStatus!=null && !orderStatus.isBlank()) {
+    private static final int PAGE_SIZE = 25;
+    private static final String QUEUE_COLUMNS = """
+        SELECT o.id,t.table_code,o.status,p.aggregate_status,o.total_idr,o.created_at
+        """;
+    private static final String QUEUE_FROM = """
+        FROM orders o
+        JOIN table_visits v ON v.id=o.visit_id JOIN cafe_tables t ON t.id=v.table_id
+        JOIN payment_intents p ON p.order_id=o.id WHERE 1=1
+        """;
+
+    public record QueuePage(int page, int pageSize, boolean hasNext,
+                            long total, List<QueueItem> items) {}
+    private record Filters(String fromWhere, List<Object> arguments) {}
+
+    private Filters filters(String orderStatus, String paymentStatus, String tableCode, UUID orderId) {
+        StringBuilder fromWhere = new StringBuilder(QUEUE_FROM);
+        var arguments = new ArrayList<Object>();
+        if (orderStatus != null && !orderStatus.isBlank()) {
             try { OrderStatus.valueOf(orderStatus); }
-            catch(IllegalArgumentException ex) { throw invalid("Invalid order status"); }
-            query.append(" AND o.status=?");
+            catch (IllegalArgumentException ex) { throw invalid("Invalid order status"); }
+            fromWhere.append(" AND o.status=?");
             arguments.add(orderStatus);
         }
-        if(paymentStatus!=null && !paymentStatus.isBlank()) {
+        if (paymentStatus != null && !paymentStatus.isBlank()) {
             try { PaymentStatus.valueOf(paymentStatus); }
-            catch(IllegalArgumentException ex) { throw invalid("Invalid payment status"); }
-            query.append(" AND p.aggregate_status=?");
+            catch (IllegalArgumentException ex) { throw invalid("Invalid payment status"); }
+            fromWhere.append(" AND p.aggregate_status=?");
             arguments.add(paymentStatus);
         }
-        if(tableCode!=null && !tableCode.isBlank()) {
-            if(tableCode.length()>40)throw invalid("Invalid table code");
-            query.append(" AND t.table_code=?");
+        if (tableCode != null && !tableCode.isBlank()) {
+            if (tableCode.length() > 40) throw invalid("Invalid table code");
+            fromWhere.append(" AND t.table_code=?");
             arguments.add(tableCode);
         }
-        if(orderId!=null) {
-            query.append(" AND o.id=?");
+        if (orderId != null) {
+            fromWhere.append(" AND o.id=?");
             arguments.add(orderId);
         }
-        query.append(" ORDER BY o.created_at DESC LIMIT 100");
-        return jdbc.query(query.toString(),(rs,n)->new QueueItem(rs.getObject("id",UUID.class),
-            rs.getString("table_code"),rs.getString("status"),rs.getString("aggregate_status"),
-            rs.getLong("total_idr"),rs.getTimestamp("created_at").toInstant()),arguments.toArray());
+        return new Filters(fromWhere.toString(), arguments);
+    }
+
+    private List<QueueItem> readQueue(String sql, List<Object> arguments) {
+        return jdbc.query(sql, (rs,n) -> new QueueItem(rs.getObject("id", UUID.class),
+            rs.getString("table_code"), rs.getString("status"),
+            rs.getString("aggregate_status"), rs.getLong("total_idr"),
+            rs.getTimestamp("created_at").toInstant()), arguments.toArray());
+    }
+
+    // Legacy callers retain the existing 100-order response contract.
+    @Transactional(readOnly = true)
+    public List<QueueItem> search(String orderStatus, String paymentStatus, String tableCode, UUID orderId) {
+        Filters f = filters(orderStatus, paymentStatus, tableCode, orderId);
+        return readQueue(QUEUE_COLUMNS + f.fromWhere() +
+            " ORDER BY o.created_at DESC LIMIT 100", f.arguments());
+    }
+
+    // The actual OCC browser uses this PostgreSQL-backed page, not the
+    // historical capped queue. Count and items share a consistent snapshot.
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public QueuePage page(int page, String orderStatus, String paymentStatus,
+                          String tableCode, UUID orderId) {
+        if (page < 0 || page > 1000) throw invalid("Invalid OCC page");
+        Filters f = filters(orderStatus, paymentStatus, tableCode, orderId);
+        Long total = jdbc.queryForObject("SELECT count(*) " + f.fromWhere(),
+            Long.class, f.arguments().toArray());
+        var arguments = new ArrayList<>(f.arguments());
+        arguments.add(PAGE_SIZE + 1);
+        arguments.add(page * PAGE_SIZE);
+        List<QueueItem> rows = readQueue(QUEUE_COLUMNS + f.fromWhere() +
+            " ORDER BY o.created_at DESC, o.id DESC LIMIT ? OFFSET ?", arguments);
+        boolean hasNext = rows.size() > PAGE_SIZE;
+        return new QueuePage(page, PAGE_SIZE, hasNext, total == null ? 0 : total,
+            List.copyOf(rows.subList(0, Math.min(rows.size(), PAGE_SIZE))));
     }
 
     @Transactional(readOnly = true)
