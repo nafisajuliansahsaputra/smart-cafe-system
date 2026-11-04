@@ -25,6 +25,9 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd --system --uid 10001 cafe
 COPY --from=build /source/target/smart-cafe-backend-0.1.0-SNAPSHOT.jar app.jar
+COPY --chown=cafe:cafe docker-review-entrypoint.sh /app/docker-review-entrypoint.sh
 USER cafe
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+# Review startup builds its CA truststore in /tmp only when opt-in is true.
+# Normal PostgreSQL startup remains the same, and no secrets enter the image.
+ENTRYPOINT ["sh","/app/docker-review-entrypoint.sh"]

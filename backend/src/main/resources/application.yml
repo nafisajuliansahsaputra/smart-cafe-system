@@ -11,6 +11,9 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    # PostgreSQL remains the default. An isolated synthetic Aiven review
+    # explicitly selects classpath:db/mysql; never mix migration engines.
+    locations: ${SCS_FLYWAY_LOCATIONS:classpath:db/migration}
 server:
   # Honour the platform-assigned listening port; local Docker remains 8080.
   port: ${PORT:8080}
@@ -36,6 +39,12 @@ springdoc:
 # Both environment=sandbox AND explicit sandbox-digital-checkout-enabled=true
 # are required to create QRIS/VA pending orders. No real payment adapter.
 scs:
+  mysql:
+    # Must be explicitly acknowledged for a disposable/isolated review only.
+    # The pre-Flyway guard also requires scs_review_* schema, strict TLS,
+    # disabled digital payments and a nonempty DB password.
+    review-enabled: ${SCS_MYSQL_REVIEW_ENABLED:false}
+    review-ack: ${SCS_MYSQL_REVIEW_ACK:}
   payments:
     sandbox-digital-checkout-enabled: ${SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED:false}
     environment: ${SCS_PAYMENT_ENVIRONMENT:disabled}
