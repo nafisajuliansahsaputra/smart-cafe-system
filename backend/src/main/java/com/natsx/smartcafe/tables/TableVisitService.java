@@ -85,7 +85,8 @@ public class TableVisitService {
             UPDATE table_visits SET join_secret_hash=?,join_proof_expires_at=?,
                 rotation_version=rotation_version+1,version=version+1 WHERE id=?
             """, SecureToken.sha256(proof), Timestamp.from(expires), visitId);
-        UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?", UUID.class, visitId);
+        UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?",
+            (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"), visitId);
         audit.staff(staffId, "TABLE_JOIN_PROOF_ROTATED", "TABLE_VISIT", visitId, requestId);
         outbox.tableVisit(visitId, "TABLE_JOIN_PROOF_ROTATED");
         return new VisitOpened(visitId, tableId, proof, expires);
