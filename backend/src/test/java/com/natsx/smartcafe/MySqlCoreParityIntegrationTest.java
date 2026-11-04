@@ -86,6 +86,19 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlVisitForeignKeyReadsUuidThroughDialectAdapter() {
+        String staff = newStaff();
+        String table = newTable();
+        String visit = newVisit(table, staff);
+        UUID fromDb = jdbc.queryForObject(
+            "SELECT table_id FROM table_visits WHERE id=?",
+            (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"),
+            UUID.fromString(visit)
+        );
+        assertEquals(UUID.fromString(table), fromDb);
+    }
+
+    @Test
     void receiptRequiresPaidExactAmountAndEvidenceIsImmutable() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
