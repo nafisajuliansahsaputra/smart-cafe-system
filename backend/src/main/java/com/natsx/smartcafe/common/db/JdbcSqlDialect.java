@@ -98,6 +98,50 @@ public final class JdbcSqlDialect {
     }
 
     /**
+     * Acquire an idempotency lock for guest checkout inside the caller's DB
+     * transaction. PostgreSQL retains the existing per-guest/per-key
+     * advisory lock. MySQL deliberately uses a coarser row lock on the real
+     * guest/visit membership, which prevents parallel checkout requests from
+     * both reading an absent idempotency key.
+     *
+     * Return false only when the guest/visit membership does not exist.
+     * Never use GET_LOCK(), whose lifetime is tied to the pooled connection
+     * rather than this transaction.
+     */
+    public static boolean lockGuestCheckout(JdbcTemplate jdbc,
+                                            java.util.UUID guestId,
+                                            java.util.UUID visitId,
+                                            String idempotencyKey) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive()) {
+            throw new IllegalStateException(
+                "Checkout idempotency locks require an active database transaction");
+        }
+        if (guestId == null || visitId == null || idempotencyKey == null) {
+            throw new IllegalArgumentException("Checkout lock identity is required");
+        }
+
+        var vendor = detect(jdbc);
+        if (vendor == Vendor.POSTGRESQL) {
+            // Preserve the original PostgreSQL lock key and its semantics.
+            jdbc.queryForObject(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                Object.class, guestId + ":" + idempotencyKey);
+            return true;
+        }
+
+        // MySQL InnoDB SELECT ... FOR UPDATE serializes all checkouts for a
+        // guest through transaction commit, including different retry keys.
+        // It also refuses a fabricated guest/visit pair before any writes.
+        var matches = jdbc.query("""
+            SELECT id FROM visit_guests WHERE id=? AND visit_id=? FOR UPDATE
+            """, (rs, row) -> JdbcUuid.read(rs, "id"),
+            JdbcUuid.parameter(guestId, vendor),
+            JdbcUuid.parameter(visitId, vendor));
+        return matches.size() == 1 && guestId.equals(matches.getFirst());
+    }
+
+    /**
      * Never overwrite an existing cart's visit ID when an insert collides.
      * A new guest ID belongs to one visit only.
      */

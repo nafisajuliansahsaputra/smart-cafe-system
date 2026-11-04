@@ -85,8 +85,7 @@ public class CashCheckoutService {
         String hash=SecureToken.sha256("CART|"+expectedVersion+
             ("CASH".equals(selected)?"":"|SANDBOX|"+selected));
         // Lock first: a completed checkout must remain replayable after cart consumption.
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-            Object.class,guest.guestId()+":"+key);
+        lockGuestCheckout(guest, key);
         var prior=jdbc.query("""
             SELECT i.request_hash,o.id,o.status,p.aggregate_status,o.total_idr
             FROM order_idempotency i JOIN orders o ON o.id=i.order_id
@@ -153,8 +152,7 @@ public class CashCheckoutService {
             SecureToken.sha256(("CASH".equals(selectedMethod)?"CASH|":
                 "SANDBOX|"+selectedMethod+"|")+String.join("|",canonical));
         // Serializes concurrent submissions for the same guest/key BEFORE reading idempotency.
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class,
-            guest.guestId()+":"+key);
+        lockGuestCheckout(guest, key);
         var existing = jdbc.query("""
             SELECT i.order_id,i.request_hash,o.status,o.total_idr,p.aggregate_status
             FROM order_idempotency i JOIN orders o ON o.id=i.order_id
@@ -273,6 +271,15 @@ public class CashCheckoutService {
             """,(rs,n)->new Checkout(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
                 rs.getString("aggregate_status"),rs.getLong("total_idr")),
             guest.guestId(),guest.visitId());
+    }
+
+    /** Transaction-scoped, fail-closed checkout lock on either supported DB. */
+    private void lockGuestCheckout(GuestPrincipal guest, String key) {
+        if (!com.natsx.smartcafe.common.db.JdbcSqlDialect.lockGuestCheckout(
+                jdbc, guest.guestId(), guest.visitId(), key)) {
+            throw failure(HttpStatus.CONFLICT, "SESSION_CLOSED",
+                "Guest is no longer a member of this table visit");
+        }
     }
 
     private ApiFailureException failure(HttpStatus status,String code,String message) {

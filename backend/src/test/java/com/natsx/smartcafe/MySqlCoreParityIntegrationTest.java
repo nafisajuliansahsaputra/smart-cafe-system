@@ -100,6 +100,34 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void checkoutIdempotencyLockIsTransactionScopedAndVisitScopedOnMySql() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Synthetic checkout guest");
+        var guestId = UUID.fromString(guest);
+        var visitId = UUID.fromString(visit);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        // A FOR UPDATE lock in autocommit would be released prematurely.
+        assertThrows(IllegalStateException.class, () ->
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.lockGuestCheckout(
+                jdbc, guestId, visitId, "idempotency-sample"));
+
+        assertEquals(Boolean.TRUE, tx.execute(status ->
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.lockGuestCheckout(
+                jdbc, guestId, visitId, "idempotency-sample")));
+        assertEquals(Boolean.FALSE, tx.execute(status ->
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.lockGuestCheckout(
+                jdbc, UUID.randomUUID(), visitId, "forged-member")));
+        assertEquals(Boolean.FALSE, tx.execute(status ->
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.lockGuestCheckout(
+                jdbc, guestId, UUID.randomUUID(), "wrong-visit")));
+    }
+
+    @Test
     void guestCartMySqlUsesChar36IdsAndPreservesVersionAndStockGuards() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
