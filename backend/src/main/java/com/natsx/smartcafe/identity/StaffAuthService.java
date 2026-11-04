@@ -48,12 +48,13 @@ public class StaffAuthService {
         var attempts = jdbc.queryForMap(
             "SELECT window_started_at, failed_attempts, locked_until FROM staff_login_throttles WHERE login_hash=? FOR UPDATE",
             loginHash);
-        Instant locked = attempts.get("locked_until") == null ? null
-            : ((java.sql.Timestamp) attempts.get("locked_until")).toInstant();
+        Instant locked = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+            attempts.get("locked_until"));
         if (locked != null && locked.isAfter(now)) {
             return LoginResult.failed("RATE_LIMITED");
         }
-        Instant start = ((java.sql.Timestamp) attempts.get("window_started_at")).toInstant();
+        Instant start = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+            attempts.get("window_started_at"));
         int failed = ((Number) attempts.get("failed_attempts")).intValue();
         if (start.plus(WINDOW).isBefore(now) || (locked != null && !locked.isAfter(now))) {
             failed = 0;
@@ -80,7 +81,7 @@ public class StaffAuthService {
         String token = SecureToken.generate();
         Instant expires = now.plus(SESSION_TTL);
         jdbc.update("INSERT INTO staff_sessions(token_hash, staff_user_id, expires_at) VALUES (?,?,?)",
-            SecureToken.sha256(token), user.id(), java.sql.Timestamp.from(expires));
+            SecureToken.sha256(token), dbUuid(user.id()), java.sql.Timestamp.from(expires));
         jdbc.update("DELETE FROM staff_login_throttles WHERE login_hash=?", loginHash);
         return new LoginResult(token, expires, null);
     }
@@ -99,8 +100,14 @@ public class StaffAuthService {
         StaffRow user = matches.getFirst();
         Set<String> roles = jdbc.query("""
             SELECT role_key FROM staff_role_assignments WHERE staff_user_id=?
-            """, (rs, row) -> rs.getString("role_key"), user.id()).stream().collect(Collectors.toUnmodifiableSet());
+            """, (rs, row) -> rs.getString("role_key"), dbUuid(user.id())).stream().collect(Collectors.toUnmodifiableSet());
         return new StaffPrincipal(user.id(), user.login(), tokenHash, roles);
+    }
+
+    /** PostgreSQL uses native UUID; MySQL uses ASCII CHAR(36). */
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     @Transactional

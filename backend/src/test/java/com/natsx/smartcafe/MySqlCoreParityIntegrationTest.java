@@ -100,6 +100,45 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void staffLoginUsesMySqlUuidSessionsRevokesAndPersistsFailedThrottles() {
+        var passwords = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4);
+        var auth = new com.natsx.smartcafe.identity.StaffAuthService(jdbc, passwords);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        String staffId = newStaff();
+        String login = jdbc.queryForObject(
+            "SELECT login FROM staff_users WHERE id=?", String.class, staffId);
+        jdbc.update("UPDATE staff_users SET password_hash=? WHERE id=?",
+            passwords.encode("test-staff-secret-24-bytes"), staffId);
+        jdbc.update(
+            "INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            staffId, "WAITER");
+
+        var signedIn = tx.execute(status -> auth.login(login, "test-staff-secret-24-bytes"));
+        assertEquals(null, signedIn.failure());
+        var principal = tx.execute(status -> auth.authenticate(signedIn.token()));
+        assertEquals(UUID.fromString(staffId), principal.staffId());
+        assertEquals(true, principal.roles().contains("WAITER"));
+        tx.executeWithoutResult(status -> auth.logout(principal));
+        org.junit.jupiter.api.Assertions.assertNull(
+            tx.execute(status -> auth.authenticate(signedIn.token())));
+
+        // Failed passwords are recorded on a separate absent identifier.
+        // Returning a denial must commit the throttle counter.
+        String absent = "missing-" + UUID.randomUUID();
+        for (int i = 0; i < 4; i++) {
+            assertEquals("UNAUTHENTICATED",
+                tx.execute(status -> auth.login(absent, "bad-password")).failure());
+        }
+        assertEquals("RATE_LIMITED",
+            tx.execute(status -> auth.login(absent, "bad-password")).failure());
+        assertEquals(5, jdbc.queryForObject(
+            "SELECT failed_attempts FROM staff_login_throttles WHERE login_hash=?",
+            Integer.class, com.natsx.smartcafe.identity.SecureToken.sha256(absent)));
+    }
+
+    @Test
     void guestJoinThrottleRejectsTheTwentyFifthAttemptWithinSameTenMinuteWindow() {
         // Exercise the real service's three HMAC buckets and transaction
         // boundary, not merely the vendor SQL chosen by a unit test.
