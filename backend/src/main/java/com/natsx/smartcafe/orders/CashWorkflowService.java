@@ -54,7 +54,7 @@ public class CashWorkflowService {
         var order=lockOrder(orderId);
         var payment=lockPaymentByOrder(orderId);
         if (!"ACTIVE".equals(jdbc.queryForObject(
-            "SELECT status FROM table_visits WHERE id=?",String.class,order.visitId()))) {
+            "SELECT status FROM table_visits WHERE id=?",String.class,dbUuid(order.visitId())))) {
             throw conflict("Table visit has ended");
         }
         try {
@@ -63,8 +63,8 @@ public class CashWorkflowService {
         } catch (IllegalStateException ex) {
             throw conflict("Cash order is not awaiting approval");
         }
-        jdbc.update("UPDATE orders SET status='ACCEPTED',accepted_at=now(),version=version+1 WHERE id=?",orderId);
-        jdbc.update("INSERT INTO kitchen_tickets(order_id,status) VALUES (?,'ACCEPTED')",orderId);
+        jdbc.update("UPDATE orders SET status='ACCEPTED',accepted_at=now(),version=version+1 WHERE id=?",dbUuid(orderId));
+        jdbc.update("INSERT INTO kitchen_tickets(order_id,status) VALUES (?,'ACCEPTED')",dbUuid(orderId));
         audit.staff(staff,"CASH_ORDER_APPROVED","ORDER",orderId,requestId);
         outbox.order(orderId,"ORDER_ACCEPTED");
     }
@@ -82,15 +82,15 @@ public class CashWorkflowService {
             throw conflict("Only submitted unpaid cash orders can be rejected");
         Integer ticketCount=jdbc.queryForObject("""
             SELECT count(*) FROM kitchen_tickets WHERE order_id=?
-            """,Integer.class,orderId);
+            """,Integer.class,dbUuid(orderId));
         if(ticketCount==null || ticketCount!=0)throw conflict("Already admitted to kitchen");
         var allocations=jdbc.query("""
             SELECT menu_item_id,quantity,released_at FROM order_stock_allocations
             WHERE order_id=? ORDER BY menu_item_id FOR UPDATE
             """,(rs,n)->new StockAllocation(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
-                rs.getInt("quantity"),rs.getTimestamp("released_at")),orderId);
+                rs.getInt("quantity"),rs.getTimestamp("released_at")),dbUuid(orderId));
         Integer lines=jdbc.queryForObject("SELECT count(*) FROM order_lines WHERE order_id=?",
-            Integer.class,orderId);
+            Integer.class,dbUuid(orderId));
         if(lines==null || allocations.size()!=lines || allocations.isEmpty())
             throw conflict("Cannot safely release an order missing stock allocation evidence");
         for(var allocation:allocations) {
@@ -98,21 +98,21 @@ public class CashWorkflowService {
             jdbc.update("""
                 UPDATE item_availability SET limited_quantity=limited_quantity+?,version=version+1
                 WHERE menu_item_id=? AND limited_quantity IS NOT NULL
-                """,allocation.quantity(),allocation.itemId());
+                """,allocation.quantity(),dbUuid(allocation.itemId()));
             int updated=jdbc.update("""
                 UPDATE order_stock_allocations SET released_at=now()
                 WHERE order_id=? AND menu_item_id=? AND released_at IS NULL
-                """,orderId,allocation.itemId());
+                """,dbUuid(orderId),dbUuid(allocation.itemId()));
             if(updated!=1)throw conflict("Concurrent stock release detected");
         }
-        jdbc.update("UPDATE orders SET status='REJECTED',version=version+1 WHERE id=?",orderId);
+        jdbc.update("UPDATE orders SET status='REJECTED',version=version+1 WHERE id=?",dbUuid(orderId));
         jdbc.update("""
             UPDATE payment_intents SET aggregate_status='UNPAID',version=version+1 WHERE id=?
-            """,payment.id());
+            """,dbUuid(payment.id()));
         jdbc.update("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,reason,correlation_id)
             VALUES ('STAFF',?,'CASH_ORDER_REJECTED','ORDER',?,?,?)
-            """,staff,orderId,reason,requestId);
+            """,dbUuid(staff),dbUuid(orderId),reason,requestId);
         outbox.order(orderId,"CASH_ORDER_REJECTED");
     }
 
@@ -129,11 +129,10 @@ public class CashWorkflowService {
             """,(rs,n)->new TicketRowView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("table_code"),rs.getString("status")));
         return tickets.stream().map(ticket->{
-            var lines=jdbc.query("""
-                SELECT name_snapshot,quantity,notes,variant_snapshot->>'label' AS variant_label
-                FROM order_lines WHERE order_id=? ORDER BY name_snapshot
-                """,(rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
-                    rs.getString("notes"),rs.getString("variant_label")),ticket.orderId());
+            var lines=jdbc.query(kitchenLinesSql(),
+                (rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
+                    rs.getString("notes"),rs.getString("variant_label")),
+                dbUuid(ticket.orderId()));
             return new KitchenTicket(ticket.id(),ticket.orderId(),ticket.tableCode(),ticket.status(),lines);
         }).toList();
     }
@@ -172,11 +171,10 @@ public class CashWorkflowService {
         boolean hasNext=rows.size()>KITCHEN_PAGE_SIZE;
         var selected=rows.subList(0,Math.min(KITCHEN_PAGE_SIZE,rows.size()));
         var items=selected.stream().map(ticket->{
-            var lines=jdbc.query("""
-                SELECT name_snapshot,quantity,notes,variant_snapshot->>'label' AS variant_label
-                FROM order_lines WHERE order_id=? ORDER BY name_snapshot
-                """,(rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
-                rs.getString("notes"),rs.getString("variant_label")),ticket.orderId());
+            var lines=jdbc.query(kitchenLinesSql(),
+                (rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
+                    rs.getString("notes"),rs.getString("variant_label")),
+                dbUuid(ticket.orderId()));
             return new KitchenTicket(ticket.id(),ticket.orderId(),ticket.tableCode(),
                 ticket.status(),lines);
         }).toList();
@@ -198,8 +196,8 @@ public class CashWorkflowService {
             CashOrderPolicy.startPreparation(OrderStatus.valueOf(order.status()),
                 PaymentStatus.valueOf(payment.status()));
         } catch(IllegalStateException ex) { throw conflict("Order not admitted to kitchen"); }
-        jdbc.update("UPDATE orders SET status='PREPARING',version=version+1 WHERE id=?",order.id());
-        jdbc.update("UPDATE kitchen_tickets SET status='PREPARING',preparing_at=now(),version=version+1 WHERE id=?",ticketId);
+        jdbc.update("UPDATE orders SET status='PREPARING',version=version+1 WHERE id=?",dbUuid(order.id()));
+        jdbc.update("UPDATE kitchen_tickets SET status='PREPARING',preparing_at=now(),version=version+1 WHERE id=?",dbUuid(ticketId));
         audit.staff(staff,"KITCHEN_STARTED","KITCHEN_TICKET",ticketId,requestId);
         outbox.order(order.id(),"ORDER_PREPARING");
     }
@@ -213,8 +211,8 @@ public class CashWorkflowService {
         try {
             CashOrderPolicy.markReady(OrderStatus.valueOf(order.status()));
         } catch(IllegalStateException ex) { throw conflict("Order cannot become ready"); }
-        jdbc.update("UPDATE orders SET status='READY',version=version+1 WHERE id=?",order.id());
-        jdbc.update("UPDATE kitchen_tickets SET status='READY',ready_at=now(),version=version+1 WHERE id=?",ticketId);
+        jdbc.update("UPDATE orders SET status='READY',version=version+1 WHERE id=?",dbUuid(order.id()));
+        jdbc.update("UPDATE kitchen_tickets SET status='READY',ready_at=now(),version=version+1 WHERE id=?",dbUuid(ticketId));
         audit.staff(staff,"KITCHEN_READY","KITCHEN_TICKET",ticketId,requestId);
         outbox.order(order.id(),"ORDER_READY");
     }
@@ -226,7 +224,7 @@ public class CashWorkflowService {
         try {
             CashOrderPolicy.markServed(OrderStatus.valueOf(order.status()));
         } catch(IllegalStateException ex) { throw conflict("Order is not ready to serve"); }
-        jdbc.update("UPDATE orders SET status='SERVED',version=version+1 WHERE id=?",orderId);
+        jdbc.update("UPDATE orders SET status='SERVED',version=version+1 WHERE id=?",dbUuid(orderId));
         audit.staff(staff,"ORDER_SERVED","ORDER",orderId,requestId);
         outbox.order(orderId,"ORDER_SERVED");
     }
@@ -312,12 +310,12 @@ public class CashWorkflowService {
         Boolean supervisor = jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM staff_role_assignments
                           WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
-            """, Boolean.class, staffId);
+            """, Boolean.class, dbUuid(staffId));
         if (Boolean.TRUE.equals(supervisor)) return;
         Boolean assigned = jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM orders o JOIN table_visits v ON v.id=o.visit_id
                           WHERE o.id=? AND v.opened_by=?)
-            """, Boolean.class, orderId, staffId);
+            """, Boolean.class, dbUuid(orderId), dbUuid(staffId));
         if (!Boolean.TRUE.equals(assigned)) {
             throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
                 "Waiter is not responsible for this visit");
@@ -327,19 +325,19 @@ public class CashWorkflowService {
     private TicketRow findTicket(UUID id) {
         return jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=?",
             rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,dbUuid(id));
     }
     private TicketRow lockTicket(UUID id) {
         var found=jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=? FOR UPDATE",
             rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,dbUuid(id));
         if(found==null)throw missing();
         return found;
     }
     private OrderRow lockOrder(UUID id) {
         var result=jdbc.query("SELECT id,status,visit_id,total_idr FROM orders WHERE id=? FOR UPDATE",
             rs->rs.next()?new OrderRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getLong("total_idr")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getLong("total_idr")):null,dbUuid(id));
         if(result==null)throw missing();
         return result;
     }
@@ -347,10 +345,26 @@ public class CashWorkflowService {
         var result=jdbc.query("""
             SELECT id,aggregate_status,amount_due_idr FROM payment_intents WHERE order_id=? FOR UPDATE
             """,rs->rs.next()?new PaymentRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("aggregate_status"),
-                rs.getLong("amount_due_idr")):null,orderId);
+                rs.getLong("amount_due_idr")):null,dbUuid(orderId));
         if(result==null)throw missing();
         return result;
     }
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
+    /** PostgreSQL JSONB field access differs from MySQL JSON path syntax. */
+    private String kitchenLinesSql() {
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String variantLabel = switch (vendor) {
+            case POSTGRESQL -> "variant_snapshot->>'label'";
+            case MYSQL -> "JSON_UNQUOTE(JSON_EXTRACT(variant_snapshot,'$.label'))";
+        };
+        return "SELECT name_snapshot,quantity,notes," + variantLabel
+            + " AS variant_label FROM order_lines WHERE order_id=? ORDER BY name_snapshot";
+    }
+
     private ApiFailureException conflict(String message) {
         return new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",message);
     }

@@ -14,6 +14,12 @@ public class AuditTrail {
         jdbc.update("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,correlation_id)
             VALUES ('STAFF',?,?,?,?,?)
-            """,staffId,operation,resourceType,resourceId,requestId);
+            """,
+            com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                staffId, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
+            operation, resourceType,
+            com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                resourceId, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
+            requestId);
     }
 }
