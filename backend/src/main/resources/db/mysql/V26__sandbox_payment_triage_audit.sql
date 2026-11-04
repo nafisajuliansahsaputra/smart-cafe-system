@@ -4,7 +4,7 @@ CREATE TABLE sandbox_payment_triage_actions (
   id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY DEFAULT (UUID()),
   evidence_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   actor_staff_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  action_code VARCHAR(40) NOT NULL
+  action_code VARCHAR(40) COLLATE utf8mb4_bin NOT NULL
     CHECK (action_code IN ('INVESTIGATE','REQUEST_PROVIDER_REVIEW','ESCALATE')),
   idempotency_key VARCHAR(128) NOT NULL
     CHECK (REGEXP_LIKE(idempotency_key,'^[A-Za-z0-9_-]{8,128}$')),
