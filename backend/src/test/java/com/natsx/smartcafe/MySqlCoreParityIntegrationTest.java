@@ -98,6 +98,44 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void guestJoinThrottleMySqlIncrementsResetsExpiredWindowAndPurges() {
+        var dialect = com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL;
+        var statement = com.natsx.smartcafe.common.db.JdbcSqlDialect.consumeGuestJoinThrottle(dialect);
+        String key = UUID.randomUUID().toString().replace("-", "") +
+            UUID.randomUUID().toString().replace("-", "");
+
+        jdbc.update(statement, key);
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+        jdbc.update(statement, key);
+        assertEquals(2, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+
+        // Simulate an expired fixed-window bucket. A new attempt must
+        // reset to one rather than carrying a stale lockout indefinitely.
+        jdbc.update("""
+            UPDATE guest_join_throttles
+            SET window_started_at=NOW(6)-INTERVAL 11 MINUTE
+            WHERE bucket_hash=?
+            """, key);
+        jdbc.update(statement, key);
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+
+        jdbc.update("""
+            UPDATE guest_join_throttles
+            SET updated_at=NOW(6)-INTERVAL 3 DAY WHERE bucket_hash=?
+            """, key);
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.purgeGuestJoinThrottle(dialect));
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+    }
+
+    @Test
     void mySqlGuestJoinUsesSharedLockOnVisitAliasWithoutLockingPublicTable() {
         String staff = newStaff();
         String table = newTable();
