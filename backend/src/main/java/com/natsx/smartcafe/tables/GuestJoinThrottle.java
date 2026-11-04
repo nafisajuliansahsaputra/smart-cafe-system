@@ -52,19 +52,19 @@ public class GuestJoinThrottle {
 
     private int consume(String bucket) {
         String key = hmac(bucket);
-        return jdbc.queryForObject("""
-            INSERT INTO guest_join_throttles (bucket_hash,window_started_at,attempts,updated_at)
-            VALUES (?,now(),1,now())
-            ON CONFLICT (bucket_hash) DO UPDATE SET
-              attempts = CASE
-                WHEN guest_join_throttles.window_started_at <= now() - interval '10 minutes'
-                  THEN 1 ELSE guest_join_throttles.attempts + 1 END,
-              window_started_at = CASE
-                WHEN guest_join_throttles.window_started_at <= now() - interval '10 minutes'
-                  THEN now() ELSE guest_join_throttles.window_started_at END,
-              updated_at=now()
-            RETURNING attempts
-            """, Integer.class, key);
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String sql = com.natsx.smartcafe.common.db.JdbcSqlDialect.consumeGuestJoinThrottle(vendor);
+        if (vendor == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.POSTGRESQL) {
+            // Keep existing PostgreSQL one-statement result and lock behavior.
+            return jdbc.queryForObject(sql, Integer.class, key);
+        }
+        // The MySQL duplicate-key statement holds an exclusive InnoDB row
+        // lock until allow() commits; SELECT FOR UPDATE reads that same
+        // serialized counter, never an uncommitted/approximate value.
+        jdbc.update(sql, key);
+        return jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=? FOR UPDATE",
+            Integer.class, key);
     }
 
     private String hmac(String value) {
@@ -80,9 +80,7 @@ public class GuestJoinThrottle {
     @Scheduled(fixedDelay = 3_600_000, initialDelay = 3_600_000)
     @Transactional
     public void cleanExpired() {
-        jdbc.update("""
-            DELETE FROM guest_join_throttles
-            WHERE updated_at < now() - interval '2 days'
-            """);
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.purgeGuestJoinThrottle(
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)));
     }
 }
