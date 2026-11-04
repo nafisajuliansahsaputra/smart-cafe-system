@@ -877,3 +877,17 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
   inspect synthetic screenshots for secrets/PII and visual quality.
 - [ ] Advance draft integration candidate and rerun candidate-to-main security
   checks only after exact-source checks pass; remain unmerged/unhosted.
+
+### M7 PostgreSQL OCC queue scalability (stacked draft)
+- [x] Replace the real OCC browser's historical 100-item cap with a
+  bounded, role-protected PostgreSQL queue page and stable ordering.
+- [x] Preserve server-validated status/payment/table filters, no-store,
+  exact row totals and existing cash/order mutation boundaries.
+- [x] Add PostgreSQL >100-order integration coverage, role denials and
+  browser filter/invalid page/320px acceptance.
+- [ ] Verify exact-head source and integration candidate CI, human
+  financial/privacy review, real operator device usability and staging.
+- [ ] Consider cursor navigation only when actual load measurements justify it.
+
+See `docs/M7-OCC-QUEUE-PAGINATION.md`. Source is a stacked draft only,
+not yet an approved main-branch or live merchant feature.
