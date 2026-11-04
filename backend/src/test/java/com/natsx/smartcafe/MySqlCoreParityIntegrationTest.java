@@ -227,6 +227,20 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlJdbcAcceptsApplicationUuidParameterAndReadAdapter() {
+        UUID userId = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO staff_users(id,login,password_hash)
+            VALUES (?,?,?)
+            """, userId, "uuid-" + userId, "synthetic-test-hash");
+        UUID fromDb = jdbc.queryForObject("""
+            SELECT id FROM staff_users WHERE id=?
+            """, (rs, n) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+            userId.toString());
+        assertEquals(userId, fromDb);
+    }
+
+    @Test
     void atMostOneActiveCashShiftAndClosedShiftIsImmutable() {
         String staff = newStaff();
         String first = id();
