@@ -404,8 +404,8 @@ public class GameLoanService {
                 "Only manager/admin can recover missing physical equipment");
         String note=requiredReason(reason);
         RecoveryCopy copy=jdbc.query("""
-            SELECT game_id,copy_code,condition
-            FROM physical_game_copies WHERE id=? FOR UPDATE
+            SELECT c.game_id,c.copy_code,c.condition
+            FROM physical_game_copies c WHERE c.id=? FOR UPDATE
             """,rs->rs.next()?new RecoveryCopy(
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("copy_code"),
                 rs.getString("condition")):null,dbUuid(copyId));

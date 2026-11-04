@@ -61,13 +61,13 @@ public class GameLossIncidentService {
         Boolean open=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loss_incidents
                           WHERE loan_id=? AND status='OPEN')
-            """,Boolean.class,loanId);
+            """,Boolean.class,dbUuid(loanId));
         if (Boolean.TRUE.equals(open)) throw conflict("A missing-unit report is already open");
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO physical_game_loss_incidents(id,loan_id,reported_by,reason)
             VALUES (?,?,?,?)
-            """,id,loanId,staff.staffId(),note);
+            """,dbUuid(id),dbUuid(loanId),dbUuid(staff.staffId()),note);
         events.gameLoan(loanId,"GAME_LOSS_REPORTED");
         audit.staff(staff.staffId(),"GAME_LOSS_REPORTED","GAME_LOSS_INCIDENT",id,requestId);
         return one(id);
@@ -112,8 +112,7 @@ public class GameLossIncidentService {
             """,rs->rs.next()?new IncidentEvidenceHeader(
                 map(rs),rs.getString("reporter_login"),
                 rs.getString("reviewer_login"),
-                rs.getTimestamp("reviewed_at")==null?null:
-                    rs.getTimestamp("reviewed_at").toInstant()):null,id);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("reviewed_at"))):null,dbUuid(id));
         if (detail==null) throw missing();
         List<IncidentActivity> trail=jdbc.query("""
             SELECT a.id,a.operation,s.login AS actor_login,a.occurred_at,
@@ -125,10 +124,10 @@ public class GameLossIncidentService {
               AND a.operation IN ('GAME_LOSS_REPORTED',
                                   'GAME_LOSS_DISMISSED','GAME_LOSS_CONFIRMED')
             ORDER BY a.occurred_at ASC,a.id ASC LIMIT 25
-            """,(rs,n)->new IncidentActivity(rs.getObject("id",UUID.class),
+            """,(rs,n)->new IncidentActivity(com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
                 rs.getString("operation"),rs.getString("actor_login"),
-                rs.getTimestamp("occurred_at").toInstant(),
-                rs.getString("correlation_id")),id);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("occurred_at")),
+                rs.getString("correlation_id")),dbUuid(id));
         return new IncidentEvidence(detail.incident(),detail.reporterLogin(),
             detail.reviewerLogin(),detail.reviewedAt(),trail);
     }
@@ -157,7 +156,7 @@ public class GameLossIncidentService {
             """,(rs,n)->new OpenIncidentPreview(
                 rs.getString("name"),rs.getString("copy_code"),
                 rs.getString("table_code"),
-                rs.getTimestamp("reported_at").toInstant()));
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("reported_at"))));
         return new OpenIncidentSummary(count==null?0:count,recent);
     }
 
@@ -217,14 +216,16 @@ public class GameLossIncidentService {
         String note=requiredReason(reviewReason);
         UUID loanId=jdbc.query("""
             SELECT loan_id FROM physical_game_loss_incidents WHERE id=?
-            """,rs->rs.next()?rs.getObject(1,UUID.class):null,incidentId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"loan_id"):null,dbUuid(incidentId));
         if (loanId==null) throw missing();
         Loan loan=lockLoan(loanId,staff,true);
         Incident incident=jdbc.query("""
             SELECT id,loan_id,status FROM physical_game_loss_incidents
             WHERE id=? FOR UPDATE
-            """,rs->rs.next()?new Incident(rs.getObject("id",UUID.class),
-                rs.getObject("loan_id",UUID.class),rs.getString("status")):null,incidentId);
+            """,rs->rs.next()?new Incident(
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"loan_id"),
+                rs.getString("status")):null,dbUuid(incidentId));
         if (incident==null || !incident.loanId().equals(loan.id())) throw missing();
         if (!"OPEN".equals(incident.status())) throw conflict("Loss report has already been reviewed");
         if (!List.of("ASSIGNED","IN_USE","RETURN_PENDING").contains(loan.status()))
@@ -233,17 +234,16 @@ public class GameLossIncidentService {
             if (copyCode==null || !copyCode.equals(loan.code()))
                 throw conflict("Verified physical inventory unit code does not match");
             String condition=jdbc.query("""
-                SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
-                """,rs->rs.next()?rs.getString(1):null,loan.copyId());
+                SELECT c.condition FROM physical_game_copies c WHERE c.id=? FOR UPDATE
+                """,rs->rs.next()?rs.getString(1):null,dbUuid(loan.copyId()));
             if (!"AVAILABLE".equals(condition))
                 throw conflict("Physical unit condition requires separate investigation");
-            jdbc.update("""
-                UPDATE physical_game_copies SET condition='LOST' WHERE id=?
-                """,loan.copyId());
+            jdbc.update("UPDATE physical_game_copies SET "+conditionColumn()
+                +"='LOST' WHERE id=?",dbUuid(loan.copyId()));
             jdbc.update("""
                 UPDATE physical_game_loans SET status='LOST',lost_at=now(),lost_confirmed_by=?
                 WHERE id=?
-                """,staff.staffId(),loanId);
+                """,dbUuid(staff.staffId()),dbUuid(loanId));
             events.gameInventory(loan.gameId());
             events.gameLoan(loanId,"GAME_LOSS_CONFIRMED");
         } else {
@@ -254,7 +254,7 @@ public class GameLossIncidentService {
             SET status=?,reviewed_by=?,reviewed_at=now(),review_reason=?
             WHERE id=?
             ""","CONFIRM_LOST".equals(decision)?"CONFIRMED_LOST":"DISMISSED",
-            staff.staffId(),note,incidentId);
+            dbUuid(staff.staffId()),note,dbUuid(incidentId));
         audit.staff(staff.staffId(),"CONFIRM_LOST".equals(decision)
             ? "GAME_LOSS_CONFIRMED" : "GAME_LOSS_DISMISSED",
             "GAME_LOSS_INCIDENT",incidentId,requestId);
@@ -264,11 +264,11 @@ public class GameLossIncidentService {
     private Loan lockLoan(UUID loanId, StaffPrincipal staff, boolean managerOnly) {
         UUID visitId=jdbc.query("""
             SELECT visit_id FROM physical_game_loans WHERE id=?
-            """,rs->rs.next()?rs.getObject(1,UUID.class):null,loanId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"visit_id"):null,dbUuid(loanId));
         if (visitId==null) throw missing();
         String visitStatus=jdbc.query("""
             SELECT status FROM table_visits WHERE id=? FOR SHARE
-            """,rs->rs.next()?rs.getString(1):null,visitId);
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(visitId));
         if (!"ACTIVE".equals(visitStatus)) throw conflict("Visit is no longer active");
         if (managerOnly) {
             if (!staff.roles().stream().anyMatch(r->r.equals("MANAGER")||r.equals("ADMIN")))
@@ -277,17 +277,22 @@ public class GameLossIncidentService {
             ||r.equals("MANAGER")||r.equals("ADMIN"))) {
             Boolean owner=jdbc.queryForObject("""
                 SELECT EXISTS(SELECT 1 FROM table_visits WHERE id=? AND opened_by=?)
-                """,Boolean.class,visitId,staff.staffId());
+                """,Boolean.class,dbUuid(visitId),dbUuid(staff.staffId()));
             if (!Boolean.TRUE.equals(owner)) throw forbidden();
         }
+        String lockSql=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? " FOR UPDATE" : " FOR UPDATE OF l";
         Loan loan=jdbc.query("""
             SELECT l.id,l.visit_id,l.copy_id,l.game_id,l.status,c.copy_code
             FROM physical_game_loans l LEFT JOIN physical_game_copies c ON c.id=l.copy_id
-            WHERE l.id=? FOR UPDATE OF l
-            """,rs->rs.next()?new Loan(rs.getObject("id",UUID.class),
-                rs.getObject("visit_id",UUID.class),rs.getObject("copy_id",UUID.class),
-                rs.getObject("game_id",UUID.class),rs.getString("status"),
-                rs.getString("copy_code")):null,loanId);
+            WHERE l.id=?
+            """+lockSql,rs->rs.next()?new Loan(
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"visit_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"copy_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"game_id"),
+                rs.getString("status"),rs.getString("copy_code")):null,dbUuid(loanId));
         if (loan==null) throw missing();
         return loan;
     }
@@ -302,14 +307,14 @@ public class GameLossIncidentService {
             JOIN table_visits v ON v.id=l.visit_id
             JOIN cafe_tables t ON t.id=v.table_id
             WHERE i.id=?
-            """,rs->rs.next()?map(rs):null,id);
+            """,rs->rs.next()?map(rs):null,dbUuid(id));
     }
     private IncidentView map(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new IncidentView(rs.getObject("id",UUID.class),
-            rs.getObject("loan_id",UUID.class),rs.getString("name"),
+        return new IncidentView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"loan_id"),rs.getString("name"),
             rs.getString("copy_code"),rs.getString("table_code"),rs.getString("status"),
             rs.getString("reason"),rs.getString("review_reason"),
-            rs.getTimestamp("reported_at").toInstant());
+            com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("reported_at")));
     }
     private String requiredReason(String note) {
         String value=note==null?"":note.strip();
@@ -319,6 +324,18 @@ public class GameLossIncidentService {
                 "Incident reason must be 5-300 printable characters");
         return value;
     }
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
+    /** The SQL identifier condition is reserved in MySQL; never accept user columns. */
+    private String conditionColumn() {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "`condition`" : "condition";
+    }
+
     private ApiFailureException forbidden() {
         return new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN","Not responsible for visit");
     }
