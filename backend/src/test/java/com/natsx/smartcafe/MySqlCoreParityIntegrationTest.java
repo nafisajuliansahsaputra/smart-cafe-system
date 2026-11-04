@@ -100,6 +100,122 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlCashCheckoutFromCartChargesOnceAndKeepsPaymentUnpaid() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Test checkout customer");
+        String category = id();
+        String menu = id();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category, "Checkout category", "mysql-checkout-" + category);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr)
+            VALUES (?,?,?,?)
+            """,menu,category,"Synthetic coffee",12500L);
+        jdbc.update("UPDATE item_availability SET limited_quantity=2 WHERE menu_item_id=?",menu);
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest), UUID.fromString(visit), "synthetic-session");
+        var variantPricing = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var cart = new com.natsx.smartcafe.orders.CartService(jdbc,variantPricing);
+        var outbox = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var checkout = new com.natsx.smartcafe.orders.CashCheckoutService(
+            jdbc,cart,outbox,variantPricing,false,"disabled");
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var put = tx.execute(status -> cart.replace(principal,0L,
+            java.util.List.of(new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+                UUID.fromString(menu),2))));
+        assertEquals(1L, put.version());
+        var first = tx.execute(status ->
+            checkout.checkoutFromCart(principal,1L,"mysql-cash-unique-key"));
+        assertEquals("SUBMITTED", first.status());
+        assertEquals("AWAITING_CASH", first.paymentStatus());
+        assertEquals(25000L, first.totalIdr());
+        var replay = tx.execute(status ->
+            checkout.checkoutFromCart(principal,1L,"mysql-cash-unique-key"));
+        assertEquals(first.id(), replay.id());
+        assertEquals(first.totalIdr(), replay.totalIdr());
+
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM orders WHERE guest_id=?",Integer.class,guest));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM payment_intents
+            WHERE order_id=? AND aggregate_status='AWAITING_CASH'
+              AND amount_due_idr=25000 AND amount_paid_idr=0
+            """,Integer.class, first.id().toString()));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM order_lines WHERE order_id=?
+              AND JSON_TYPE(variant_snapshot)='OBJECT'
+              AND JSON_LENGTH(variant_snapshot)=0
+            """,Integer.class,first.id().toString()));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM outbox_events WHERE aggregate_id=?
+              AND aggregate_type='ORDER' AND event_type='ORDER_SUBMITTED'
+            """,Integer.class,first.id().toString()));
+        assertEquals(0L, jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",
+            Long.class,menu));
+        assertEquals(2L, tx.execute(status -> cart.get(principal)).version());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status ->
+                checkout.checkoutFromCart(principal,2L,"mysql-cash-unique-key")));
+    }
+
+    @Test
+    void mySqlModifierSnapshotUsesEscapedBoundJsonAndServerPrice() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(),staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest,visit,"Synthetic modifier customer");
+        String category=id();
+        String menu=id();
+        String group=id();
+        String option=id();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category,"Modifiers","mysql-modifier-"+category);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr) VALUES (?,?,?,?)
+            """,menu,category,"Coffee with modifiers",12000L);
+        jdbc.update("""
+            INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
+            VALUES (?,?,?,true)
+            """,group,menu,"Milk");
+        jdbc.update("""
+            INSERT INTO menu_variant_options(id,group_id,option_key,label,price_delta_idr)
+            VALUES (?,?,?,?,?)
+            """,option,group,"OAT","Oat \"milk\"",1500L);
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest),UUID.fromString(visit),"synthetic-session");
+        var variants = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var carts = new com.natsx.smartcafe.orders.CartService(jdbc,variants);
+        var checkout = new com.natsx.smartcafe.orders.CashCheckoutService(
+            jdbc,carts,new com.natsx.smartcafe.common.events.OutboxEvents(jdbc),
+            variants,false,"disabled");
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        var result = tx.execute(status -> checkout.checkout(principal,
+            java.util.List.of(new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+                UUID.fromString(menu),1,UUID.fromString(option))),
+            "mysql-modifier-snapshot"));
+        assertEquals(13500L,result.totalIdr());
+        assertEquals("AWAITING_CASH",result.paymentStatus());
+        assertEquals("Oat \"milk\"",jdbc.queryForObject("""
+            SELECT JSON_UNQUOTE(JSON_EXTRACT(variant_snapshot,'$.options[0].label'))
+            FROM order_lines WHERE order_id=?
+            """,String.class,result.id().toString()));
+        assertEquals(option,jdbc.queryForObject("""
+            SELECT JSON_UNQUOTE(JSON_EXTRACT(variant_snapshot,'$.options[0].id'))
+            FROM order_lines WHERE order_id=?
+            """,String.class,result.id().toString()));
+    }
+
+    @Test
     void outboxOnMySqlStoresOnlySafeEmptyJsonWithCanonicalUuidKeys() {
         var events = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
         String staff = newStaff();
