@@ -41,7 +41,7 @@ public class VariantPricingService {
             SELECT id,name,required FROM menu_variant_groups
             WHERE menu_item_id=? AND active=true ORDER BY id FOR SHARE
             """,(rs,n)->new Group(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                rs.getString("name"),rs.getBoolean("required")),menuItemId);
+                rs.getString("name"),rs.getBoolean("required")),dbUuid(menuItemId));
         if(groups.size()>MAX_GROUPS)throw invalid();
 
         var groupIndex=new HashMap<UUID,Group>();
@@ -56,7 +56,7 @@ public class VariantPricingService {
                 WHERE o.id=? AND o.active=true FOR SHARE OF o
                 """,(rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                     com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "group_id"),rs.getString("option_key"),
-                    rs.getString("label"),rs.getLong("price_delta_idr")),id);
+                    rs.getString("label"),rs.getLong("price_delta_idr")),dbUuid(id));
             if(rows.size()!=1)throw invalid();
             var option=rows.getFirst();
             var group=groupIndex.get(option.groupId());
@@ -81,6 +81,12 @@ public class VariantPricingService {
 
     public Selection resolveSelections(UUID menuItemId,UUID legacyOptionId) {
         return resolveSelections(menuItemId,legacyOptionId==null?List.of():List.of(legacyOptionId));
+    }
+
+    /** MySQL CHAR(36) and PostgreSQL native UUID must bind identically. */
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private record Option(UUID id,UUID groupId,String key,String label,long delta) {}
