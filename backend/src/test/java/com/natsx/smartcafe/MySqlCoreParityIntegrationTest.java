@@ -38,10 +38,22 @@ class MySqlCoreParityIntegrationTest {
     static void migrate() {
         DriverManagerDataSource ds = new DriverManagerDataSource(
             mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
-        // Never pick PostgreSQL's 31 migrations for a MySQL database.
-        var flyway = Flyway.configure().dataSource(ds).locations("classpath:db/mysql").load();
-        var result = flyway.migrate();
-        assertEquals(31, result.migrationsExecuted);
+        // A real staged upgrade, not a Flyway baseline shortcut:
+        // first deploy V1-V14, then migrate that same disposable database
+        // to V31. Both stages execute all scripts, retaining history.
+        // This covers a fresh database and a forward-only upgrade path.
+        var initial = Flyway.configure().dataSource(ds)
+            .locations("classpath:db/mysql")
+            .target("14")
+            .load();
+        assertEquals(14, initial.migrate().migrationsExecuted);
+
+        var upgraded = Flyway.configure().dataSource(ds)
+            .locations("classpath:db/mysql")
+            .load();
+        assertEquals(17, upgraded.migrate().migrationsExecuted);
+        // Applying the current head a second time must be a no-op.
+        assertEquals(0, upgraded.migrate().migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
     }
 
