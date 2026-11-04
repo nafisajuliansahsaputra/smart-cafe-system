@@ -100,6 +100,44 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void outboxOnMySqlStoresOnlySafeEmptyJsonWithCanonicalUuidKeys() {
+        var events = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        UUID order = UUID.randomUUID();
+        UUID game = UUID.randomUUID();
+
+        events.order(order, "ORDER_SUBMITTED");
+        events.tableVisit(UUID.fromString(visit), "TABLE_VISIT_OPENED");
+        events.gameInventory(game);
+
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM outbox_events
+            WHERE aggregate_type='ORDER' AND aggregate_id=?
+              AND event_type='ORDER_SUBMITTED'
+              AND JSON_TYPE(payload_safe)='OBJECT'
+              AND JSON_LENGTH(payload_safe)=0
+            """, Integer.class, order.toString()));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM outbox_events
+            WHERE aggregate_type='TABLE_VISIT' AND aggregate_id=?
+              AND event_type='TABLE_VISIT_OPENED'
+              AND JSON_TYPE(payload_safe)='OBJECT'
+              AND JSON_LENGTH(payload_safe)=0
+            """, Integer.class, visit));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM outbox_events
+            WHERE aggregate_type='GAME_INVENTORY' AND aggregate_id=?
+              AND JSON_TYPE(payload_safe)='OBJECT'
+              AND JSON_LENGTH(payload_safe)=0
+            """, Integer.class, game.toString()));
+
+        // A malformed event must not bypass the domain's allowlist.
+        assertThrows(IllegalArgumentException.class,
+            () -> events.tableVisit(UUID.fromString(visit), "INVALID_EVENT"));
+    }
+
+    @Test
     void checkoutIdempotencyLockIsTransactionScopedAndVisitScopedOnMySql() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
