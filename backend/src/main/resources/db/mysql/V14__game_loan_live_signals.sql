@@ -5,8 +5,8 @@ CREATE TABLE live_game_signals (
   sequence_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   outbox_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
   loan_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  event_type VARCHAR(120) NOT NULL
-    CHECK (event_type IN (
+  event_type VARCHAR(120) NOT NULL,
+  CONSTRAINT live_game_signal_type CHECK (event_type IN (
       'GAME_LOAN_REQUESTED','GAME_LOAN_ASSIGNED','GAME_LOAN_HANDED_OVER',
       'GAME_LOAN_RETURNED','GAME_LOAN_CANCELLED')),
   published_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
