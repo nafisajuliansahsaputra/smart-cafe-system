@@ -299,7 +299,12 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
 
     // Kitchen connects before cashier approval; the new ticket must appear
     // without a manual Kitchen page reload.
+    await kitchen.goto("/staff/kitchen?page=1001");
+    await expect(kitchen.locator("p[role='alert']"))
+      .toContainText("Nomor halaman dapur tidak valid");
     await kitchen.goto("/staff/kitchen");
+    await expect(kitchen.getByRole("navigation", { name: "Halaman tiket dapur" }))
+      .toContainText("25 per halaman");
     await expect(kitchen.getByText("Live · otomatis")).toBeVisible();
 
     // The kitchen device loses connectivity while the cashier approves.
