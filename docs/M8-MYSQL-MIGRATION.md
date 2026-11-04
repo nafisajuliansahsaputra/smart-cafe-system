@@ -10,12 +10,13 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL stage 1-2 is implemented:** opt-in `db/mysql/V1-V14`
-  foundational tables, staff/guest revocable sessions, table-visit unique
-  active-visit constraint, immutable order financial snapshots, immutable
-  paid-only receipts, limited-stock triggers, cart/variant groups,
-  HMAC-only guest join throttles, live outbox signals and serialized
-  physical-game copy uniqueness. MySQL expressions/trigger syntax are native MySQL 8.
+- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 version numbers; **pending full migration CI**, not production-certified)
+  foundational tables, staff/guest revocable sessions, one-active-visit,
+  immutable paid-only receipts, stock/cart/variant groups, join throttles,
+  durable live outbox, serialized loan exclusivity, loss and condition
+  history, fake-payment quarantine, cash shift custody, append-only audit,
+  and menu image URLs. Every MySQL-specific trigger/constraint still needs
+  exact MySQL CI and business E2E verification. MySQL expressions/trigger syntax are native MySQL 8.
 - Added `mysql-connector-j`, `flyway-mysql` and MySQL 8.4 Testcontainers.
 - `MySqlCoreParityIntegrationTest` creates a disposable MySQL instance,
   migrates it using `classpath:db/mysql`, and rejects duplicate active
@@ -56,9 +57,12 @@ with unprotected API-only checks to bypass hosting limitations.
 
 ## Required before an actual MySQL deployment
 
-- Port MySQL equivalents of **V15-V31** in the exact order and preserve
-  unique, foreign key, check, append-only and concurrency behavior.
-  Several PG partial unique indexes need generated nullable columns.
+- Run the **entire 31-version MySQL migration** against fresh and upgrade
+  databases, then test concurrent unique constraints, trigger rejection,
+  foreign keys, immutable audit evidence, stock/game loans and receipt
+  settlement. The draft MySQL DDL uses generated nullable keys instead
+  of PostgreSQL partial unique indexes. A green migration is necessary,
+  but does not alone prove business parity.
 - Replace PG-specific SQL in backend services, e.g. advisory transaction
   locks, `ON CONFLICT`, `::jsonb`, `jsonb_build_object`, data-returning
   casts, regex and epoch functions. Decide equivalently safe MySQL
@@ -78,7 +82,7 @@ with unprotected API-only checks to bypass hosting limitations.
 
 ## Isolated local SQL verification
 
-The MySQL schema stage is deliberately opt-in and intended for
+The MySQL schema port is deliberately opt-in and intended for
 integration tests, **not** to enable the public application server.
 
 ```bash
@@ -88,7 +92,8 @@ mvn -B -ntp -Dtest=MySqlCoreParityIntegrationTest test
 
 Needs Docker Engine. The CI workflow
 `.github/workflows/mysql8-parity.yml` runs exactly these tests on
-GitHub Actions. A MySQL database must NEVER use the PostgreSQL
+GitHub Actions. The tests now target all 31 migration files and include
+cash-shift and fake-payment negative cases. A MySQL database must NEVER use the PostgreSQL
 `classpath:db/migration` scripts; it uses
 `classpath:db/mysql`. Default application deployment continues
 PostgreSQL until complete parity.
