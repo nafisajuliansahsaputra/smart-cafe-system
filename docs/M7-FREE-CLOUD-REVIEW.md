@@ -63,22 +63,51 @@ have cold starts and limited RAM. This is not reliable 24/7 cafe production.
    behavior with a **clean synthetic database**. Never substitute the
    in-memory `/showcase` route for backend-integrated testing.
 
-## Critical first-admin limitation
+## Single-use FIRST ADMIN on an isolated Neon review database
 
-The repository's `dev-bootstrap` profile is deliberately blocked for hosted
-and external databases, **including Neon**. The local-only admin provisioner
-does not run in production, and the automatic GitHub browser fixtures contain
-known synthetic passwords that must **never** be seeded into an internet-facing
-staff endpoint. Consequently, an empty hosted database can be migrated and
-serve the public brochure, but there is **no approved secure remote first-admin
-enrollment/recovery workflow yet**.
+The `dev-bootstrap` profile is **always local-only**. A separate gated
+`hosted-review-bootstrap` profile exists only on the reviewed branch.
+Before Flyway touches the database, a BeanFactory postprocessor rejects:
 
-**Stop before claiming a full publicly reviewable cashier/KDS/waiter UI.**
-The owner must approve and implement a limited, single-use remote enrollment
-mechanism or an equally reviewed separate operator setup process, with
-auditable issuance, TLS, credential rotation, lockout and no reusable bootstrap
-secrets. Do not expose arbitrary SQL consoles or populate the browser's
-known E2E test staff credentials on a public domain.
+- All remote databases **except** a direct `*.neon.tech` PostgreSQL
+  endpoint on the exact, newly created `smart_cafe_review` database.
+- Missing TLS `?sslmode=require` or `?sslmode=verify-full`, any extra query
+  parameters, a missing exact bootstrap acknowledgement, an invalid admin
+  login or a password shorter than 24 characters.
+- Production/multiple Spring profiles; backend property datasource overrides;
+  **all enabled QRIS/VA/sandbox webhook settings**.
+- Any mismatch between the declared database and effective JDBC URL.
+
+On successful Flyway migration, a serializable one-time application runner
+takes a transaction-scoped advisory lock, verifies that **no** staff account
+exists, and creates exactly one BCrypt-hashed ADMIN account. No HTTP public
+bootstrap endpoint exists; no credentials, SQL URLs or hashes enter logs.
+A second launch with the profile intentionally fails closed.
+
+For a brand-new private Render + Neon review workspace only:
+
+1. Ensure database name is **exactly `smart_cafe_review`**, not the default
+   Neon `neondb`. Do not use a database containing valuable records.
+2. Set the standard private JDBC `DB_URL`, DB username/password, payment
+   disabled env, random throttle secret as documented above.
+3. For the **first deployment only**, add via Render protected service env:
+   `SPRING_PROFILES_ACTIVE=hosted-review-bootstrap`
+   `SCS_REVIEW_BOOTSTRAP_ACK=I_ACCEPT_ONE_TIME_HOSTED_REVIEW_ADMIN`
+   `SCS_REVIEW_BOOTSTRAP_USERNAME=<owner-created safe login>`
+   `SCS_REVIEW_BOOTSTRAP_PASSWORD=<new unique password 24-128 chars>`
+4. Wait for startup, database Flyway checks and **exact one ADMIN account**.
+   Before sharing the URL, **delete all four bootstrap env variables**,
+   recreate/redeploy the backend with the normal profile, verify health and
+   login using the owner-chosen credential. Never retain plaintext
+   administrator credentials in service configuration.
+5. Keep the staff login behind a review access restriction where possible,
+   enable no merchant provider and use only fabricated guest data.
+
+**This special review bootstrap must never be used on a merchant/production
+database or on the NATSX portfolio project.** CI covers its strict
+database/host/TLS/profile/payment preflight, while a hosted first-run and
+credential-removal walkthrough remains an explicit acceptance gate until
+observed on Render.
 
 ## Safety and lifecycle
 
