@@ -204,7 +204,7 @@ export type KitchenTicket = {
   lines: { name: string; quantity: number; notes: string | null; variantLabel: string | null }[];
 };
 
-function isTicket(value: unknown): value is KitchenTicket {
+export function isTicket(value: unknown): value is KitchenTicket {
   return (
     record(value) &&
     typeof value.id === "string" &&

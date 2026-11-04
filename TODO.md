@@ -903,3 +903,17 @@ not yet an approved main-branch or live merchant feature.
 
 See `docs/M7-WAITER-TASK-PAGINATION.md`. This changes no financial
 write path or merchant integration and does not touch `main`.
+
+### M7 real kitchen display queue without 100-ticket truncation (stacked draft)
+- [x] Add KDS role-protected PostgreSQL ticket pagination with
+  25 tickets per page and PREPARING > ACCEPTED > READY work priority.
+- [x] Preserve legacy endpoint and backend authoritative order/payment
+  transitions, with no-store server-only staff read models.
+- [x] Cover 112 synthetic kitchen tickets across five pages, cross-role
+  denial, invalid pages and real cash-flow Chromium regression.
+- [ ] Verify exact source and integration candidate CI, physical tablet
+  and accessibility usability, staging and human shift acceptance.
+
+See `docs/M7-KDS-PRIORITY-PAGINATION.md`. A verified standalone cash
+MVP is portfolio-worthy; live merchant payment and public cafe
+production remain dependent on provider and owner release approval.

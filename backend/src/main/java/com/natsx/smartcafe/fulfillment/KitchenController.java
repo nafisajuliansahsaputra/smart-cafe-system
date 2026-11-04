@@ -6,6 +6,9 @@ import com.natsx.smartcafe.identity.StaffPrincipal;
 import com.natsx.smartcafe.orders.CashWorkflowService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.web.bind.annotation.RequestParam;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +26,13 @@ public class KitchenController {
     @GetMapping
     public ApiEnvelope<List<CashWorkflowService.KitchenTicket>> tickets(HttpServletRequest request) {
         return ApiEnvelope.of(workflow.kitchen(),RequestIdFilter.get(request));
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<ApiEnvelope<CashWorkflowService.KitchenPage>> ticketPage(
+        @RequestParam(defaultValue="0") int page,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
+            ApiEnvelope.of(workflow.kitchenPage(page),RequestIdFilter.get(request)));
     }
 
     @PostMapping("/{id}/start")
