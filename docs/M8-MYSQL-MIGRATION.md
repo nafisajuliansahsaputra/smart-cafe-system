@@ -43,6 +43,33 @@ The portfolio must not describe MySQL as operational until proven.
 7. All session tokens are hashed, join proof expiring, no static QR ordering.
 8. No customer/real payment data in migration fixtures or test screenshots.
 
+## Additional parity hardening on this branch
+
+- PostgreSQL's default enum comparisons are case-sensitive. MySQL's
+  common default text collation is often case-insensitive. Critical
+  database states and financial methods now explicitly use
+  `utf8mb4_bin` on the MySQL schema, including the core roles,
+  table/order/kitchen statuses, receipt currency, game loans, digital
+  payment attempts, sandbox event classifications and variance actions.
+  The MySQL integration suite includes rejection tests for lowercase
+  financial statuses and methods. Do not remove these constraints.
+- V11's composite `outbox_events(aggregate_type,live_published_at,created_at,id)`
+  index also serves V12, V14 and V17. Redundant duplicate copies of
+  that index were removed to reduce free-tier storage overhead.
+- `JdbcSqlDialect` handles a **narrow audited subset** of SQL dialect
+  differences: idempotent staff-login throttle and cart insertions.
+  The MySQL `ON DUPLICATE KEY UPDATE` form preserves the existing
+  throttle counter and cart-to-visit binding and does not use unsafe
+  `INSERT IGNORE`. Both cases have real MySQL integration tests.
+- `JdbcUuid.read` supports native PostgreSQL UUID, MySQL CHAR(36)
+  strings and validated 16-byte representations in service query
+  mappings; MySQL UUID **parameter binding** and other SQL remain
+  full-backend acceptance gates. Do not bypass the startup guard.
+- As of this review, the last **completed** successful MySQL CI was
+  on the earlier V1-V14 migration set. New V1-V31 attempts are
+  queued in GitHub Actions; queued checks are **not** evidence of
+  successful 31-version migrations. This branch is not deployment-ready.
+
 ## Trigger privilege prerequisite for hosted MySQL
 
 MySQL 8 with binary logging and `log_bin_trust_function_creators=0`
