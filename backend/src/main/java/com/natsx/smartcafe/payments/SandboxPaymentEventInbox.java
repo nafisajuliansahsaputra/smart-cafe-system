@@ -58,7 +58,7 @@ public final class SandboxPaymentEventInbox {
             JOIN payment_intents p ON p.id=a.payment_intent_id
             WHERE a.provider_key=? AND a.provider_reference=?
             FOR UPDATE OF a
-            """,(rs,n)->new Attempt(rs.getObject("id",UUID.class),
+            """,(rs,n)->new Attempt(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("method"),rs.getString("state"),
                 rs.getLong("amount_idr"),rs.getString("currency"),
                 rs.getString("aggregate_status")),
@@ -87,8 +87,8 @@ public final class SandboxPaymentEventInbox {
             SELECT id,attempt_id,provider_event_id,classification,payload_fingerprint
             FROM sandbox_payment_event_inbox
             WHERE provider_key='SANDBOX_FAKE' AND provider_event_id=?
-            """,(rs,n)->new Evidence(rs.getObject("id",UUID.class),
-                rs.getObject("attempt_id",UUID.class),
+            """,(rs,n)->new Evidence(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "attempt_id"),
                 rs.getString("provider_event_id"),
                 rs.getString("classification"),
                 rs.getString("payload_fingerprint")),input.eventId());
