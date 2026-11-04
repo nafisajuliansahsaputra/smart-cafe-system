@@ -962,14 +962,16 @@ candidate, not a production financial service or a Vercel portfolio release.
 
 ### M8 MySQL 8 database migration: independent branch, not live
 - [x] Owner approved a MySQL-first port to demonstrate different SQL DB skills.
-- [x] Port core MySQL V1-V14 tables, staff/guest session keys, one-active-table
+- [x] Port core MySQL V1-V31 DDL (unverified end-to-end), staff/guest session keys, one-active-table
   uniqueness via generated column, paid-only receipt and immutable financial
   snapshots via native MySQL triggers.
 - [x] Add MySQL JDBC/Flyway modules and real Testcontainers MySQL 8 negative
   invariants test, separate CI workflow and pre-Flyway runtime fail-closed guard.
 - [ ] Pass MySQL core exact-head test without weakening any constraints.
-- [ ] Port Flyway V15-V31 incl. physical unit uniqueness, audit append-only,
-  loan resolution and real money shift custody controls.
+- [x] Draft MySQL V15-V31 including loan exclusivity, cash shift custody,
+  fake payment quarantine and append-only audit trigger counterparts.
+- [ ] Verify all 31 versions migrate on MySQL 8.4, and run negative/concurrency
+  tests before accepting the DDL as financially equivalent.
 - [ ] Port pg-specific Java SQL and UUID mapping to MySQL, then run ALL full
   Spring Boot/PostgreSQL-equivalent E2E acceptance against MySQL.
 - [ ] Create fresh no-card MySQL Free service only after application parity
