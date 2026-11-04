@@ -123,3 +123,55 @@ permanent plan availability. Never promise this is zero-cost forever.
 
 Before merging app code to default branch, require Java/PostgreSQL exact-head
 CI and a separate human review. Do not change the portfolio repository.
+
+## Render account creation denied (2026-11-05) and no-card fallback
+
+The owner connected Render, but its API refused **even the explicit Free
+web-service plan** with `HTTP 402: Payment information is required`.
+**Do not try to add a card, switch to a paid tier, or misrepresent the
+service as deployed.** This is an account-specific creation block.
+
+A potential no-card alternative is **blitz.cloud Free**, which advertises
+HTTPS, Docker/GitHub deploy, 512 MB reserved RAM, and free-plan sleep
+after 15 minutes. This is a younger provider and should be independently
+assessed for uptime and privacy, not marketed as production-grade.
+
+A separate backend setup can be attempted only after owner registers on
+`https://dashboard.blitz.cloud/` and confirms its free plan, without
+providing payment details:
+
+1. Create app `smart-cafe-review-api` from the **public** repo
+   `https://github.com/nafisajuliansahsaputra/smart-cafe-system`.
+2. Choose branch `feat/m7-hosted-review-first-admin` and **Folder to
+   build = `backend`**, which contains its `Dockerfile`.
+3. Assign 512 MB reserved RAM if allowed; let the service supply `PORT`.
+   Existing `backend/Dockerfile` runs as non-root Java 21.
+4. Configure environment secrets **in provider dashboard only**, not in
+   GitHub or ChatGPT: the dedicated Neon `smart_cafe_review` JDBC URL
+   with TLS, DB username and secret, random join throttling key, disabled
+   payments, bounded JVM heap and Hikari pool as above.
+5. For the **first** launch only, apply the special hosted review profile
+   and owner-chosen strong admin secret as described above, then remove
+   all temporary bootstrap environment variables before exposing URLs.
+   Confirm the live HTTP backend can read migrated database state.
+6. Build a separate Vercel project `smart-cafe-review` from the same
+   repo's `apps/web` folder, with server-only `API_INTERNAL_URL`
+   set to the actual backend HTTPS domain.
+7. Before claiming success, perform full cash demo in the real hosted UI
+   and verify HTTPS, login, table joining, menu, OCC, KDS, waiter, receipt,
+   and failure mode after the free backend sleeps.
+
+Unlike Render, blitz.cloud does **not** have a connected ChatGPT service
+connector in this session. Its sign-up, app creation and secret entry must
+be completed through its authenticated dashboard by the owner. Do not
+invent a deployment URL, and do not present a backend-unavailable
+Vercel project as fully functional.
+
+Provider evidence (checked 2026-11-05):
+`https://blitz.cloud/docs/deploy-from-github/`,
+`https://blitz.cloud/docs/limits/`,
+`https://blitz.cloud/terms/`.
+
+Note that Hugging Face Docker Spaces also became subscription-gated for
+new users; Koyeb requires a credit card. Neither is a reliable no-card
+alternative for this review.
