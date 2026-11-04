@@ -86,6 +86,23 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlGuestJoinUsesSharedLockOnVisitAliasWithoutLockingPublicTable() {
+        String staff = newStaff();
+        String table = newTable();
+        String visit = newVisit(table, staff);
+
+        String visitId = jdbc.queryForObject("""
+            SELECT v.id
+            FROM cafe_tables t JOIN table_visits v ON v.table_id=t.id
+            WHERE t.public_alias=? AND v.status='ACTIVE'
+            FOR SHARE OF v
+            """, (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id").toString(),
+            "mysql-" + table);
+
+        assertEquals(visit, visitId);
+    }
+
+    @Test
     void mySqlVisitForeignKeyReadsUuidThroughDialectAdapter() {
         String staff = newStaff();
         String table = newTable();
