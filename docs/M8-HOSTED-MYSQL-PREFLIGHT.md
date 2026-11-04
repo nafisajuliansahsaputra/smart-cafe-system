@@ -151,11 +151,18 @@ Owner-supplied Windows PowerShell output confirms the service is MySQL
 `PASS: read-only server and TLS checks.` The owner separately
 confirmed Aiven's `Free-1-1gb` service plan.
 
-**This proves ONLY remote connection + TLS + basic server variables.**
-Trigger creation, CHECK enforcement, hosted V1–V31 Flyway migrations,
-full MySQL SQL/financial transaction parity, backend first-admin login,
-public frontend and backend deployment remain **UNVERIFIED**.
-Never interpret the successful read-only check as merchant readiness.
+**Subsequent host DDL verification passed (owner PowerShell screenshot,
+2026-11-05 WIB):** on the same isolated Aiven Free MySQL 8.4.11 service,
+`-RunWriteProbe` successfully created and executed a scratch trigger,
+rejected an invalid lowercase financial state through the CHECK constraint,
+and automatically removed the random `scs_probe_*` database. This confirms
+remote host trigger/constraint capability but **NOT** actual Smart Cafe
+Flyway migrations.
+
+Hosted V1–V31 Flyway migrations, full MySQL SQL/financial transaction
+parity, backend first-admin login, public frontend and backend deployment
+remain **UNVERIFIED**. Never interpret successful host probes as merchant
+readiness.
 
 The next review acceptance step uses the saved *local* MySQL login-path;
 no password is included in a script or committed:
@@ -171,6 +178,56 @@ CREATE TRIGGER, or the strict financial CHECK. Do not alter protected
 money/stock triggers as a workaround. An unsuccessful probe is **not**
 a reason to copy PostgreSQL/Neon data or switch the backend to MySQL.
 
+## Next: real hosted Flyway V1-V31 rehearsal (opt-in, disposable)
+
+A local Windows wrapper and Java/JUnit migration-only test are committed:
+
+- `scripts/test-aiven-flyway-windows.ps1`
+- `backend/src/test/java/com/natsx/smartcafe/HostedAivenFlywayReview.java`
+
+**Requires:** Aiven Free service running and accessible; existing MySQL
+login-path `smartcafe_review`; downloaded private CA file;
+**JDK 21** and **Maven** in PATH. Both Java and Maven are required
+on the developer PC. Do not run the migration from hosted GitHub Actions
+with database credentials.
+
+From the repository checkout on branch
+`feat/m8-host-mysql-preflight`, pull the latest changes:
+
+```powershell
+git pull --ff-only
+java -version
+mvn -version
+
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-aiven-flyway-windows.ps1 -HostName "YOUR_SERVICE_HOST.aivencloud.com" -Port YOUR_SERVICE_PORT -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
+```
+
+The script first re-runs the **read-only** TLS/host check using the
+existing login-path. It then requires explicitly typing
+`MIGRATE-SCRATCH-ONLY` before prompting for the Aiven password
+locally (hidden). It passes the password only to the short-lived Java
+test via a process environment variable, which is removed afterward.
+Do not screenshot the hidden password or upload the temporary environment.
+The Java test creates a **random** `scs_m8_*` schema; the
+existing `defaultdb`, Neon, production and portfolio data are
+not migrated or deleted.
+
+The Java runner constructs a one-use PKCS12 truststore from the Aiven CA,
+enforces Connector/J `sslMode=VERIFY_IDENTITY`, and disables
+untrusted default root fallback. It first migrates V1–V14, then V15–V31
+on the same disposable MySQL 8.4 schema; re-running Flyway must be a
+zero-migration operation and validation must succeed. It checks the
+Flyway history, the paid-receipt trigger and the menu image column.
+The runner drops only the random scratch database in `finally` and
+deletes the temporary truststore. On failed cleanup, it identifies the
+exact scratch schema requiring manual inspection. A passing result is
+a hosted **migration rehearsal**, not a persistent application database.
+
+**Stop conditions:** do not bypass any SSL, Flyway, or trigger error;
+do not remove the MySQL startup readiness guard; do not issue real
+financial transactions or deploy public access until all backend
+compatibility and security gates pass.
+
 ## Acceptance and follow-on gates
 
 | Gate | Acceptance evidence |
@@ -178,10 +235,10 @@ a reason to copy PostgreSQL/Neon data or switch the backend to MySQL.
 | TLS | Session reports nonempty `Ssl_cipher`; the client enforces `VERIFY_IDENTITY` and uses the CA |
 | Billing | Confirm **Free**, **1 GB**, and **$0/month**; Developer 8 GB is a paid tier after trial |
 | Version | Genuine MySQL 8.x, not simply a MySQL-compatible wire protocol |
-| Trigger privileges | One scratch trigger created, fired with intended error, and dropped |
-| Financial state collation | `PAID` accepted, lowercase `paid` rejected by database CHECK |
-| Cleanup | Scratch database dropped; no shared schema modified |
-| Flyway V1-V31 | **NOT covered:** must pass exact-head CI and isolated hosted upgrade test |
+| Trigger privileges | **PASS on owner Aiven Free service**: scratch trigger created, fired, and dropped |
+| Financial state collation | **PASS on owner Aiven Free service**: `PAID` accepted, lowercase `paid` rejected |
+| Cleanup | **PASS on owner Aiven Free service**: random `scs_probe_*` deleted |
+| Flyway V1-V31 | **NOT YET RUN on Aiven**: owner to run opt-in migration rehearsal above; exact-head CI pending |
 | Business SQL parity | **NOT covered:** transaction-safe PG advisory-lock replacements, UUID binding, JSON/SQL differences and all cash, game, KDS and security E2E |
 | Public deployment | **NOT covered:** API boot remains blocked on MySQL until above gates are passed |
 
