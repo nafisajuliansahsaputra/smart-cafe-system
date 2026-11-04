@@ -4,7 +4,7 @@
 **Type:** Self-initiated full-stack portfolio project
 **Product stage:** Functional MVP code + isolated interactive product showcase; no real merchant processing
 **Author/brand:** NATSX
-**Code status:** Integration candidate in draft PR #61, not merged to main
+**Code status:** Full-stack draft PR #61, with incremental evidence in stacked source PRs; not merged to main
 
 ## Problem and product direction
 
@@ -72,8 +72,28 @@ The GitHub Actions full browser acceptance job captures these **synthetic-only**
 - `portfolio-demo-kitchen.png`
 - `portfolio-demo-receipt.png`
 - `operational-table-qr.png` (real manager-only QR studio using synthetic data)
+- `real-occ-awaiting-cash.png` (real cashier queue showing unpaid cash order)
+- `real-occ-approved-cash-due.png` (real cashier detail after kitchen approval, still unpaid)
+- `real-kds-preparing.png` (real Kitchen Display with accepted ticket in PREPARING)
+- `real-waiter-ready.png` (real waiter delivery task after READY status arrives through SSE)
+- `real-guest-paid-receipt.png` (actual API-backed immutable, synthetic paid receipt)
 
-To get the images: open the CI workflow run for the portfolio PR, locate its Artifacts section, and download the above artifact. Most screenshots show the portfolio tour. The operational QR screenshot is from a role-authenticated, disposable PostgreSQL-backed table registry. None proves real payment-gateway settlement. Capture separate role-authenticated operational screenshots if the final case study needs OCC/KDS/Waiter views, using disposable test fixtures only.
+To get the images: open the **Chromium / full guest-to-cash receipt lifecycle**
+GitHub Actions job on the exact commit, locate the `portfolio-showcase-screenshots`
+artifact, and download it within its seven-day retention window. The five
+`real-*.png` screenshots come from an **authenticated full-stack browser test
+against disposable PostgreSQL fixtures**, not the client-only `/showcase`.
+They show actual backend-governed cash, kitchen, waiter and receipt transitions,
+but no real money or merchant settlement. Earlier `portfolio-*.png` images
+remain labeled client-only simulations.
+
+Each role snapshot is only captured after its relevant server-confirmed
+state appears. The test explicitly refuses screenshots outside local addresses,
+outside the expected role path, or from a page revealing the temporary table
+join code or test password. Staff login, join proof and credential screens are
+never photographed. Synthetic fixture names and amounts remain visible so
+reviewers can distinguish evidence from a real cafe deployment. CI screenshot
+artifacts are temporary and should not be auto-published.
 
 ## What was intentionally excluded
 

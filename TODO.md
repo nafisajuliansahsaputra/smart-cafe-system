@@ -734,7 +734,10 @@ required; main, real payments and hosted infrastructure remain untouched.
 - [ ] Conduct design/accessibility review with real devices and adjust editorial tone based on portfolio direction.
 - [ ] Integrate the reviewed draft dependency stack into a protected main branch only after owner-approved merge plan.
 - [ ] Provision an isolated hosted read-only/public-safe demo through a separately authorized environment and TLS; never expose synthetic staff login fixtures or a writable cash/merchant database publicly.
-- [ ] Gather real operational screenshots using a disposable local seeded environment for full OCC/KDS/Waiter case-study evidence.
+- [ ] Gather and inspect CI-generated real operational screenshots of the full
+  authenticated OCC/KDS/Waiter/paid-receipt journey using a disposable
+  PostgreSQL environment. Screenshot code and artifact paths are added in
+  stacked PR #82; exact-head passing evidence and image review still required.
 - [ ] Add a featured-project card and case-study link to NATSX portfolio in a separate, approved repository change.
 
 The publicly accessible no-backend tour, if hosted later, is only an educational simulation. Its UI progression cannot be cited as evidence of API financial settlement or actual kitchen order processing. Actual acceptance is independently verified by ephemeral full-stack CI.
@@ -864,3 +867,13 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
   gates; independent review and authorized integration before main release.
 - [ ] Run physical operator acceptance and browser accessibility checks on
   an isolated HTTPS staging system before public use.
+
+### M7 actual role-backed portfolio visual evidence (stacked draft)
+- [x] Add conditional, local-only, credential-screen-refusing screenshots
+  after the real guest->cashier->kitchen->waiter->receipt E2E states.
+- [x] Add five explicit CI screenshot artifact paths and provenance/case study
+  documentation distinguishing functional backend views from `/showcase`.
+- [ ] Verify exact-head Java/PostgreSQL and Chromium CI plus artifact upload;
+  inspect synthetic screenshots for secrets/PII and visual quality.
+- [ ] Advance draft integration candidate and rerun candidate-to-main security
+  checks only after exact-source checks pass; remain unmerged/unhosted.

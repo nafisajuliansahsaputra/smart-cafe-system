@@ -21,6 +21,29 @@ async function login(browser, role) {
   return { context, page };
 }
 
+
+// Keep portfolio evidence limited to a genuinely local disposable DB run.
+// No login screen, join-proof screen, credentials, or public merchant URL.
+async function captureSyntheticOperatorScreen(page, fileName, expectedPath, joinProof) {
+  const location = new URL(page.url());
+  if (!["localhost", "127.0.0.1"].includes(location.hostname) ||
+      location.pathname !== expectedPath) {
+    throw new Error("Operational screenshot refused outside expected local route");
+  }
+  const visibleText = await page.locator("body").innerText();
+  if (visibleText.includes(joinProof) || visibleText.includes(PASSWORD)) {
+    throw new Error("Operational screenshot refused: credential on page");
+  }
+  if (await page.locator('input[type="password"], input[name="joinProof"], #one-time-proof').count()) {
+    throw new Error("Operational screenshot refused: credential input on page");
+  }
+  await page.screenshot({
+    path: `test-results/${fileName}`,
+    fullPage: true,
+    animations: "disabled",
+  });
+}
+
 test("separate staff roles and guest complete the real cash/receipt visit", async ({ browser }) => {
   const contexts = [];
   async function makeContext() {
@@ -219,6 +242,10 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible({
       timeout: 25000,
     });
+    // Authentic OCC queue screenshot: API-backed order, still awaiting cash.
+    await captureSyntheticOperatorScreen(
+      cashier, "real-occ-awaiting-cash.png", "/staff/orders", proof,
+    );
 
     // A second guest using a valid visit proof cannot read this guest's order.
     const strangerContext = await makeContext();
@@ -268,6 +295,11 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await cashier.getByRole("checkbox", { name: /Saya telah memeriksa pesanan dan meja tamu/ }).check();
     await cashier.getByRole("button", { name: "Setujui untuk dapur" }).click();
     await expect(cashier.getByText("ACCEPTED", { exact: true })).toBeVisible();
+    // Approval advances preparation but MUST NOT mark cash payment PAID.
+    await expect(cashier.getByText("AWAITING_CASH", { exact: true })).toBeVisible();
+    await captureSyntheticOperatorScreen(
+      cashier, "real-occ-approved-cash-due.png", `/staff/orders/${orderId}`, proof,
+    );
     // Guest and kitchen should update when cashier acts, without reload.
     await expect(guest.getByRole("heading", { name: "ACCEPTED" })).toBeVisible({
       timeout: 25000,
@@ -285,6 +317,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await kitchen.getByRole("checkbox", { name: /Mulai menyiapkan pesanan ini/ }).check();
     await kitchen.getByRole("button", { name: "Mulai masak" }).click();
     await expect(kitchen.getByText("PREPARING", { exact: true })).toBeVisible();
+    await captureSyntheticOperatorScreen(
+      kitchen, "real-kds-preparing.png", "/staff/kitchen", proof,
+    );
     // Waiter subscribes while kitchen is preparing; READY should flow
     // independently over SSE to the waiter task board.
     await waiter.goto("/staff/waiter");
@@ -296,6 +331,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     // Opening waiter confirms handover and physical cash including backend change.
     // No navigation: the waiter must receive the READY state via SSE.
     await expect(waiter.getByText("READY", { exact: true })).toBeVisible();
+    await captureSyntheticOperatorScreen(
+      waiter, "real-waiter-ready.png", "/staff/waiter", proof,
+    );
     await waiter.getByRole("checkbox", { name: /Pesanan sudah diserahkan langsung ke meja/ }).check();
     await waiter.getByRole("button", { name: "Tandai sudah diantar" }).click();
     await expect(waiter.getByText("SERVED", { exact: true })).toBeVisible();
@@ -400,6 +438,9 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await expect(guest.getByRole("button", { name: "Cetak / simpan PDF" })).toBeVisible();
     await expect(guest.getByRole("table", { name: "Rincian pembelian" })).toContainText("E2E Latte");
     await expect(guest.getByText("35.000", { exact: false }).last()).toBeVisible();
+    await captureSyntheticOperatorScreen(
+      guest, "real-guest-paid-receipt.png", `/visit/orders/${orderId}/receipt`, proof,
+    );
     await guest.goto("/visit/orders/" + orderId);
 
     // Even after cash is PAID and food SERVED, a physical unit in use
