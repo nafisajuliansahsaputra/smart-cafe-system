@@ -75,7 +75,7 @@ if ($CheckOnly) {
 if (Test-Path -LiteralPath $envFile) {
   throw "Refused: .env exists. Start from a clean copy so no current settings are touched."
 }
-$containers = @(& docker compose --project-name $project --file $composeFile ps --all --quiet 2>$null)
+$containers = @(& docker ps --all --filter "label=com.docker.compose.project=$project" --quiet)
 if ($LASTEXITCODE -ne 0) { throw "Cannot inspect isolated Compose project." }
 if (@($containers | Where-Object { $_ -and $_.Trim() }).Count -gt 0) {
   throw "Refused: this local demo Compose project already has containers."
@@ -116,14 +116,21 @@ $password = $null
 [System.IO.File]::WriteAllText($envFile, ($lines -join [Environment]::NewLine) + [Environment]::NewLine, $utf8)
 $lines = $null
 
+$bootstrapSucceeded = $false
 try {
   Compose -CommandParts @("config","--quiet")
   Compose -CommandParts @("up","--build","--detach")
   WaitForUrl "http://127.0.0.1:8080/api/v1/system/status"
+  $bootstrapSucceeded = $true
 } finally {
   # Remove the one-time ADMIN password/profile from the persistent environment,
   # even if Docker startup fails. Never leave bootstrap active by accident.
   RemoveBootstrapSecrets
+  if (-not $bootstrapSucceeded) {
+    # Also stop any bootstrapping API container to prevent an on-disk
+    # temporary credential from remaining active inside that process.
+    & docker compose --project-name $project --file $composeFile stop api 2>$null | Out-Null
+  }
 }
 
 # The first run created exactly one administrator. Restart API with the normal
