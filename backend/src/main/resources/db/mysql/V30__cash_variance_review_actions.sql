@@ -3,7 +3,7 @@ CREATE TABLE cash_variance_review_actions (
   id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY DEFAULT (UUID()),
   shift_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   actor_staff_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  action_code VARCHAR(40) NOT NULL
+  action_code VARCHAR(40) COLLATE utf8mb4_bin NOT NULL
     CHECK (action_code IN ('REQUEST_RECOUNT','DOCUMENT_EVIDENCE','ESCALATE')),
   note VARCHAR(300) NOT NULL CHECK (CHAR_LENGTH(TRIM(note)) BETWEEN 10 AND 300),
   idempotency_key VARCHAR(128) NOT NULL
