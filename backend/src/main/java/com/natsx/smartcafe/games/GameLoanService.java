@@ -308,7 +308,7 @@ public class GameLoanService {
                 rs.getString("name"),rs.getString("copy_code"),
                 rs.getString("before_condition"),rs.getString("after_condition"),
                 rs.getString("reason"),rs.getString("actor_login"),
-                rs.getTimestamp("recorded_at").toInstant()));
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("recorded_at"))));
     }
 
     /** Bounded manager-only audit history: search is over the full event table,
@@ -345,7 +345,7 @@ public class GameLoanService {
                 rs.getString("name"),rs.getString("copy_code"),
                 rs.getString("before_condition"),rs.getString("after_condition"),
                 rs.getString("reason"),rs.getString("actor_login"),
-                rs.getTimestamp("recorded_at").toInstant()),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("recorded_at"))),
             q,q,q,q,q,next,next,size+1,page*size);
         boolean hasNext=rows.size()>size && page<2000;
         return new ConditionHistoryPage(
@@ -361,7 +361,7 @@ public class GameLoanService {
         String note=requiredReason(reason);
         String current=jdbc.query("""
             SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
-            """,rs->rs.next()?rs.getString(1):null,copyId);
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(copyId));
         if (current==null) throw missing();
         if (!("AVAILABLE".equals(current) && "DAMAGED".equals(desired)
               || "DAMAGED".equals(current) && "AVAILABLE".equals(desired)))
@@ -369,14 +369,15 @@ public class GameLoanService {
         Boolean active=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
                 WHERE copy_id=? AND status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
-            """,Boolean.class,copyId);
+            """,Boolean.class,dbUuid(copyId));
         if (Boolean.TRUE.equals(active))
             throw conflict("Cannot change condition while physical copy is assigned");
-        jdbc.update("UPDATE physical_game_copies SET condition=? WHERE id=?",desired,copyId);
+        jdbc.update("UPDATE physical_game_copies SET condition=? WHERE id=?",desired,dbUuid(copyId));
         recordCondition(copyId,null,staff.staffId(),current,desired,note);
-        UUID gameId=jdbc.queryForObject("""
+        UUID gameId=jdbc.query("""
             SELECT game_id FROM physical_game_copies WHERE id=?
-            """,UUID.class,copyId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"game_id"):null,
+            dbUuid(copyId));
         events.gameInventory(gameId);
         audit.staff(staff.staffId(),"DAMAGED".equals(desired)
             ? "GAME_COPY_QUARANTINED" : "GAME_COPY_RESTORED_INSPECTED",
@@ -387,7 +388,7 @@ public class GameLoanService {
             WHERE c.id=?
             """,rs->rs.next()?new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
-                rs.getString("copy_code"),rs.getString("condition")):null,copyId);
+                rs.getString("copy_code"),rs.getString("condition")):null,dbUuid(copyId));
     }
 
     /** Physical recovery does not erase a confirmed-loss incident or alter
@@ -407,7 +408,7 @@ public class GameLoanService {
             FROM physical_game_copies WHERE id=? FOR UPDATE
             """,rs->rs.next()?new RecoveryCopy(
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("copy_code"),
-                rs.getString("condition")):null,copyId);
+                rs.getString("condition")):null,dbUuid(copyId));
         if (copy==null) throw missing();
         if (!"LOST".equals(copy.condition())) throw conflict("Copy is not marked LOST");
         if (verifiedCopyCode==null || !verifiedCopyCode.equals(copy.code()))
@@ -419,15 +420,16 @@ public class GameLoanService {
             JOIN physical_game_loss_incidents i ON i.loan_id=l.id
             WHERE l.copy_id=? AND l.status='LOST' AND i.status='CONFIRMED_LOST'
             ORDER BY i.reviewed_at DESC,i.id DESC LIMIT 1
-            """,rs->rs.next()?rs.getObject(1,UUID.class):null,copyId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"):null,
+            dbUuid(copyId));
         if (loanId==null) throw conflict("Copy has no verified lost-loan incident");
         Boolean active=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
                 WHERE copy_id=? AND status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
-            """,Boolean.class,copyId);
+            """,Boolean.class,dbUuid(copyId));
         if (Boolean.TRUE.equals(active))
             throw conflict("Cannot recover while copy is assigned to an active visit");
-        jdbc.update("UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?",copyId);
+        jdbc.update("UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?",dbUuid(copyId));
         // Before/after inspection history is permanent; original LOST loan
         // and confirmed incident are deliberately never rewritten.
         recordCondition(copyId,loanId,staff.staffId(),"LOST","DAMAGED",note);
@@ -440,7 +442,7 @@ public class GameLoanService {
             WHERE c.id=?
             """,rs->rs.next()?new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
-                rs.getString("copy_code"),rs.getString("condition")):null,copyId);
+                rs.getString("copy_code"),rs.getString("condition")):null,dbUuid(copyId));
     }
 
     private void recordCondition(UUID copyId, UUID loanId, UUID actorId,
