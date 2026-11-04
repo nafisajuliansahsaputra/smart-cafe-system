@@ -10,7 +10,7 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 version numbers; **pending full migration CI**, not production-certified)
+- **MySQL SQL port drafted and schema-verified:** opt-in `db/mysql/V1-V31` (all 31 versions migrated both on isolated CI and the owner's Aiven Free scratch schema; **backend endpoint and full business parity still incomplete**, not production-certified)
   foundational tables, staff/guest revocable sessions, one-active-visit,
   immutable paid-only receipts, stock/cart/variant groups, join throttles,
   durable live outbox, serialized loan exclusivity, loss and condition
@@ -65,10 +65,12 @@ The portfolio must not describe MySQL as operational until proven.
   strings and validated 16-byte representations in service query
   mappings; MySQL UUID **parameter binding** and other SQL remain
   full-backend acceptance gates. Do not bypass the startup guard.
-- As of this review, the last **completed** successful MySQL CI was
-  on the earlier V1-V14 migration set. New V1-V31 attempts are
-  queued in GitHub Actions; queued checks are **not** evidence of
-  successful 31-version migrations. This branch is not deployment-ready.
+- On 2026-11-05 WIB the owner verified hosted V1-V31 Flyway migrations,
+  validation and cleanup. Subsequent exact-head isolated MySQL CI on
+  [PR #102](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/41932712088)
+  passed **25/25** integration tests including physical game copy lending.
+  This is not equivalent to full Spring Boot MySQL runtime readiness;
+  **the MySQL startup guard remains enabled**.
 
 ## Trigger privilege prerequisite for hosted MySQL
 
@@ -127,9 +129,12 @@ PostgreSQL until complete parity.
 
 ## Infrastructure status
 
-- User's new Neon project/database remain intact, no sample app data
-  imported, no further production/portfolio changes.
-- Render Free returned HTTP 402, so it was NOT deployed; Aiven MySQL
-  Free is only a proposed provider pending separate owner signup and
-  verification that its plan does not require a card.
-- No separate public Smart Cafe full-stack review URL exists yet.
+- The existing Neon/PostgreSQL environments remain intact; no actual
+  customer data was imported or deleted and no portfolio changes made.
+- The owner created a real **Aiven MySQL Free 8.4.11** service and verified
+  hosted schema/trigger tests in disposable databases. A persistent app
+  database has **not** been migrated or provisioned by those tests.
+- A card-free, sustainably accessible public Spring Boot host remains
+  unverified; no full-stack Smart Cafe review URL exists.
+- See [M8 real evidence and remaining release gates](M8-MYSQL-REALITY-AND-NEXT-GATES.md)
+  for the current source of truth.
