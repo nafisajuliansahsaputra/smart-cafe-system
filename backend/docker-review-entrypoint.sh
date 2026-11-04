@@ -1,0 +1,30 @@
+#!/bin/sh
+# Build an ephemeral JSSE truststore from the Aiven PUBLIC CA only for
+# the deliberately opt-in synthetic MySQL review. No secrets in image.
+set -eu
+if [ "\${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    if [ -z "\${SCS_AIVEN_CA_PEM_BASE64:-}" ]; then
+        echo 'MySQL review refused: Aiven public CA not configured.' >&2
+        exit 1
+    fi
+    umask 077
+    ca_file=/tmp/scs-aiven-public-ca.pem
+    truststore=/tmp/scs-aiven-truststore.p12
+    trap 'rm -f "$ca_file"' EXIT
+    if ! printf '%s' "$SCS_AIVEN_CA_PEM_BASE64" | base64 -d > "$ca_file"; then
+        echo 'MySQL review refused: invalid CA encoding.' >&2
+        exit 1
+    fi
+    # Password protects only the truststore of one PUBLIC certificate,
+    # not a database credential. Never print secret environment variables.
+    if ! keytool -importcert -noprompt -trustcacerts \
+       -alias scs-aiven-review -file "$ca_file" \
+       -keystore "$truststore" -storetype PKCS12 \
+       -storepass 'scs-public-ca-only' >/dev/null 2>&1; then
+        echo 'MySQL review refused: invalid CA certificate.' >&2
+        exit 1
+    fi
+    rm -f "$ca_file"
+    trap - EXIT
+fi
+exec java -jar /app/app.jar
