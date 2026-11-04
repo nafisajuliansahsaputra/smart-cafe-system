@@ -43,7 +43,8 @@ public class StaffAuthService {
         String loginHash = SecureToken.sha256(login);
         Instant now = Instant.now();
 
-        jdbc.update("INSERT INTO staff_login_throttles(login_hash) VALUES (?) ON CONFLICT DO NOTHING", loginHash);
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureStaffLoginThrottle(
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)), loginHash);
         var attempts = jdbc.queryForMap(
             "SELECT window_started_at, failed_attempts, locked_until FROM staff_login_throttles WHERE login_hash=? FOR UPDATE",
             loginHash);
