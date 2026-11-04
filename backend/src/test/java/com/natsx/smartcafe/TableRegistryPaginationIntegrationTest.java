@@ -177,7 +177,7 @@ class TableRegistryPaginationIntegrationTest {
         var opened=mvc.perform(post("/api/v1/waiter/table-visits")
             .header("Authorization","Bearer " + owner)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\\\"tableId\\\":\\\"" + firstTable + "\\\"}"))
+            .content("{\"tableId\":\"" + firstTable + "\"}"))
             .andReturn().getResponse();
         assertEquals(200,opened.getStatus(),opened.getContentAsString());
         String visitId=mapper.readTree(opened.getContentAsString()).path("data")
