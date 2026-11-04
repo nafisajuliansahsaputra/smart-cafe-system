@@ -74,7 +74,7 @@ public class CartService {
         if(cart.version()!=version)throw conflict("Cart version is stale");
         var entries=jdbc.query("""
             SELECT menu_item_id,quantity FROM cart_lines WHERE cart_id=? ORDER BY menu_item_id
-            """,(rs,n)->new Entry(rs.getObject("menu_item_id",UUID.class),
+            """,(rs,n)->new Entry(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
                 rs.getInt("quantity")),cart.id());
         if(entries.isEmpty())throw invalid("Cart is empty");
         var lines=new java.util.ArrayList<CashCheckoutService.Line>();
@@ -102,7 +102,7 @@ public class CartService {
             """,guest.guestId(),guest.visitId());
         var rows=jdbc.query("SELECT id,version FROM carts WHERE guest_id=? AND visit_id=?"
             +(lock?" FOR UPDATE":""),(rs,n)->new CartRow(
-                rs.getObject("id",UUID.class),rs.getLong("version")),guest.guestId(),guest.visitId());
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getLong("version")),guest.guestId(),guest.visitId());
         if(rows.isEmpty())throw conflict("Cart not available");
         return rows.getFirst();
     }
@@ -115,7 +115,7 @@ public class CartService {
         return jdbc.query("""
             SELECT option_id FROM cart_line_variant_options
             WHERE cart_id=? AND menu_item_id=? ORDER BY option_id
-            """,(rs,n)->rs.getObject("option_id",UUID.class),cartId,itemId);
+            """,(rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "option_id"),cartId,itemId);
     }
 
     private CartView view(CartRow cart) {
@@ -127,7 +127,7 @@ public class CartService {
             JOIN menu_categories c ON c.id=i.category_id
             JOIN item_availability a ON a.menu_item_id=i.id
             WHERE l.cart_id=? ORDER BY i.name,l.menu_item_id
-            """,(rs,n)->new PreviewRow(rs.getObject("menu_item_id",UUID.class),
+            """,(rs,n)->new PreviewRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
                 rs.getString("name"),rs.getLong("base_price_idr"),rs.getInt("quantity"),
                 rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
                 rs.getBoolean("can_order")),cart.id());
