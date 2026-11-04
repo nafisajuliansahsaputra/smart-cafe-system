@@ -65,7 +65,7 @@ public class VariantCatalogService {
             SELECT id,name,required,active,revision FROM menu_variant_groups
             WHERE menu_item_id=?
             """+(publicOnly?" AND active=true":"")+" ORDER BY name,id",
-            (rs,n)->new Group(rs.getObject("id",UUID.class),itemId,
+            (rs,n)->new Group(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),itemId,
                 rs.getString("name"),rs.getBoolean("required"),
                 rs.getBoolean("active"),rs.getLong("revision"),List.of()),itemId);
         var results=new java.util.ArrayList<Group>();
@@ -74,7 +74,7 @@ public class VariantCatalogService {
                 SELECT id,option_key,label,price_delta_idr,active,revision
                 FROM menu_variant_options WHERE group_id=?
                 """+(publicOnly?" AND active=true":"")+" ORDER BY label,id",
-                (rs,n)->new Option(rs.getObject("id",UUID.class),rs.getString("option_key"),
+                (rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("option_key"),
                     rs.getString("label"),rs.getLong("price_delta_idr"),rs.getBoolean("active"),
                     rs.getLong("revision")),group.id());
             results.add(new Group(group.id(),itemId,group.name(),group.required(),
@@ -182,7 +182,7 @@ public class VariantCatalogService {
         return jdbc.queryForObject("""
             SELECT id,option_key,label,price_delta_idr,active,revision
             FROM menu_variant_options WHERE id=?
-            """,(rs,n)->new Option(rs.getObject("id",UUID.class),rs.getString("option_key"),
+            """,(rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("option_key"),
                 rs.getString("label"),rs.getLong("price_delta_idr"),
                 rs.getBoolean("active"),rs.getLong("revision")),id);
     }
