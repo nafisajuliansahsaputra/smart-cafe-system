@@ -159,11 +159,25 @@ class MySqlCoreParityIntegrationTest {
             () -> tx.execute(status -> ops.capture(
                 intentId,20000L,"waiter-cash-0001",waiterId,"cash-no-shift")));
 
-        String shift = id();
-        jdbc.update("""
-            INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
-            VALUES (?,?,50000,?)
-            """,shift,cashier,"open-"+shift);
+        var drawer = new com.natsx.smartcafe.ops.CashDrawerShiftService(jdbc);
+        var cashierActor = new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(cashier),"synthetic-cashier","synthetic-token",
+            java.util.Set.of("CASHIER"));
+        var waiterActor = new com.natsx.smartcafe.identity.StaffPrincipal(
+            waiterId,"synthetic-waiter","synthetic-token",java.util.Set.of("WAITER"));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> drawer.open(
+                waiterActor,50000L,"waiter-open-denied","bad-role")));
+        String shiftOpenKey="open-"+id();
+        var opened=tx.execute(status -> drawer.open(
+            cashierActor,50000L,shiftOpenKey,"cash-shift-open"));
+        assertEquals("OPEN",opened.state());
+        var retryOpen=tx.execute(status -> drawer.open(
+            cashierActor,50000L,shiftOpenKey,"cash-shift-replay"));
+        assertEquals(opened.id(),retryOpen.id());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> drawer.open(
+                cashierActor,50000L,"second-"+id(),"cash-duplicate-till")));
 
         var paid=tx.execute(status -> ops.capture(
             intentId,20000L,"waiter-cash-0001",waiterId,"cash-collected"));
@@ -197,23 +211,37 @@ class MySqlCoreParityIntegrationTest {
         assertEquals(1,jdbc.queryForObject("""
             SELECT COUNT(*) FROM cash_tender_handoffs WHERE tender_id=?
               AND cash_shift_id=? AND waiter_staff_id=? AND received_at IS NULL
-            """,Integer.class,tenderId.toString(),shift,waiter));
+            """,Integer.class,tenderId.toString(),opened.id().toString(),waiter));
+        var pending=drawer.dashboard();
+        assertEquals(opened.id(),pending.active().id());
+        assertEquals(1L,pending.pendingHandoffCount());
+        assertEquals(16000L,pending.pendingHandoffs().getFirst().netCashIdr());
 
-        // Synthetic acknowledgment and settlement close the test till.
-        // Production handoff verification still requires CashDrawerShiftService E2E.
-        jdbc.update("""
-            UPDATE cash_tender_handoffs
-            SET received_by=?,received_at=CURRENT_TIMESTAMP(6),acknowledgment_key=?
-            WHERE tender_id=? AND received_at IS NULL
-            """,cashier,"ack-"+tenderId,tenderId.toString());
-        jdbc.update("""
-            UPDATE cash_drawer_shifts
-            SET closed_at=CURRENT_TIMESTAMP(6),closed_by=?,close_key=?,
-                counted_cash_idr=66000,recorded_cash_idr=16000,
-                expected_drawer_idr=66000,difference_idr=0,
-                closing_reason='Synthetic cash verification complete'
-            WHERE id=? AND closed_at IS NULL
-            """,cashier,"close-"+shift,shift);
+        String shiftCloseKey="close-"+id();
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> drawer.close(opened.id(),cashierActor,66000L,
+                shiftCloseKey,"Cash drawer reconciliation complete","close-pending")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> drawer.receive(opened.id(),tenderId,cashierActor,
+                15000L,"ack-"+id(),"wrong-count")));
+        String handoffKey="ack-"+id();
+        var received=tx.execute(status -> drawer.receive(
+            opened.id(),tenderId,cashierActor,16000L,handoffKey,"receive-waiter-cash"));
+        assertEquals("RECEIVED",received.state());
+        assertEquals(16000L,received.netCashIdr());
+        assertEquals("RECEIVED",tx.execute(status -> drawer.receive(
+            opened.id(),tenderId,cashierActor,16000L,handoffKey,"replay-handoff")).state());
+
+        var closed=tx.execute(status -> drawer.close(
+            opened.id(),cashierActor,66000L,shiftCloseKey,
+            "Cash drawer reconciliation complete","close-cash-drawer"));
+        assertEquals("CLOSED",closed.state());
+        assertEquals(66000L,closed.expectedDrawerIdr());
+        assertEquals(16000L,closed.recordedCashIdr());
+        assertEquals(0L,closed.differenceIdr());
+        assertEquals("CLOSED",tx.execute(status -> drawer.close(
+            opened.id(),cashierActor,66000L,shiftCloseKey,
+            "Cash drawer reconciliation complete","replay-cash-close")).state());
         assertEquals(0,jdbc.queryForObject(
             "SELECT COUNT(*) FROM cash_drawer_shifts WHERE closed_at IS NULL",
             Integer.class));
