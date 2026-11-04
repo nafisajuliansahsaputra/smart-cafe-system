@@ -15,6 +15,13 @@ and is not backed by the paid SLA; plan availability and policies can change.
 This is suitable only for **isolated review data**, not a guaranteed
 always-on production cafe. Check the actual dashboard plan before provisioning.
 
+**Billing guard:** Aiven **Developer** plans commonly have **8 GB** storage
+and charge after trial credits run out. Aiven **Free** provides **1 GB**
+storage at **$0/month**. A green banner for 30-day trial credits does **not**
+make an 8 GB Developer service free forever. Verify the service is really
+Free in Aiven > Overview > Service plan usage, and explicitly switch plans
+using **Change plan** when needed. Do not add a debit/credit card.
+
 The principal unresolved provider condition is `CREATE TRIGGER` with
 binary logging. MySQL can refuse trigger creation (error 1419) when
 `log_bin_trust_function_creators=0` and the user has no appropriate privilege.
@@ -46,22 +53,59 @@ ssl-ca=C:/Users/you/AppData/Local/SmartCafe/ca.pem
 Do not downgrade to `ssl-mode=DISABLED` or remove hostname validation to
 make a failed connection pass.
 
-## Read-only first, then explicitly opt into disposable DDL
+## Windows setup: MySQL login-path (preferred)
 
-From a checkout of this PR branch:
+After the service status is **Running** and you confirm the **Free**
+plan, download the CA certificate from Aiven > Overview > Connection
+information. Save it outside the repository, for example at
+`$env:LOCALAPPDATA\SmartCafe\ca.pem`.
+
+Install the official MySQL 8 client (including `mysql_config_editor`).
+Run these commands in **local** PowerShell, replacing the host and
+port with the connection information shown by Aiven:
 
 ```powershell
-# Read-only metadata and TLS checks. No tables or databases created.
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 -DefaultsFile "$env:LOCALAPPDATA\SmartCafe\mysql-review.cnf"
+# One-time interactive MySQL login-path setup.
+# The password prompt is local; no password appears in shell history.
+mysql_config_editor set --login-path=smartcafe_review --host=YOUR_AIVEN_HOST.aivencloud.com --port=YOUR_AIVEN_PORT --user=avnadmin --password
 
-# Only after verifying the selected remote host is an EMPTY review provider:
-# Creates one random scs_probe_* database, tests a trigger and financial
-# case-sensitive CHECK, then drops only that scratch database.
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 -DefaultsFile "$env:LOCALAPPDATA\SmartCafe\mysql-review.cnf" -RunWriteProbe
+# Read-only TLS and server-prerequisite verification.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 `
+  -LoginPath smartcafe_review `
+  -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem" `
+  -ExpectedHost "YOUR_AIVEN_HOST.aivencloud.com"
+
+# Opt in only on a disposable, non-production Aiven review service:
+# creates one random scratch database, tests triggers and CHECK, deletes it.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 `
+  -LoginPath smartcafe_review `
+  -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem" `
+  -ExpectedHost "YOUR_AIVEN_HOST.aivencloud.com" `
+  -RunWriteProbe
+```
+
+The MySQL login-path file (`.mylogin.cnf`) stores an **obfuscated**
+password, not strongly encrypted data. Restrict file access to your
+Windows account; never upload the file. To remove this local credential,
+run `mysql_config_editor remove --login-path=smartcafe_review`.
+Rotate the remote password through Aiven if it is exposed.
+
+### Alternative: a local-only MySQL client option file
+
+If `mysql_config_editor` is unavailable, use the option file
+described in the prerequisites section, with restricted NTFS permissions:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-mysql-host-preflight.ps1 `
+  -DefaultsFile "$env:LOCALAPPDATA\SmartCafe\mysql-review.cnf" `
+  -ExpectedHost "YOUR_AIVEN_HOST.aivencloud.com"
+
+# Add -RunWriteProbe only when deliberately authorizing temporary DDL.
 ```
 
 The script does not use `--password=...` on the command line and does not
-print credentials. It always requires an active TLS connection and genuine
+print credentials. Write mode requires an explicit Aiven `-ExpectedHost`
+to avoid relying on hidden client defaults. It always requires an active TLS connection and genuine
 MySQL 8.x. It refuses MariaDB and TiDB compatibility proxies as equivalent
 proof. The write probe validates actual creation and firing of a trigger,
 plus a database-level rejection of lowercase `paid` compared with `PAID`.
@@ -75,7 +119,7 @@ server or use your existing cafe database to run this probe.
 | Gate | Acceptance evidence |
 | --- | --- |
 | TLS | Session reports nonempty `Ssl_cipher`; client option file enforces `VERIFY_IDENTITY` |
-| Version | Genuine MySQL 8.x, not simply a MySQL-compatible wire protocol |
+| Billing | Confirm **Free**, **1 GB**, and **$0/month**; Developer 8 GB is a paid tier after trial |\n| Version | Genuine MySQL 8.x, not simply a MySQL-compatible wire protocol |
 | Trigger privileges | One scratch trigger created, fired with intended error, and dropped |
 | Financial state collation | `PAID` accepted, lowercase `paid` rejected by database CHECK |
 | Cleanup | Scratch database dropped; no shared schema modified |
