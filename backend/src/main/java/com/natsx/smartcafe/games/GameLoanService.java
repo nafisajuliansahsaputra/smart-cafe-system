@@ -220,13 +220,13 @@ public class GameLoanService {
         // Serialize inspection with manager quarantine/restoration and
         // automatic assignment. Never release an already non-available copy.
         String condition=jdbc.query("""
-            SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
+            SELECT c.condition FROM physical_game_copies c WHERE c.id=? FOR UPDATE
             """,rs->rs.next()?rs.getString(1):null,dbUuid(loan.copyId()));
         if (!"AVAILABLE".equals(condition))
             throw conflict("Physical game copy is not available for clean return");
         if (damageReason!=null) {
             jdbc.update("""
-                UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?
+                UPDATE physical_game_copies SET " + conditionColumn() + "='DAMAGED' WHERE id=?
                 """,dbUuid(loan.copyId()));
             recordCondition(loan.copyId(),loanId,staff.staffId(),
                 "AVAILABLE","DAMAGED",damageReason);
@@ -360,7 +360,7 @@ public class GameLoanService {
                 "Only AVAILABLE and DAMAGED transitions are supported");
         String note=requiredReason(reason);
         String current=jdbc.query("""
-            SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
+            SELECT c.condition FROM physical_game_copies c WHERE c.id=? FOR UPDATE
             """,rs->rs.next()?rs.getString(1):null,dbUuid(copyId));
         if (current==null) throw missing();
         if (!("AVAILABLE".equals(current) && "DAMAGED".equals(desired)
@@ -372,7 +372,8 @@ public class GameLoanService {
             """,Boolean.class,dbUuid(copyId));
         if (Boolean.TRUE.equals(active))
             throw conflict("Cannot change condition while physical copy is assigned");
-        jdbc.update("UPDATE physical_game_copies SET condition=? WHERE id=?",desired,dbUuid(copyId));
+        jdbc.update("UPDATE physical_game_copies SET " + conditionColumn() + "=? WHERE id=?",
+            desired,dbUuid(copyId));
         recordCondition(copyId,null,staff.staffId(),current,desired,note);
         UUID gameId=jdbc.query("""
             SELECT game_id FROM physical_game_copies WHERE id=?
@@ -429,7 +430,7 @@ public class GameLoanService {
             """,Boolean.class,dbUuid(copyId));
         if (Boolean.TRUE.equals(active))
             throw conflict("Cannot recover while copy is assigned to an active visit");
-        jdbc.update("UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?",dbUuid(copyId));
+        jdbc.update("UPDATE physical_game_copies SET " + conditionColumn() + "='DAMAGED' WHERE id=?",dbUuid(copyId));
         // Before/after inspection history is permanent; original LOST loan
         // and confirmed incident are deliberately never rewritten.
         recordCondition(copyId,loanId,staff.staffId(),"LOST","DAMAGED",note);
@@ -570,6 +571,13 @@ public class GameLoanService {
             rs.getString("copy_code"),
             com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("requested_at")));
     }
+    /** CONDITION is reserved in MySQL; never interpolate a user identifier. */
+    private String conditionColumn() {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "`condition`" : "condition";
+    }
+
     private Object dbUuid(UUID value) {
         return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
             value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
