@@ -100,6 +100,70 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void guestCartMySqlUsesChar36IdsAndPreservesVersionAndStockGuards() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Synthetic cart customer");
+
+        String category = id();
+        String menu = id();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category, "Test items", "mysql-cart-" + category);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr,availability)
+            VALUES (?,?,?,?,?)
+            """, menu, category, "Menu sample", 12500L, "AVAILABLE");
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest), UUID.fromString(visit), "synthetic-token-hash");
+        var variants = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var carts = new com.natsx.smartcafe.orders.CartService(jdbc, variants);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var initial = tx.execute(status -> carts.get(principal));
+        assertEquals(0L, initial.version());
+        assertEquals(0, initial.lines().size());
+
+        var line = new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+            UUID.fromString(menu), 2);
+        var changed = tx.execute(status ->
+            carts.replace(principal, 0L, java.util.List.of(line)));
+        assertEquals(1L, changed.version());
+        assertEquals(25000L, changed.estimatedSubtotalIdr());
+        assertEquals(1, changed.lines().size());
+        assertEquals(2, changed.lines().getFirst().quantity());
+
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> carts.replace(principal, 0L,
+                java.util.List.of(line))));
+
+        var locked = tx.execute(status -> carts.lockForCheckout(principal, 1L));
+        assertEquals(1, locked.size());
+        assertEquals(UUID.fromString(menu), locked.getFirst().menuItemId());
+        assertEquals(0, locked.getFirst().selectedOptionIds().size());
+
+        tx.executeWithoutResult(status -> carts.consume(principal, 1L));
+        var empty = tx.execute(status -> carts.get(principal));
+        assertEquals(2L, empty.version());
+        assertEquals(0, empty.lines().size());
+        assertEquals(0, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM cart_lines l
+            JOIN carts c ON c.id=l.cart_id WHERE c.guest_id=?
+            """, Integer.class, guest));
+        assertThrows(IllegalStateException.class, () ->
+            tx.executeWithoutResult(status -> carts.consume(principal, 1L)));
+
+        // A guessed guest ID in the same visit is not a member.
+        var stranger = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.randomUUID(), UUID.fromString(visit), "synthetic-stranger-hash");
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> carts.get(stranger)));
+    }
+
+    @Test
     void staffLoginUsesMySqlUuidSessionsRevokesAndPersistsFailedThrottles() {
         var passwords = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4);
         var auth = new com.natsx.smartcafe.identity.StaffAuthService(jdbc, passwords);
