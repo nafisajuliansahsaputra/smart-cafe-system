@@ -248,7 +248,7 @@ export type WaiterTask = {
   lines: { name: string; quantity: number; variantLabel: string | null; notes: string | null }[];
 };
 
-function isWaiterTask(value: unknown): value is WaiterTask {
+export function isWaiterTask(value: unknown): value is WaiterTask {
   return (
     record(value) &&
     typeof value.orderId === "string" &&
