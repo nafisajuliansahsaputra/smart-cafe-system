@@ -100,6 +100,92 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlGameLossReportNeedsManagerDecisionAndDoesNotEraseEvidence() {
+        String waiter = newStaff();
+        String manager = newStaff();
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            waiter,"WAITER");
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            manager,"MANAGER");
+        String visit = newVisit(newTable(),waiter);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest,visit,"Synthetic game incident customer");
+        String game = id();
+        String copy = id();
+        String serial = "GAME-LOST-"+copy;
+        jdbc.update("INSERT INTO physical_games(id,name) VALUES (?,?)",
+            game,"Incident game "+game);
+        jdbc.update("INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES (?,?,?)",
+            copy,game,serial);
+
+        var waiterIdentity=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(waiter),"synthetic-waiter","synthetic",java.util.Set.of("WAITER"));
+        var managerIdentity=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(manager),"synthetic-manager","synthetic",java.util.Set.of("MANAGER"));
+        var guestIdentity=new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest),UUID.fromString(visit),"synthetic-session");
+        var audit=new com.natsx.smartcafe.audit.AuditTrail(jdbc);
+        var events=new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var gameLoans=new com.natsx.smartcafe.games.GameLoanService(jdbc,audit,events);
+        var incidents=new com.natsx.smartcafe.games.GameLossIncidentService(jdbc,audit,events);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var requested=tx.execute(status->gameLoans.request(guestIdentity,UUID.fromString(game)));
+        tx.executeWithoutResult(status->gameLoans.assign(requested.id(),waiterIdentity,"loss-assign"));
+        tx.executeWithoutResult(status->gameLoans.handover(requested.id(),serial,waiterIdentity,"loss-handover"));
+
+        var reported=tx.execute(status->incidents.report(requested.id(),
+            "Unit missing during table service",waiterIdentity,"report-physical-loss"));
+        assertEquals("OPEN",reported.status());
+        assertEquals(1L,incidents.openIncidentSummary().openCount());
+        assertEquals(1,incidents.reviewQueue().size());
+        assertEquals(reported.id(),incidents.incidentEvidence(reported.id()).incident().id());
+        assertEquals("GAME_LOSS_REPORTED",
+            incidents.incidentEvidence(reported.id()).activity().getFirst().operation());
+
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->incidents.report(requested.id(),
+                "Duplicate report should be denied",waiterIdentity,"duplicate-loss")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->incidents.review(reported.id(),"CONFIRM_LOST",serial,
+                "Unauthorized review attempt",waiterIdentity,"forbidden-manager-action")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->incidents.review(reported.id(),"CONFIRM_LOST","WRONG-CODE",
+                "Incorrect physical inventory check",managerIdentity,"bad-code")));
+
+        var confirmed=tx.execute(status->incidents.review(reported.id(),
+            "CONFIRM_LOST",serial,"Manager verified unit is lost",
+            managerIdentity,"manager-confirmed-loss"));
+        assertEquals("CONFIRMED_LOST",confirmed.status());
+        assertEquals("LOST",jdbc.queryForObject(
+            "SELECT status FROM physical_game_loans WHERE id=?",String.class,requested.id().toString()));
+        assertEquals("LOST",jdbc.queryForObject(
+            "SELECT c.condition FROM physical_game_copies c WHERE c.id=?",String.class,copy));
+        assertEquals(0,gameLoans.catalog().stream()
+            .filter(g->g.id().equals(UUID.fromString(game))).findFirst()
+            .orElseThrow().availableCopies());
+        assertEquals(0L,incidents.openIncidentSummary().openCount());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->incidents.review(reported.id(),"DISMISS",serial,
+                "Cannot reverse completed manager decision",managerIdentity,"illegal-replay")));
+
+        var found=tx.execute(status->gameLoans.recoverLostCopy(UUID.fromString(copy),serial,
+            "Physical unit located after incident",managerIdentity,"found-and-quarantine"));
+        assertEquals("DAMAGED",found.condition());
+        assertEquals("CONFIRMED_LOST",
+            incidents.incidentEvidence(reported.id()).incident().status());
+        assertEquals("LOST",jdbc.queryForObject(
+            "SELECT status FROM physical_game_loans WHERE id=?",String.class,requested.id().toString()));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_logs
+            WHERE resource_type='GAME_LOSS_INCIDENT' AND resource_id=?
+              AND operation='GAME_LOSS_CONFIRMED'
+            """,Integer.class,reported.id().toString()));
+    }
+
+    @Test
     void mySqlPhysicalGameRequestAssignHandoverAndReturnNeverDoubleLoansCopy() {
         String waiter1 = newStaff();
         String waiter2 = newStaff();
