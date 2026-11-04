@@ -339,8 +339,13 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     );
     // Waiter subscribes while kitchen is preparing; READY should flow
     // independently over SSE to the waiter task board.
+    await waiter.goto("/staff/waiter?page=1001");
+    await expect(waiter.locator("p[role='alert']"))
+      .toContainText("Halaman tugas tidak valid");
     await waiter.goto("/staff/waiter");
     await expect(waiter.getByText("Live · otomatis")).toBeVisible();
+    await expect(waiter.getByRole("navigation", { name: "Halaman tugas waiter" }))
+      .toContainText("25 per halaman");
     await kitchen.getByRole("checkbox", { name: /Semua item sudah disiapkan/ }).check();
     await kitchen.getByRole("button", { name: "Siap diantar" }).click();
     await expect(kitchen.getByText("READY", { exact: true })).toBeVisible();
