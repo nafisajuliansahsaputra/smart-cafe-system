@@ -245,6 +245,27 @@ do not remove the MySQL startup readiness guard; do not issue real
 financial transactions or deploy public access until all backend
 compatibility and security gates pass.
 
+## Remote Flyway rehearsal verified by owner (2026-11-05 WIB)
+
+Owner-supplied PowerShell output from `HostedAivenFlywayReview` on the
+real Aiven Free MySQL 8.4.11 instance confirms:
+
+- **V1–V14** initial Flyway migration succeeded in a random `scs_m8_*`
+  database, and **V15–V31** upgrade succeeded on the same database.
+- Flyway **successfully validated all 31 migrations**.
+- Re-running Flyway at version 31 performed **zero** additional migrations.
+- JUnit: **1 test, 0 failures, 0 errors, 0 skipped**; `BUILD SUCCESS`.
+- The **random scratch database was deleted** after validation; no
+  persistent application database was provisioned or migrated.
+- Timestamp from the owner's Maven output: **2026-11-05 04:45 WIB**.
+
+This is a **real hosted schema migration pass**, NOT full Spring Boot
+application/transaction parity. MySQL startup stays intentionally blocked
+by `MySqlPortReadinessGuard`. QR/NFC guest-to-cart, payment/receipt, KDS,
+waiter/game loans, staff login and authorization workflows must run
+against actual MySQL before an application cutover. Do not treat successful
+DDL alone as proof that the cafe system can serve transactions.
+
 ## Acceptance and follow-on gates
 
 | Gate | Acceptance evidence |
@@ -255,7 +276,7 @@ compatibility and security gates pass.
 | Trigger privileges | **PASS on owner Aiven Free service**: scratch trigger created, fired, and dropped |
 | Financial state collation | **PASS on owner Aiven Free service**: `PAID` accepted, lowercase `paid` rejected |
 | Cleanup | **PASS on owner Aiven Free service**: random `scs_probe_*` deleted |
-| Flyway V1-V31 | **NOT YET RUN on Aiven**: owner to run opt-in migration rehearsal above; exact-head CI pending |
+| Flyway V1-V31 | **PASS on owner Aiven Free**: staged V1–V14 then V15–V31, validation, zero-op repeat and cleanup; application parity still pending |
 | Business SQL parity | **NOT covered:** transaction-safe PG advisory-lock replacements, UUID binding, JSON/SQL differences and all cash, game, KDS and security E2E |
 | Public deployment | **NOT covered:** API boot remains blocked on MySQL until above gates are passed |
 
