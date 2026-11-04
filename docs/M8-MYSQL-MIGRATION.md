@@ -173,10 +173,20 @@ A dedicated **manual opt-in** Flyway remote rehearsal is now on the
 - `HostedAivenFlywayReview` (TLS-verified JDBC, random `scs_m8_*` schema,
   actual V1–14 then V15–31 Flyway migration, validation and cleanup).
 
-**Status:** This hosted Flyway rehearsal has not yet been executed by
-the owner, nor has it passed on the actual Aiven database. The MySQL
-application startup guard remains in place; PostgreSQL app operation,
-real payment providers and portfolio are unchanged.
+**Verified hosted rehearsal:** On 2026-11-05 WIB the owner ran
+`HostedAivenFlywayReview` against Aiven MySQL 8.4.11: staged V1–V14,
+V15–V31 and a repeated zero-op migration passed; validation reported
+**31 migrations**. JUnit: **1 test, 0 failures/errors/skips, BUILD SUCCESS**.
+The disposable `scs_m8_*` database was deleted. This is **schema-only**
+evidence and does not certify the Spring Boot MySQL runtime.
+
+**Remaining blockers:** On the separate MySQL port regression PR #91,
+GitHub CI run 41910074782 found 2 UUID JDBC binding failures (12 tests:
+0 assertion failures, 2 errors). Dialect-aware UUID fixes were pushed to
+that draft branch, but its latest CI is still unverified. Other services,
+payment/cash/stock/game transaction and security parity remain unresolved.
+The MySQL application startup guard remains in place; PostgreSQL app
+operation, merchant providers and portfolio are unchanged.
 
 Full details: [M8 hosted MySQL preflight](M8-HOSTED-MYSQL-PREFLIGHT.md).
 
