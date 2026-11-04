@@ -121,7 +121,8 @@ class MySqlCoreParityIntegrationTest {
         assertEquals(UUID.fromString(staffId), principal.staffId());
         assertEquals(true, principal.roles().contains("WAITER"));
         tx.executeWithoutResult(status -> auth.logout(principal));
-        assertEquals(null, tx.execute(status -> auth.authenticate(signedIn.token())));
+        org.junit.jupiter.api.Assertions.assertNull(
+            tx.execute(status -> auth.authenticate(signedIn.token())));
 
         // Failed passwords are recorded on a separate absent identifier.
         // Returning a denial must commit the throttle counter.
