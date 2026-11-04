@@ -13,7 +13,7 @@ CREATE TABLE physical_game_copies (
   game_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   copy_code VARCHAR(80) NOT NULL UNIQUE,
   UNIQUE (id,game_id),
-  `condition` VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
+  `condition` VARCHAR(20) COLLATE utf8mb4_bin NOT NULL DEFAULT 'AVAILABLE'
       CHECK (`condition` IN ('AVAILABLE','DAMAGED','LOST','RETIRED')),
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   FOREIGN KEY (game_id) REFERENCES physical_games(id)
@@ -27,7 +27,7 @@ CREATE TABLE physical_game_loans (
   guest_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   game_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   copy_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
-  status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED'
+  status VARCHAR(20) COLLATE utf8mb4_bin NOT NULL DEFAULT 'REQUESTED'
     CONSTRAINT game_loan_status CHECK
       (status IN ('REQUESTED','ASSIGNED','IN_USE','RETURNED','CANCELLED')),
   requested_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
