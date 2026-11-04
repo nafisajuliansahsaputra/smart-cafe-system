@@ -10,7 +10,7 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 version numbers; **pending full migration CI**, not production-certified)
+- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 versions; **V1-V31 migrations and 7 core negative tests passed in earlier CI**, not application/production-certified)
   foundational tables, staff/guest revocable sessions, one-active-visit,
   immutable paid-only receipts, stock/cart/variant groups, join throttles,
   durable live outbox, serialized loan exclusivity, loss and condition
@@ -65,10 +65,16 @@ The portfolio must not describe MySQL as operational until proven.
   strings and validated 16-byte representations in service query
   mappings; MySQL UUID **parameter binding** and other SQL remain
   full-backend acceptance gates. Do not bypass the startup guard.
-- As of this review, the last **completed** successful MySQL CI was
-  on the earlier V1-V14 migration set. New V1-V31 attempts are
-  queued in GitHub Actions; queued checks are **not** evidence of
-  successful 31-version migrations. This branch is not deployment-ready.
+- **Verified CI evidence (not the latest branch head):** GitHub Actions
+  [run 41902735530](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/41902735530)
+  on commit `e8d80f7822c57f9c257b8d48208ae65b00dca639` completed
+  successfully on 2026-11-05 WIB. Testcontainers MySQL 8.4 validated and
+  **applied all 31 Flyway migrations** to a fresh disposable schema.
+  `MySqlCoreParityIntegrationTest` ran **7 tests: 0 failures, 0 errors,
+  0 skipped**. This supersedes the earlier V1-V14-only evidence, but does
+  **not** prove an upgrade rehearsal, full backend business parity or
+  the latest branch head. Later runs, including commit `54b8aa14`, were
+  still queued when checked. This branch is not deployment-ready.
 
 ## Trigger privilege prerequisite for hosted MySQL
 
