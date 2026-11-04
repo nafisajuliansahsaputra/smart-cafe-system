@@ -2,7 +2,29 @@
 
 QR/NFC-powered dine-in ordering and cafe operations platform with a customer web app, an **Order Control Center** for cashier/admin, waiter tools, kitchen display, cash/QRIS/virtual-account payments, physical board-game loans, and optional phone-based receipt delivery.
 
-> **Current build (2026-11-03):** The application is implemented in the stacked **draft integration PR #61** (not merged into `main`). The prior exact-head candidate passed 5/5 GitHub Actions workflows, including Java/PostgreSQL, Chromium end-to-end, CodeQL, dependency scanning, runtime image CVE scanning, and SBOMs. The new homepage and standalone portfolio tour are being reviewed in a separate stacked draft PR. **No production or public hosted environment exists. No real merchant QRIS/VA or phone receipt sender is connected.** Historical milestone notes below are development snapshots and should not override this current status.
+> **Current build (2026-11-05):** The actual Next.js 16 + Spring Boot/Java 21 + PostgreSQL 17 application lives in [draft integration PR #61](https://github.com/nafisajuliansahsaputra/smart-cafe-system/pull/61), **not** the documentation-only `main` branch. The exact integration candidate through PR #85 passed **39 GitHub checks, 4 skipped, zero failed** on commit `554576f3247dbc4e39671ee95ab6d6dc036f3361`. Its real cash-to-paid-receipt lifecycle, role permissions, migrations, security checks and operator screens run in isolated CI. A separate local-only first-run PowerShell onboarding workflow is under stacked draft review. **Nothing is deployed for real public cafe use. QRIS/VA remains fake sandbox and no external WhatsApp/SMS receipt sender is approved or connected.** Historical notes below are development milestones, not evidence of production readiness.
+
+## Run the ACTUAL full-stack app on Windows
+
+The client-only `/showcase` tour is not the full system. For a real,
+database-backed cashier/kitchen/waiter/customer experience, use the
+isolated localhost onboarding script (available in the latest stacked
+draft candidate, not on the documentation-only default branch).
+
+```powershell
+git clone --branch integration/m6-v30-release-candidate --single-branch https://github.com/nafisajuliansahsaputra/smart-cafe-system.git
+cd smart-cafe-system
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local-fullstack.ps1
+```
+
+This prompts for a unique ADMIN password, creates a private local Docker
+project, migrates PostgreSQL and seeds twelve synthetic products, six
+tables and physical game copies. The script removes one-time bootstrap
+credentials before leaving the API running. No default accounts, real
+merchant payment, live customer messages or internet-facing service is
+created. **Requires Docker Desktop and a fresh checkout with no `.env`.**
+See [Windows full-stack onboarding](docs/M7-LOCAL-FULLSTACK-PORTFOLIO-SETUP.md)
+for operational steps, test-only cash flow and safe restart instructions.
 
 ## Portfolio preview
 
@@ -27,9 +49,8 @@ Open `http://localhost:3000/` for the landing and `http://localhost:3000/showcas
 
 The actual operational website includes the authenticated cashier OCC,
 kitchen display, waiter service, cash shifts and financial reports,
-table/visit management, staff onboarding and game inventory. The next
-whole-product increment adds **manager/admin menu management** under
-`/staff/catalog`, backed by the existing Spring Boot catalog API:
+table/visit management, staff onboarding and game inventory. Manager/admin menu management is already implemented under
+`/staff/catalog`, backed by the real Spring Boot catalog API:
 category creation/visibility, hidden item creation, price/publication edits,
 audited stock, and multiple price-adjusted modifier groups/options.
 Mutations are server-authoritative, role-gated and revision-aware. See
