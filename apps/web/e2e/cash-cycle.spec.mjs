@@ -255,7 +255,7 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
     await cashier.goto("/staff/orders?status=SUBMITTED&paymentStatus=AWAITING_CASH&tableCode=E2E-01");
     await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible();
     await cashier.goto("/staff/orders?page=1001");
-    await expect(cashier.getByRole("alert")).toContainText("Filter atau halaman tidak valid");
+    await expect(cashier.locator("p.staff-notice[role='alert']")).toContainText("Filter atau halaman tidak valid");
     await cashier.goto("/staff/orders");
     await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible();
     await cashier.setViewportSize({ width: 320, height: 720 });
