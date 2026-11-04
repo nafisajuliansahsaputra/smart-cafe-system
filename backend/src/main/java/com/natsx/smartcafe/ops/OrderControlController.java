@@ -8,6 +8,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +36,19 @@ public class OrderControlController {
         HttpServletRequest request) {
         return ApiEnvelope.of(queries.search(status,paymentStatus,tableCode,orderId),
             RequestIdFilter.get(request));
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<ApiEnvelope<OrderControlQueryService.QueuePage>> queuePage(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String paymentStatus,
+        @RequestParam(required = false) String tableCode,
+        @RequestParam(required = false) UUID orderId,
+        HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
+            ApiEnvelope.of(queries.page(page, status, paymentStatus, tableCode, orderId),
+                RequestIdFilter.get(request)));
     }
 
     @GetMapping("/{id}")
