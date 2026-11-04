@@ -72,7 +72,7 @@ public class GameLoanService {
             JOIN cafe_tables t ON t.id=v.table_id
             LEFT JOIN physical_game_copies c ON c.id=l.copy_id
             WHERE l.guest_id=? AND l.visit_id=? ORDER BY l.requested_at DESC LIMIT 100
-            """, (rs,n)->map(rs),guest.guestId(),guest.visitId());
+            """, (rs,n)->map(rs),dbUuid(guest.guestId()),dbUuid(guest.visitId()));
     }
 
     @Transactional
@@ -83,16 +83,16 @@ public class GameLoanService {
         Boolean member=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM visit_guests
                           WHERE id=? AND visit_id=?)
-            """,Boolean.class,guest.guestId(),guest.visitId());
+            """,Boolean.class,dbUuid(guest.guestId()),dbUuid(guest.visitId()));
         if (!Boolean.TRUE.equals(member)) throw missing();
         Boolean available=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_games WHERE id=? AND active=true)
-            """,Boolean.class,gameId);
+            """,Boolean.class,dbUuid(gameId));
         if (!Boolean.TRUE.equals(available)) throw missing();
         Boolean duplicate=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
               WHERE visit_id=? AND game_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING'))
-            """,Boolean.class,guest.visitId(),gameId);
+            """,Boolean.class,dbUuid(guest.visitId()),dbUuid(gameId));
         if (Boolean.TRUE.equals(duplicate)) throw conflict("A game request is already active for this table");
         // A REQUESTED loan does not reserve a copy. Waiter rechecks units at
         // assignment. A pending request must never masquerade as delivery.
@@ -100,7 +100,7 @@ public class GameLoanService {
         jdbc.update("""
             INSERT INTO physical_game_loans(id,visit_id,guest_id,game_id)
             VALUES (?,?,?,?)
-            """,id,guest.visitId(),guest.guestId(),gameId);
+            """,dbUuid(id),dbUuid(guest.visitId()),dbUuid(guest.guestId()),dbUuid(gameId));
         events.gameLoan(id,"GAME_LOAN_REQUESTED");
         return one(id);
     }
@@ -117,14 +117,14 @@ public class GameLoanService {
             WHERE id=? AND guest_id=? AND visit_id=?
             FOR UPDATE
             """, rs -> rs.next()?rs.getString(1):null,
-            loanId,guest.guestId(),guest.visitId());
+            dbUuid(loanId),dbUuid(guest.guestId()),dbUuid(guest.visitId()));
         if (state == null) throw missing(); // foreign loans never disclose existence
         if ("RETURN_PENDING".equals(state)) return one(loanId); // idempotent retry
         if (!"IN_USE".equals(state)) throw conflict("Game is not in guest possession");
         jdbc.update("""
             UPDATE physical_game_loans SET status='RETURN_PENDING',
                 return_requested_at=now() WHERE id=?
-            """,loanId);
+            """,dbUuid(loanId));
         events.gameLoan(loanId,"GAME_LOAN_RETURN_REQUESTED");
         return one(loanId);
     }
@@ -142,25 +142,32 @@ public class GameLoanService {
             WHERE l.status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING')
             """+(supervisor?"":" AND v.opened_by=? ")+
             " ORDER BY l.requested_at ASC LIMIT 100",
-            (rs,n)->map(rs),supervisor?new Object[]{}:new Object[]{staff.staffId()});
+            (rs,n)->map(rs),supervisor?new Object[]{}:new Object[]{dbUuid(staff.staffId())});
     }
 
     @Transactional
     public LoanView assign(UUID loanId, StaffPrincipal staff, String requestId) {
         Loan loan=lockLoanByVisit(loanId,staff);
         if (!loan.status().equals("REQUESTED")) throw conflict("Game request is not waiting for assignment");
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        // A row lock on the candidate copy plus the unique active-copy
+        // constraint protect against two physical loans of the same unit.
+        String lockCopy = vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? " FOR UPDATE SKIP LOCKED" : " FOR UPDATE OF c SKIP LOCKED";
         UUID copy=jdbc.query("""
             SELECT c.id FROM physical_game_copies c
             WHERE c.game_id=? AND c.condition='AVAILABLE'
               AND NOT EXISTS(SELECT 1 FROM physical_game_loans l
                   WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
-            ORDER BY c.copy_code LIMIT 1 FOR UPDATE OF c SKIP LOCKED
-            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"):null,loan.gameId());
+            ORDER BY c.copy_code LIMIT 1
+            """+lockCopy,rs->rs.next()?
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"):null,
+                dbUuid(loan.gameId()));
         if (copy==null) throw conflict("No available physical copy for this game");
         jdbc.update("""
             UPDATE physical_game_loans SET copy_id=?,status='ASSIGNED',
                 assigned_at=now(),assigned_by=? WHERE id=?
-            """,copy,staff.staffId(),loanId);
+            """,dbUuid(copy),dbUuid(staff.staffId()),dbUuid(loanId));
         events.gameLoan(loanId,"GAME_LOAN_ASSIGNED");
         events.gameInventory(loan.gameId());
         audit.staff(staff.staffId(),"GAME_COPY_ASSIGNED","GAME_LOAN",loanId,requestId);
@@ -179,7 +186,7 @@ public class GameLoanService {
         jdbc.update("""
             UPDATE physical_game_loans SET status='IN_USE',
                 handed_over_at=now(),handed_over_by=? WHERE id=?
-            """,staff.staffId(),loanId);
+            """,dbUuid(staff.staffId()),dbUuid(loanId));
         events.gameLoan(loanId,"GAME_LOAN_HANDED_OVER");
         audit.staff(staff.staffId(),"GAME_COPY_HANDED_OVER","GAME_LOAN",loanId,requestId);
         return one(loanId);
@@ -214,13 +221,13 @@ public class GameLoanService {
         // automatic assignment. Never release an already non-available copy.
         String condition=jdbc.query("""
             SELECT condition FROM physical_game_copies WHERE id=? FOR UPDATE
-            """,rs->rs.next()?rs.getString(1):null,loan.copyId());
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(loan.copyId()));
         if (!"AVAILABLE".equals(condition))
             throw conflict("Physical game copy is not available for clean return");
         if (damageReason!=null) {
             jdbc.update("""
                 UPDATE physical_game_copies SET condition='DAMAGED' WHERE id=?
-                """,loan.copyId());
+                """,dbUuid(loan.copyId()));
             recordCondition(loan.copyId(),loanId,staff.staffId(),
                 "AVAILABLE","DAMAGED",damageReason);
             audit.staff(staff.staffId(),"GAME_COPY_QUARANTINED_AT_RETURN",
@@ -229,7 +236,7 @@ public class GameLoanService {
         jdbc.update("""
             UPDATE physical_game_loans SET status='RETURNED',
                 returned_at=now(),returned_by=? WHERE id=?
-            """,staff.staffId(),loanId);
+            """,dbUuid(staff.staffId()),dbUuid(loanId));
         events.gameLoan(loanId,"GAME_LOAN_RETURNED");
         events.gameInventory(loan.gameId());
         audit.staff(staff.staffId(),damageReason==null
@@ -553,6 +560,11 @@ public class GameLoanService {
             rs.getString("name"),rs.getString("status"),rs.getString("table_code"),
             rs.getString("copy_code"),rs.getTimestamp("requested_at").toInstant());
     }
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
     private boolean supervisor(StaffPrincipal staff) {
         return staff.roles().stream().anyMatch(r ->
             r.equals("CASHIER") || r.equals("MANAGER") || r.equals("ADMIN"));
