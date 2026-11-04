@@ -852,3 +852,15 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
   authorized by the owner and Cloudinary account holder.
 - [ ] Require exact-head source + candidate CI and human review prior
   to integration release; keep payment/receipt provider gates closed.
+
+### M7 waiter floor scalability (stacked draft)
+- [x] Add role-gated, 25-row PostgreSQL pagination and literal code/alias
+  search for the real waiter floor board without the previous 250-row UI cap.
+- [x] Preserve waiter owner vs supervisor visit visibility, no-store response,
+  server-only bearer handling and fail-closed frontend shape validation.
+- [x] Add >250 synthetic-table backend integration, access/error tests,
+  Playwright search, invalid page and 320px mobile coverage.
+- [ ] Verify exact-head GitHub Actions Java/PostgreSQL, Chromium and security
+  gates; independent review and authorized integration before main release.
+- [ ] Run physical operator acceptance and browser accessibility checks on
+  an isolated HTTPS staging system before public use.
