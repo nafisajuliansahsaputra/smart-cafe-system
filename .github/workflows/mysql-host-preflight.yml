@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "scripts/test-mysql-host-preflight.ps1"
+      - "scripts/setup-aiven-review-windows.ps1"
       - "docs/M8-HOSTED-MYSQL-PREFLIGHT.md"
       - ".github/workflows/mysql-host-preflight.yml"
   workflow_dispatch:
@@ -26,13 +27,20 @@ jobs:
         run: |
           $tokens = $null
           $parseErrors = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile(
+          foreach ($file in @(
             "scripts/test-mysql-host-preflight.ps1",
-            [ref]$tokens,
-            [ref]$parseErrors
-          )
-          if ($parseErrors.Count -gt 0) {
-            $parseErrors | ForEach-Object { Write-Error $_.Message }
-            exit 1
+            "scripts/setup-aiven-review-windows.ps1"
+          )) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $file,
+              [ref]$tokens,
+              [ref]$parseErrors
+            )
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error "$file : $($_.Message)" }
+              exit 1
+            }
+            Write-Host "PASS: Parsed $file"
           }
-          Write-Host "PASS: PowerShell parser accepted the host preflight script."
