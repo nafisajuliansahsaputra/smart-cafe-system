@@ -1,0 +1,58 @@
+name: Hosted MySQL Preflight Script Safety
+
+on:
+  pull_request:
+    paths:
+      - "scripts/test-mysql-host-preflight.ps1"
+      - "scripts/setup-aiven-review-windows.ps1"
+      - "scripts/test-aiven-flyway-windows.ps1"
+      - "scripts/setup-maven-windows.ps1"
+      - "backend/src/test/java/com/natsx/smartcafe/HostedAivenFlywayReview.java"
+      - "docs/M8-HOSTED-MYSQL-PREFLIGHT.md"
+      - ".github/workflows/mysql-host-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only the newest PR head needs syntax verification.
+# Avoid piling up obsolete runs while iterating on the Windows preflight.
+concurrency:
+  group: mysql-host-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  parse-powershell:
+    name: PowerShell preflight syntax (no network, no credentials)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate PowerShell AST syntax without connecting to a host
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          foreach ($file in @(
+            "scripts/test-mysql-host-preflight.ps1",
+            "scripts/setup-aiven-review-windows.ps1",
+            "scripts/test-aiven-flyway-windows.ps1",
+            "scripts/setup-maven-windows.ps1"
+          )) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $file,
+              [ref]$tokens,
+              [ref]$parseErrors
+            )
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object { Write-Error "$file : $($_.Message)" }
+              exit 1
+            }
+            Write-Host "PASS: Parsed $file"
+          }

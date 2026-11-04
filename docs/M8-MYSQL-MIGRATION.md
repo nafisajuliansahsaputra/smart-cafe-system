@@ -10,7 +10,7 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 version numbers; **pending full migration CI**, not production-certified)
+- **MySQL SQL port drafted:** opt-in `db/mysql/V1-V31` (all 31 versions; **V1-V31 migrations and 7 core negative tests passed in earlier CI**, not application/production-certified)
   foundational tables, staff/guest revocable sessions, one-active-visit,
   immutable paid-only receipts, stock/cart/variant groups, join throttles,
   durable live outbox, serialized loan exclusivity, loss and condition
@@ -65,10 +65,16 @@ The portfolio must not describe MySQL as operational until proven.
   strings and validated 16-byte representations in service query
   mappings; MySQL UUID **parameter binding** and other SQL remain
   full-backend acceptance gates. Do not bypass the startup guard.
-- As of this review, the last **completed** successful MySQL CI was
-  on the earlier V1-V14 migration set. New V1-V31 attempts are
-  queued in GitHub Actions; queued checks are **not** evidence of
-  successful 31-version migrations. This branch is not deployment-ready.
+- **Verified CI evidence (not the latest branch head):** GitHub Actions
+  [run 41902735530](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/41902735530)
+  on commit `e8d80f7822c57f9c257b8d48208ae65b00dca639` completed
+  successfully on 2026-11-05 WIB. Testcontainers MySQL 8.4 validated and
+  **applied all 31 Flyway migrations** to a fresh disposable schema.
+  `MySqlCoreParityIntegrationTest` ran **7 tests: 0 failures, 0 errors,
+  0 skipped**. This supersedes the earlier V1-V14-only evidence, but does
+  **not** prove an upgrade rehearsal, full backend business parity or
+  the latest branch head. Later runs, including commit `54b8aa14`, were
+  still queued when checked. This branch is not deployment-ready.
 
 ## Trigger privilege prerequisite for hosted MySQL
 
@@ -133,3 +139,54 @@ PostgreSQL until complete parity.
   Free is only a proposed provider pending separate owner signup and
   verification that its plan does not require a card.
 - No separate public Smart Cafe full-stack review URL exists yet.
+
+
+## Remote free-host compatibility gate (added in M8 review)
+
+Before choosing an Aiven MySQL Free review service, run the **read-only**
+host check and then explicitly authorize its disposable trigger/CHECK probe:
+[hosted MySQL preflight](M8-HOSTED-MYSQL-PREFLIGHT.md).
+The script at `scripts/test-mysql-host-preflight.ps1` requires a separately
+stored local MySQL client option file with hostname-verified TLS; no secrets
+are committed. It creates and removes only a random `scs_probe_*` database
+when `-RunWriteProbe` is explicitly specified.
+
+Passing this check confirms the *remote host prerequisites only*. It is not
+proof of MySQL application readiness, full V1-V31 Flyway migration, financial
+transaction parity, deployment authorization or unrestricted free uptime.
+Keep `MySqlPortReadinessGuard` in place until all those separate gates pass.
+
+## Hosted Aiven Free evidence and next test (2026-11-05 WIB)
+
+Owner-provided Windows output confirms a **Free-1-1gb** Aiven MySQL 8.4.11
+instance successfully passes hostname-verified CA/TLS connection, binary
+logging, `log_bin_trust_function_creators=1`, a scratch trigger
+creation/execution, strict payment-state CHECK enforcement and scratch
+database deletion. This proves **host prerequisites**, not full MySQL POS
+application parity.
+
+A dedicated **manual opt-in** Flyway remote rehearsal is now on the
+`feat/m8-host-mysql-preflight` stacked draft branch:
+
+- `scripts/test-aiven-flyway-windows.ps1` (local PowerShell prompt and
+  ephemeral process-environment password; no hosted CI credential);
+- `HostedAivenFlywayReview` (TLS-verified JDBC, random `scs_m8_*` schema,
+  actual V1–14 then V15–31 Flyway migration, validation and cleanup).
+
+**Verified hosted rehearsal:** On 2026-11-05 WIB the owner ran
+`HostedAivenFlywayReview` against Aiven MySQL 8.4.11: staged V1–V14,
+V15–V31 and a repeated zero-op migration passed; validation reported
+**31 migrations**. JUnit: **1 test, 0 failures/errors/skips, BUILD SUCCESS**.
+The disposable `scs_m8_*` database was deleted. This is **schema-only**
+evidence and does not certify the Spring Boot MySQL runtime.
+
+**Remaining blockers:** On the separate MySQL port regression PR #91,
+GitHub CI run 41910074782 found 2 UUID JDBC binding failures (12 tests:
+0 assertion failures, 2 errors). Dialect-aware UUID fixes were pushed to
+that draft branch, but its latest CI is still unverified. Other services,
+payment/cash/stock/game transaction and security parity remain unresolved.
+The MySQL application startup guard remains in place; PostgreSQL app
+operation, merchant providers and portfolio are unchanged.
+
+Full details: [M8 hosted MySQL preflight](M8-HOSTED-MYSQL-PREFLIGHT.md).
+
