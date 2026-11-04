@@ -228,6 +228,11 @@ jobs:
             apps/web/test-results/operational-audit-manager.png
             apps/web/test-results/operational-table-qr.png
             apps/web/test-results/operational-guest-menu-search.png
+            apps/web/test-results/real-occ-awaiting-cash.png
+            apps/web/test-results/real-occ-approved-cash-due.png
+            apps/web/test-results/real-kds-preparing.png
+            apps/web/test-results/real-waiter-ready.png
+            apps/web/test-results/real-guest-paid-receipt.png
           if-no-files-found: error
           retention-days: 7
       - name: Upload browser failure trace and screenshots
