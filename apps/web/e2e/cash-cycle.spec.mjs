@@ -247,6 +247,23 @@ test("separate staff roles and guest complete the real cash/receipt visit", asyn
       cashier, "real-occ-awaiting-cash.png", "/staff/orders", proof,
     );
 
+    // The real cashier board is PostgreSQL-paginated with filter-preserving
+    // navigation, and malformed page requests fail closed rather than showing
+    // a misleading empty queue. The approved cash amount is still UNPAID.
+    await expect(cashier.getByRole("navigation", { name: "Halaman antrean pesanan" }))
+      .toContainText("25 per halaman");
+    await cashier.goto("/staff/orders?status=SUBMITTED&paymentStatus=AWAITING_CASH&tableCode=E2E-01");
+    await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible();
+    await cashier.goto("/staff/orders?page=1001");
+    await expect(cashier.getByRole("alert")).toContainText("Filter atau halaman tidak valid");
+    await cashier.goto("/staff/orders");
+    await expect(cashier.locator(`a[href="/staff/orders/${orderId}"]`)).toBeVisible();
+    await cashier.setViewportSize({ width: 320, height: 720 });
+    await expect.poll(() => cashier.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )).toBeLessThanOrEqual(1);
+    await cashier.setViewportSize({ width: 1280, height: 720 });
+
     // A second guest using a valid visit proof cannot read this guest's order.
     const strangerContext = await makeContext();
     const stranger = await strangerContext.newPage();
