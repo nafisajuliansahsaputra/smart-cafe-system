@@ -11,7 +11,9 @@ class MySqlPortReadinessGuardTest {
 
     private static final String REVIEW_URL =
         "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic"
-        + "?sslMode=VERIFY_IDENTITY";
+        + "?sslMode=VERIFY_IDENTITY"
+        + "&trustCertificateKeyStoreUrl=file:/tmp/scs-aiven-truststore.p12"
+        + "&trustCertificateKeyStoreType=PKCS12";
 
     private void check(MockEnvironment props) {
         var guard = new MySqlPortReadinessGuard();
@@ -57,7 +59,9 @@ class MySqlPortReadinessGuardTest {
             "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&trustServerCertificate=true",
             "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&sslMode=DISABLED",
             "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&allowPublicKeyRetrieval=true",
-            "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&useSSL=false"
+            "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&useSSL=false",
+            "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/tmp/wrong.p12&trustCertificateKeyStoreType=PKCS12",
+            "jdbc:mysql://mysql-review.aivencloud.com:12886/scs_review_synthetic?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/tmp/scs-aiven-truststore.p12"
         }) {
             assertThrows(IllegalStateException.class,
                 () -> check(allowed().withProperty("spring.datasource.url", url)));
