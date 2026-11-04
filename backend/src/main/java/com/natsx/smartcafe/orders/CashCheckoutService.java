@@ -220,26 +220,7 @@ public class CashCheckoutService {
             VALUES (?,?,?,'SUBMITTED',?,?,'M2-DEMO-UNTAXED')
             """,dbUuid(orderId),dbUuid(guest.visitId()),dbUuid(guest.guestId()),subtotal,subtotal);
         for(var item:items) {
-            jdbc.update("""
-                INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
-                                        unit_price_idr,quantity,line_total_idr)
-                VALUES (?,?,?,CASE WHEN CAST(? AS text)='' THEN '{}'::jsonb
-                    ELSE jsonb_build_object(
-                      'label',CAST(? AS text),
-                      'options',(
-                        SELECT coalesce(jsonb_agg(jsonb_build_object(
-                            'id',o.id,'group',g.name,'key',o.option_key,
-                            'label',o.label,'deltaIdr',o.price_delta_idr)
-                            ORDER BY g.name,g.id),'[]'::jsonb)
-                        FROM menu_variant_options o
-                        JOIN menu_variant_groups g ON g.id=o.group_id
-                        WHERE o.id=ANY(CAST(? AS uuid[]))
-                      )
-                    ) END,?,?,?)
-                """,orderId,item.menu().id(),item.menu().name(),
-                item.selection().label(),item.selection().label(),
-                item.selection().uuidArrayLiteral(),
-                item.unitPrice(),item.quantity(),item.total());
+            insertOrderLine(orderId, item);
             jdbc.update("""
                 INSERT INTO order_stock_allocations(order_id,menu_item_id,quantity) VALUES (?,?,?)
                 """,dbUuid(orderId),dbUuid(item.menu().id()),item.quantity());
@@ -256,6 +237,76 @@ public class CashCheckoutService {
         outbox.order(orderId,"ORDER_SUBMITTED");
         return new Checkout(orderId,"SUBMITTED",
             "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING",subtotal);
+    }
+
+    /**
+     * Write immutable server-priced order snapshots. Preserve the legacy
+     * PostgreSQL JSONB expression verbatim. MySQL builds JSON with bound
+     * JSON_OBJECT/JSON_ARRAY parameters in deterministic group order, never
+     * string-concatenating customer/catalog data into SQL or handwritten JSON.
+     */
+    private void insertOrderLine(UUID orderId, PricedLine item) {
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        if (vendor == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.POSTGRESQL) {
+            jdbc.update("""
+                INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
+                                        unit_price_idr,quantity,line_total_idr)
+                VALUES (?,?,?,CASE WHEN CAST(? AS text)='' THEN '{}'::jsonb
+                    ELSE jsonb_build_object(
+                      'label',CAST(? AS text),
+                      'options',(
+                        SELECT coalesce(jsonb_agg(jsonb_build_object(
+                            'id',o.id,'group',g.name,'key',o.option_key,
+                            'label',o.label,'deltaIdr',o.price_delta_idr)
+                            ORDER BY g.name,g.id),'[]'::jsonb)
+                        FROM menu_variant_options o
+                        JOIN menu_variant_groups g ON g.id=o.group_id
+                        WHERE o.id=ANY(CAST(? AS uuid[]))
+                      )
+                    ) END,?,?,?)
+                """, dbUuid(orderId), dbUuid(item.menu().id()), item.menu().name(),
+                item.selection().label(), item.selection().label(),
+                item.selection().uuidArrayLiteral(),
+                item.unitPrice(), item.quantity(), item.total());
+            return;
+        }
+
+        // VariantPricingService has already locked and validated these rows.
+        // MySQL's JSON_ARRAY preserves insertion order; sort like PG snapshot.
+        var choices = item.selection().choices().stream().sorted(
+            Comparator.comparing(VariantPricingService.Choice::groupName)
+                .thenComparing(VariantPricingService.Choice::groupId)).toList();
+        var args = new java.util.ArrayList<Object>();
+        args.add(dbUuid(orderId));
+        args.add(dbUuid(item.menu().id()));
+        args.add(item.menu().name());
+
+        var jsonExpression = new StringBuilder("JSON_OBJECT()");
+        if (!choices.isEmpty()) {
+            jsonExpression = new StringBuilder(
+                "JSON_OBJECT('label',?,'options',JSON_ARRAY(");
+            args.add(item.selection().label());
+            for (int i=0; i<choices.size(); i++) {
+                var choice = choices.get(i);
+                if (i>0) jsonExpression.append(',');
+                jsonExpression.append(
+                    "JSON_OBJECT('id',?,'group',?,'key',?,'label',?,'deltaIdr',?)");
+                args.add(choice.id().toString());
+                args.add(choice.groupName());
+                args.add(choice.optionKey());
+                args.add(choice.label());
+                args.add(choice.deltaIdr());
+            }
+            jsonExpression.append("))");
+        }
+        args.add(item.unitPrice());
+        args.add(item.quantity());
+        args.add(item.total());
+        jdbc.update("""
+            INSERT INTO order_lines(order_id,menu_item_id,name_snapshot,variant_snapshot,
+                                    unit_price_idr,quantity,line_total_idr)
+            VALUES (?,?,?,
+            """ + jsonExpression + ",?,?,?)", args.toArray());
     }
 
     private record Existing(UUID id,String hash,String status,long total,String payment) {}
