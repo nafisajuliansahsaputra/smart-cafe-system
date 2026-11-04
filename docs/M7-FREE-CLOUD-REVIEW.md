@@ -63,22 +63,51 @@ have cold starts and limited RAM. This is not reliable 24/7 cafe production.
    behavior with a **clean synthetic database**. Never substitute the
    in-memory `/showcase` route for backend-integrated testing.
 
-## Critical first-admin limitation
+## Single-use FIRST ADMIN on an isolated Neon review database
 
-The repository's `dev-bootstrap` profile is deliberately blocked for hosted
-and external databases, **including Neon**. The local-only admin provisioner
-does not run in production, and the automatic GitHub browser fixtures contain
-known synthetic passwords that must **never** be seeded into an internet-facing
-staff endpoint. Consequently, an empty hosted database can be migrated and
-serve the public brochure, but there is **no approved secure remote first-admin
-enrollment/recovery workflow yet**.
+The `dev-bootstrap` profile is **always local-only**. A separate gated
+`hosted-review-bootstrap` profile exists only on the reviewed branch.
+Before Flyway touches the database, a BeanFactory postprocessor rejects:
 
-**Stop before claiming a full publicly reviewable cashier/KDS/waiter UI.**
-The owner must approve and implement a limited, single-use remote enrollment
-mechanism or an equally reviewed separate operator setup process, with
-auditable issuance, TLS, credential rotation, lockout and no reusable bootstrap
-secrets. Do not expose arbitrary SQL consoles or populate the browser's
-known E2E test staff credentials on a public domain.
+- All remote databases **except** a direct `*.neon.tech` PostgreSQL
+  endpoint on the exact, newly created `smart_cafe_review` database.
+- Missing TLS `?sslmode=require` or `?sslmode=verify-full`, any extra query
+  parameters, a missing exact bootstrap acknowledgement, an invalid admin
+  login or a password shorter than 24 characters.
+- Production/multiple Spring profiles; backend property datasource overrides;
+  **all enabled QRIS/VA/sandbox webhook settings**.
+- Any mismatch between the declared database and effective JDBC URL.
+
+On successful Flyway migration, a serializable one-time application runner
+takes a transaction-scoped advisory lock, verifies that **no** staff account
+exists, and creates exactly one BCrypt-hashed ADMIN account. No HTTP public
+bootstrap endpoint exists; no credentials, SQL URLs or hashes enter logs.
+A second launch with the profile intentionally fails closed.
+
+For a brand-new private Render + Neon review workspace only:
+
+1. Ensure database name is **exactly `smart_cafe_review`**, not the default
+   Neon `neondb`. Do not use a database containing valuable records.
+2. Set the standard private JDBC `DB_URL`, DB username/password, payment
+   disabled env, random throttle secret as documented above.
+3. For the **first deployment only**, add via Render protected service env:
+   `SPRING_PROFILES_ACTIVE=hosted-review-bootstrap`
+   `SCS_REVIEW_BOOTSTRAP_ACK=I_ACCEPT_ONE_TIME_HOSTED_REVIEW_ADMIN`
+   `SCS_REVIEW_BOOTSTRAP_USERNAME=<owner-created safe login>`
+   `SCS_REVIEW_BOOTSTRAP_PASSWORD=<new unique password 24-128 chars>`
+4. Wait for startup, database Flyway checks and **exact one ADMIN account**.
+   Before sharing the URL, **delete all four bootstrap env variables**,
+   recreate/redeploy the backend with the normal profile, verify health and
+   login using the owner-chosen credential. Never retain plaintext
+   administrator credentials in service configuration.
+5. Keep the staff login behind a review access restriction where possible,
+   enable no merchant provider and use only fabricated guest data.
+
+**This special review bootstrap must never be used on a merchant/production
+database or on the NATSX portfolio project.** CI covers its strict
+database/host/TLS/profile/payment preflight, while a hosted first-run and
+credential-removal walkthrough remains an explicit acceptance gate until
+observed on Render.
 
 ## Safety and lifecycle
 
@@ -94,3 +123,55 @@ permanent plan availability. Never promise this is zero-cost forever.
 
 Before merging app code to default branch, require Java/PostgreSQL exact-head
 CI and a separate human review. Do not change the portfolio repository.
+
+## Render account creation denied (2026-11-05) and no-card fallback
+
+The owner connected Render, but its API refused **even the explicit Free
+web-service plan** with `HTTP 402: Payment information is required`.
+**Do not try to add a card, switch to a paid tier, or misrepresent the
+service as deployed.** This is an account-specific creation block.
+
+A potential no-card alternative is **blitz.cloud Free**, which advertises
+HTTPS, Docker/GitHub deploy, 512 MB reserved RAM, and free-plan sleep
+after 15 minutes. This is a younger provider and should be independently
+assessed for uptime and privacy, not marketed as production-grade.
+
+A separate backend setup can be attempted only after owner registers on
+`https://dashboard.blitz.cloud/` and confirms its free plan, without
+providing payment details:
+
+1. Create app `smart-cafe-review-api` from the **public** repo
+   `https://github.com/nafisajuliansahsaputra/smart-cafe-system`.
+2. Choose branch `feat/m7-hosted-review-first-admin` and **Folder to
+   build = `backend`**, which contains its `Dockerfile`.
+3. Assign 512 MB reserved RAM if allowed; let the service supply `PORT`.
+   Existing `backend/Dockerfile` runs as non-root Java 21.
+4. Configure environment secrets **in provider dashboard only**, not in
+   GitHub or ChatGPT: the dedicated Neon `smart_cafe_review` JDBC URL
+   with TLS, DB username and secret, random join throttling key, disabled
+   payments, bounded JVM heap and Hikari pool as above.
+5. For the **first** launch only, apply the special hosted review profile
+   and owner-chosen strong admin secret as described above, then remove
+   all temporary bootstrap environment variables before exposing URLs.
+   Confirm the live HTTP backend can read migrated database state.
+6. Build a separate Vercel project `smart-cafe-review` from the same
+   repo's `apps/web` folder, with server-only `API_INTERNAL_URL`
+   set to the actual backend HTTPS domain.
+7. Before claiming success, perform full cash demo in the real hosted UI
+   and verify HTTPS, login, table joining, menu, OCC, KDS, waiter, receipt,
+   and failure mode after the free backend sleeps.
+
+Unlike Render, blitz.cloud does **not** have a connected ChatGPT service
+connector in this session. Its sign-up, app creation and secret entry must
+be completed through its authenticated dashboard by the owner. Do not
+invent a deployment URL, and do not present a backend-unavailable
+Vercel project as fully functional.
+
+Provider evidence (checked 2026-11-05):
+`https://blitz.cloud/docs/deploy-from-github/`,
+`https://blitz.cloud/docs/limits/`,
+`https://blitz.cloud/terms/`.
+
+Note that Hugging Face Docker Spaces also became subscription-gated for
+new users; Koyeb requires a credit card. Neither is a reliable no-card
+alternative for this review.
