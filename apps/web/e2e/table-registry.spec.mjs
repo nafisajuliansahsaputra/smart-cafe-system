@@ -63,6 +63,20 @@ test("manager creates a physical table and cannot disable it during a live visit
     }).check();
     await waiterCard.getByRole("button", { name: "Buka kunjungan" }).click();
     await expect(waiter.page.getByLabel("Kode bergabung sementara")).toBeVisible();
+    // Waiter searches real PostgreSQL floor inventory, not a capped 250-row list.
+    await waiter.page.goto("/staff/tables?q=E2E-M7");
+    await expect(waiter.page.getByLabel("Cari kode meja atau alias QR/NFC"))
+      .toHaveValue("E2E-M7");
+    await expect(waiter.page.locator(".staff-task-grid > article")).toHaveCount(1);
+    await expect(waiter.page.getByRole("heading", { name: "Meja E2E-M7" })).toBeVisible();
+    await waiter.page.setViewportSize({ width: 320, height: 740 });
+    await expect.poll(() => waiter.page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth
+    )).toBeLessThanOrEqual(1);
+    await waiter.page.goto("/staff/tables?page=1001");
+    await expect(waiter.page.locator("section.staff-panel[role='alert']"))
+      .toContainText("Pencarian atau halaman tidak valid");
+
 
     // Manager still has the previously rendered AVAILABLE form. Server must
     // reject disabling it now, even if the old page has not refreshed.
