@@ -91,10 +91,16 @@ if ($AdminLogin -notmatch '^[a-zA-Z][a-zA-Z0-9._-]{2,39}$') {
 
 Write-Host "Starting isolated local PostgreSQL, Spring Boot and Next.js on 127.0.0.1."
 Write-Host "No real bank transactions, external receipt messages or public listeners."
-$secure = Read-Host -AsSecureString "Choose a UNIQUE local admin password (16-72 letters/numbers/_/-)"
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+if ($env:CI -eq "true" -and $env:SCS_LOCAL_DEMO_TEST_ADMIN_PASSWORD) {
+  # Explicit ephemeral test hook only. Never accepted outside CI.
+  $password = $env:SCS_LOCAL_DEMO_TEST_ADMIN_PASSWORD
+  Remove-Item Env:SCS_LOCAL_DEMO_TEST_ADMIN_PASSWORD
+} else {
+  $secure = Read-Host -AsSecureString "Choose a UNIQUE local admin password (16-72 letters/numbers/_/-)"
+  $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+  try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+}
 if ($password -cnotmatch '^[A-Za-z0-9_-]{16,72}$') {
   throw "Use 16-72 ASCII letters, digits, underscores or hyphens, without spaces."
 }
