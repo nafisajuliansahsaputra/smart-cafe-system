@@ -325,6 +325,63 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlThrottleAndCartIdempotencyPreserveExistingValues() {
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        assertEquals(com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL, vendor);
+        String throttleSql =
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureStaffLoginThrottle(vendor);
+        String loginHash = "a".repeat(64);
+        jdbc.update(throttleSql, loginHash);
+        jdbc.update("UPDATE staff_login_throttles SET failed_attempts=4 WHERE login_hash=?",
+            loginHash);
+        jdbc.update(throttleSql, loginHash);
+        assertEquals(4, jdbc.queryForObject(
+            "SELECT failed_attempts FROM staff_login_throttles WHERE login_hash=?",
+            Integer.class, loginHash));
+
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Synthetic cart owner");
+        String cartSql =
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureGuestCart(vendor);
+        jdbc.update(cartSql, guest, visit);
+        jdbc.update("UPDATE carts SET version=7 WHERE guest_id=?", guest);
+        jdbc.update(cartSql, guest, visit);
+        assertEquals(7L, jdbc.queryForObject(
+            "SELECT version FROM carts WHERE guest_id=?", Long.class, guest));
+    }
+
+    @Test
+    void financialAndPhysicalStateEnumerationsRejectIncorrectCase() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Synthetic guest");
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE table_visits SET status='active' WHERE id=?", visit));
+        String order = id();
+        jdbc.update("""
+            INSERT INTO orders(id,visit_id,guest_id,subtotal_idr,total_idr,pricing_policy_version)
+            VALUES (?,?,?,?,?,?)
+            """,order,visit,guest,10000L,10000L,"test-case-sensitive");
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE orders SET status='accepted' WHERE id=?", order));
+        String intent = id();
+        jdbc.update("""
+            INSERT INTO payment_intents(
+              id,order_id,method_selected,amount_due_idr,aggregate_status)
+            VALUES (?,?,?,?,?)
+            """,intent,order,"CASH",10000L,"AWAITING_CASH");
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE payment_intents SET aggregate_status='paid' WHERE id=?",intent));
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE payment_intents SET method_selected='cash' WHERE id=?",intent));
+    }
+
+    @Test
     void coreForeignKeysCheckConstraintsAndStaffRolesAreEnforced() {
         assertEquals(5, jdbc.queryForObject(
             "SELECT COUNT(*) FROM staff_roles", Integer.class));
