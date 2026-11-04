@@ -938,3 +938,22 @@ production remain dependent on provider and owner release approval.
 See `docs/M7-LOCAL-FULLSTACK-PORTFOLIO-SETUP.md`. Existing website
 still needs merchant provider contract/integration, approved receipt
 channel, hosted staging, backup retention/PITR and an owner-signed release.
+
+### M7 zero-card standalone hosted review preparation
+- [x] Spring Boot respects platform-assigned `PORT` while keeping local 8080 default.
+- [x] Document isolated Neon Free PostgreSQL, Render Free Java/Docker and
+  Vercel Hobby Next.js (a separate project, never NATSX Portfolio).
+- [x] Define no-live-payment, database SSL, low-memory Java and protected
+  secret setup, with independent health acceptance and release gating.
+- [ ] Connect a new owner-controlled Neon Free project and provision only a
+  disposable preview database, with no payment credentials.
+- [ ] Verify real hosted JVM memory, migration startup, platform cold starts
+  and fully remote frontend-to-backend connectivity.
+- [ ] Implement and audit a one-time safe **remote** ADMIN enrollment flow;
+  local dev-bootstrap and known browser fixture accounts must never be
+  exposed via a public backend.
+- [ ] Run isolated hosted customer/cashier/kitchen/waiter lifecycle with only
+  dummy data; owner must review the hosted URL before portfolio publication.
+
+See `docs/M7-FREE-CLOUD-REVIEW.md`. This is a separate cloud review
+candidate, not a production financial service or a Vercel portfolio release.
