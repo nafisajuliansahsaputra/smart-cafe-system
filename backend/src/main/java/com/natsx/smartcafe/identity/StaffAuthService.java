@@ -48,12 +48,13 @@ public class StaffAuthService {
         var attempts = jdbc.queryForMap(
             "SELECT window_started_at, failed_attempts, locked_until FROM staff_login_throttles WHERE login_hash=? FOR UPDATE",
             loginHash);
-        Instant locked = attempts.get("locked_until") == null ? null
-            : ((java.sql.Timestamp) attempts.get("locked_until")).toInstant();
+        Instant locked = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+            attempts.get("locked_until"));
         if (locked != null && locked.isAfter(now)) {
             return LoginResult.failed("RATE_LIMITED");
         }
-        Instant start = ((java.sql.Timestamp) attempts.get("window_started_at")).toInstant();
+        Instant start = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+            attempts.get("window_started_at"));
         int failed = ((Number) attempts.get("failed_attempts")).intValue();
         if (start.plus(WINDOW).isBefore(now) || (locked != null && !locked.isAfter(now))) {
             failed = 0;
