@@ -225,9 +225,8 @@ public class GameLoanService {
         if (!"AVAILABLE".equals(condition))
             throw conflict("Physical game copy is not available for clean return");
         if (damageReason!=null) {
-            jdbc.update("""
-                UPDATE physical_game_copies SET " + conditionColumn() + "='DAMAGED' WHERE id=?
-                """,dbUuid(loan.copyId()));
+            jdbc.update("UPDATE physical_game_copies SET " + conditionColumn()
+                + "='DAMAGED' WHERE id=?",dbUuid(loan.copyId()));
             recordCondition(loan.copyId(),loanId,staff.staffId(),
                 "AVAILABLE","DAMAGED",damageReason);
             audit.staff(staff.staffId(),"GAME_COPY_QUARANTINED_AT_RETURN",
