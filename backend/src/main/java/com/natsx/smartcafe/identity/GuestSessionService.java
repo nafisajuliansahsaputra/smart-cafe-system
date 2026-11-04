@@ -20,8 +20,8 @@ public class GuestSessionService {
             JOIN table_visits v ON v.id=s.visit_id
             WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > now()
               AND v.status='ACTIVE'
-            """, (rs,row)-> new GuestPrincipal(rs.getObject("guest_id",UUID.class),
-                rs.getObject("visit_id",UUID.class), hash), hash);
+            """, (rs,row)-> new GuestPrincipal(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "guest_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"), hash), hash);
         return matches.isEmpty() ? null : matches.getFirst();
     }
 }
