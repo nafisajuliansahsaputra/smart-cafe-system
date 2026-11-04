@@ -100,6 +100,76 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlCashReceiptIsIssuedOnlyAfterPaidAndOwnedByGuest() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        String otherGuest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Receipt customer");
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            otherGuest, visit, "Other customer");
+        String order = id();
+        String intent = id();
+        jdbc.update("""
+            INSERT INTO orders(id,visit_id,guest_id,subtotal_idr,total_idr,pricing_policy_version)
+            VALUES (?,?,?,?,?,?)
+            """,order,visit,guest,14000L,14000L,"synthetic-receipt-test");
+        jdbc.update("""
+            INSERT INTO order_lines(order_id,name_snapshot,variant_snapshot,unit_price_idr,quantity,line_total_idr)
+            VALUES (?, ?,JSON_OBJECT('label',?),?,?,?)
+            """, order, "Receipt drink", "Oat \"milk\"",14000L,1,14000L);
+        jdbc.update("""
+            INSERT INTO payment_intents(id,order_id,method_selected,amount_due_idr,aggregate_status)
+            VALUES (?,?, 'CASH',?, 'AWAITING_CASH')
+            """,intent,order,14000L);
+
+        var receipts = new com.natsx.smartcafe.receipts.GuestReceiptService(jdbc);
+        var owner = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest), UUID.fromString(visit), "synthetic-owner-hash");
+        var stranger = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(otherGuest), UUID.fromString(visit), "synthetic-foreign-hash");
+
+        assertThrows(IllegalStateException.class, () -> receipts.issueCash(
+            UUID.fromString(intent),UUID.fromString(order),14000L));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> receipts.ownReceiptForOrder(UUID.fromString(order),owner));
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT COUNT(*) FROM receipts WHERE order_id=?",Integer.class,order));
+
+        // Synthetic settlement is performed directly here only to test
+        // read/issue guards, NOT to certify staff tender workflow.
+        jdbc.update("""
+            UPDATE payment_intents SET aggregate_status='PAID',amount_paid_idr=14000
+            WHERE id=?
+            """,intent);
+        UUID receiptId = receipts.issueCash(
+            UUID.fromString(intent),UUID.fromString(order),14000L);
+        var result = receipts.ownReceiptForOrder(UUID.fromString(order),owner);
+        assertEquals(receiptId,result.id());
+        assertEquals(UUID.fromString(order),result.orderId());
+        assertEquals(14000L,result.totalIdr());
+        assertEquals("IDR",result.currency());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.issuedAt());
+        assertEquals(1,result.lines().size());
+        assertEquals("Oat \"milk\"",result.lines().getFirst().variantLabel());
+
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM receipts
+            WHERE id=? AND JSON_TYPE(JSON_EXTRACT(document_json,'$.lines'))='ARRAY'
+              AND JSON_UNQUOTE(JSON_EXTRACT(document_json,'$.lines[0].variant.label'))=?
+            """,Integer.class,receiptId.toString(),"Oat \"milk\""));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> receipts.ownReceiptForOrder(UUID.fromString(order),stranger));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> receipts.ownReceipt(receiptId,stranger));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+            () -> receipts.issueCash(UUID.fromString(intent),UUID.fromString(order),14000L));
+        assertThrows(org.springframework.dao.DataAccessException.class,() ->
+            jdbc.update("UPDATE receipts SET total_idr=1 WHERE id=?",receiptId.toString()));
+    }
+
+    @Test
     void mySqlOccKitchenAndWaiterAdvanceOrderWithoutMarkingCashPaid() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
