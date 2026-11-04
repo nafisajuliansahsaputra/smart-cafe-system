@@ -917,3 +917,24 @@ write path or merchant integration and does not touch `main`.
 See `docs/M7-KDS-PRIORITY-PAGINATION.md`. A verified standalone cash
 MVP is portfolio-worthy; live merchant payment and public cafe
 production remain dependent on provider and owner release approval.
+
+### M7 isolated real full-stack Windows portfolio onboarding
+- [x] First-run PowerShell 5.1/7 script creates a uniquely named loopback-only
+  Docker Compose environment with randomly generated DB/HMAC secrets, prompts
+  for a unique ADMIN secret and removes one-time bootstrap settings.
+- [x] Abort if an existing .env, Docker container or labeled volume is found;
+  no default passwords, no public listener and no live payment configuration.
+- [x] Seed twelve synthetic real menu items, six tables, multiple variant
+  options and physical serialized game copies without any personal data.
+- [x] Add dedicated CI workflow to parse PowerShell and run an actual local
+  Docker onboarding, assert data/roles/no plaintext bootstrap retention,
+  then delete only the disposable GitHub Actions containers/volume.
+- [x] Document real customer-to-OCC-to-KDS-to-waiter-to-receipt walkthrough,
+  safe restart/cleanup, and local vs merchant production boundaries.
+- [ ] Exact-head PR CI and full candidate check required before acceptance.
+- [ ] Real Windows Docker Desktop walkthrough and physical QR/NFC/tablet
+  checks require human device acceptance; do not market as public POS.
+
+See `docs/M7-LOCAL-FULLSTACK-PORTFOLIO-SETUP.md`. Existing website
+still needs merchant provider contract/integration, approved receipt
+channel, hosted staging, backup retention/PITR and an owner-signed release.
