@@ -48,23 +48,24 @@ public class CartService {
                 JOIN item_availability a ON a.menu_item_id=i.id
                 WHERE i.id=? AND i.availability='AVAILABLE' AND c.active
                   AND a.available AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
-                """,Integer.class,line.menuItemId());
+                """,Integer.class,dbUuid(line.menuItemId()));
             if(count==null || count==0)throw outOfStock();
             variants.resolveSelections(line.menuItemId(),line.selectedOptionIds());
         }
-        jdbc.update("DELETE FROM cart_lines WHERE cart_id=?",cart.id());
+        jdbc.update("DELETE FROM cart_lines WHERE cart_id=?",dbUuid(cart.id()));
         for(var line:lines) {
             var ids=line.selectedOptionIds();
             jdbc.update("""
                 INSERT INTO cart_lines(cart_id,menu_item_id,variant_option_id,quantity)
                 VALUES (?,?,?,?)
-                """,cart.id(),line.menuItemId(),ids.size()==1?ids.getFirst():null,line.quantity());
+                """,dbUuid(cart.id()),dbUuid(line.menuItemId()),
+                ids.size()==1?dbUuid(ids.getFirst()):null,line.quantity());
             for(var optionId:ids)jdbc.update("""
                 INSERT INTO cart_line_variant_options(cart_id,menu_item_id,option_id)
                 VALUES (?,?,?)
-                """,cart.id(),line.menuItemId(),optionId);
+                """,dbUuid(cart.id()),dbUuid(line.menuItemId()),dbUuid(optionId));
         }
-        jdbc.update("UPDATE carts SET version=version+1,updated_at=now() WHERE id=?",cart.id());
+        jdbc.update("UPDATE carts SET version=version+1,updated_at=now() WHERE id=?",dbUuid(cart.id()));
         return view(new CartRow(cart.id(),expectedVersion+1));
     }
 
@@ -75,7 +76,7 @@ public class CartService {
         var entries=jdbc.query("""
             SELECT menu_item_id,quantity FROM cart_lines WHERE cart_id=? ORDER BY menu_item_id
             """,(rs,n)->new Entry(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
-                rs.getInt("quantity")),cart.id());
+                rs.getInt("quantity")),dbUuid(cart.id()));
         if(entries.isEmpty())throw invalid("Cart is empty");
         var lines=new java.util.ArrayList<CashCheckoutService.Line>();
         for(var entry:entries)lines.add(new CashCheckoutService.Line(entry.itemId(),
@@ -88,23 +89,29 @@ public class CartService {
         jdbc.update("""
             DELETE FROM cart_lines WHERE cart_id IN (
                 SELECT id FROM carts WHERE guest_id=? AND visit_id=? AND version=?)
-            """,guest.guestId(),guest.visitId(),version);
+            """,dbUuid(guest.guestId()),dbUuid(guest.visitId()),version);
         int updated=jdbc.update("""
             UPDATE carts SET version=version+1,updated_at=now()
             WHERE guest_id=? AND visit_id=? AND version=?
-            """,guest.guestId(),guest.visitId(),version);
+            """,dbUuid(guest.guestId()),dbUuid(guest.visitId()),version);
         if(updated!=1)throw new IllegalStateException("Cart changed during checkout");
     }
 
     private CartRow findCart(GuestPrincipal guest,boolean lock) {
         jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureGuestCart(
             com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
-            guest.guestId(),guest.visitId());
+            dbUuid(guest.guestId()),dbUuid(guest.visitId()));
         var rows=jdbc.query("SELECT id,version FROM carts WHERE guest_id=? AND visit_id=?"
             +(lock?" FOR UPDATE":""),(rs,n)->new CartRow(
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getLong("version")),guest.guestId(),guest.visitId());
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getLong("version")),dbUuid(guest.guestId()),dbUuid(guest.visitId()));
         if(rows.isEmpty())throw conflict("Cart not available");
         return rows.getFirst();
+    }
+
+    /** Bind MySQL CHAR(36) UUIDs as strings, keeping PostgreSQL native UUIDs. */
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private record Entry(UUID itemId,int quantity) {}
@@ -115,7 +122,7 @@ public class CartService {
         return jdbc.query("""
             SELECT option_id FROM cart_line_variant_options
             WHERE cart_id=? AND menu_item_id=? ORDER BY option_id
-            """,(rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "option_id"),cartId,itemId);
+            """,(rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "option_id"),dbUuid(cartId),dbUuid(itemId));
     }
 
     private CartView view(CartRow cart) {
@@ -130,7 +137,7 @@ public class CartService {
             """,(rs,n)->new PreviewRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
                 rs.getString("name"),rs.getLong("base_price_idr"),rs.getInt("quantity"),
                 rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
-                rs.getBoolean("can_order")),cart.id());
+                rs.getBoolean("can_order")),dbUuid(cart.id()));
         var lines=new java.util.ArrayList<Line>();
         long subtotal=0;
         for(var entry:entries) {
@@ -160,7 +167,7 @@ public class CartService {
         Integer count=jdbc.queryForObject("""
             SELECT count(*) FROM table_visits v JOIN visit_guests g ON g.visit_id=v.id
             WHERE g.id=? AND v.id=? AND v.status='ACTIVE'
-            """,Integer.class,guest.guestId(),guest.visitId());
+            """,Integer.class,dbUuid(guest.guestId()),dbUuid(guest.visitId()));
         if(count==null || count==0)throw new ApiFailureException(
             HttpStatus.CONFLICT,"SESSION_CLOSED","Table visit ended");
     }
