@@ -6,7 +6,7 @@ CREATE TABLE receipts (
   order_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
   receipt_number BIGINT NOT NULL AUTO_INCREMENT UNIQUE,
   total_idr BIGINT NOT NULL CHECK (total_idr > 0),
-  currency CHAR(3) NOT NULL DEFAULT 'IDR' CHECK (currency='IDR'),
+  currency CHAR(3) COLLATE utf8mb4_bin NOT NULL DEFAULT 'IDR' CHECK (currency='IDR'),
   issued_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   document_json JSON NOT NULL,
   FOREIGN KEY (payment_intent_id) REFERENCES payment_intents(id),
