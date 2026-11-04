@@ -51,12 +51,12 @@ public class TableVisitService {
     @Transactional
     public VisitOpened open(UUID tableId, UUID staffId, String requestId) {
         String status = jdbc.query("SELECT status FROM cafe_tables WHERE id=? FOR UPDATE", rs ->
-            rs.next() ? rs.getString("status") : null, tableId);
+            rs.next() ? rs.getString("status") : null, dbUuid(tableId));
         if (status == null) throw missing();
         if (!status.equals("AVAILABLE")) throw conflict("Table is unavailable");
         Integer active = jdbc.queryForObject("""
             SELECT count(*) FROM table_visits WHERE table_id=? AND status IN ('ACTIVE','CLOSING')
-            """, Integer.class, tableId);
+            """, Integer.class, dbUuid(tableId));
         if (active != null && active > 0) throw conflict("Table already has an active visit");
         String proof = SecureToken.generate();
         Instant expires = Instant.now().plus(PROOF_TTL);
@@ -64,7 +64,7 @@ public class TableVisitService {
         jdbc.update("""
             INSERT INTO table_visits(id,table_id,status,opened_by,join_secret_hash,join_proof_expires_at)
             VALUES (?,?,'ACTIVE',?,?,?)
-            """, id, tableId, staffId, SecureToken.sha256(proof), Timestamp.from(expires));
+            """, dbUuid(id), dbUuid(tableId), dbUuid(staffId), SecureToken.sha256(proof), Timestamp.from(expires));
         audit.staff(staffId, "TABLE_VISIT_OPENED", "TABLE_VISIT", id, requestId);
         outbox.tableVisit(id, "TABLE_VISIT_OPENED");
         return new VisitOpened(id, tableId, proof, expires);
@@ -75,7 +75,7 @@ public class TableVisitService {
         VisitRow visit = jdbc.query("""
             SELECT id,status,join_secret_hash,join_proof_expires_at
             FROM table_visits WHERE id=? FOR UPDATE
-            """, rs -> rs.next() ? readVisit(rs) : null, visitId);
+            """, rs -> rs.next() ? readVisit(rs) : null, dbUuid(visitId));
         if (visit == null) throw missing();
         requireWaiterOwnershipOrSupervisor(visitId,staffId);
         if (!visit.status().equals("ACTIVE")) throw conflict("Visit is not active");
@@ -84,9 +84,9 @@ public class TableVisitService {
         jdbc.update("""
             UPDATE table_visits SET join_secret_hash=?,join_proof_expires_at=?,
                 rotation_version=rotation_version+1,version=version+1 WHERE id=?
-            """, SecureToken.sha256(proof), Timestamp.from(expires), visitId);
+            """, SecureToken.sha256(proof), Timestamp.from(expires), dbUuid(visitId));
         UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?",
-            (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"), visitId);
+            (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"), dbUuid(visitId));
         audit.staff(staffId, "TABLE_JOIN_PROOF_ROTATED", "TABLE_VISIT", visitId, requestId);
         outbox.tableVisit(visitId, "TABLE_JOIN_PROOF_ROTATED");
         return new VisitOpened(visitId, tableId, proof, expires);
@@ -110,9 +110,9 @@ public class TableVisitService {
         String token = SecureToken.generate();
         Instant expires = Instant.now().plus(GUEST_TTL);
         jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
-            guestId, visit.id(), displayName.strip());
+            dbUuid(guestId), dbUuid(visit.id()), displayName.strip());
         jdbc.update("INSERT INTO guest_sessions(token_hash,guest_id,visit_id,expires_at) VALUES (?,?,?,?)",
-            SecureToken.sha256(token), guestId, visit.id(), Timestamp.from(expires));
+            SecureToken.sha256(token), dbUuid(guestId), dbUuid(visit.id()), Timestamp.from(expires));
         return new JoinResult(guestId, visit.id(), token, expires);
     }
 
@@ -126,7 +126,7 @@ public class TableVisitService {
             """, rs -> {
                 if (!rs.next()) throw missing();
                 return new GuestVisit(guestId, visitId, rs.getString("table_code"), rs.getString("display_name"));
-            }, guestId, visitId);
+            }, dbUuid(guestId), dbUuid(visitId));
     }
 
     @Transactional
@@ -134,7 +134,7 @@ public class TableVisitService {
         VisitRow visit = jdbc.query("""
             SELECT id,status,join_secret_hash,join_proof_expires_at FROM table_visits
             WHERE id=? FOR UPDATE
-            """, rs -> rs.next() ? readVisit(rs) : null, visitId);
+            """, rs -> rs.next() ? readVisit(rs) : null, dbUuid(visitId));
         if (visit == null) throw missing();
         requireWaiterOwnershipOrSupervisor(visitId,staffId);
         if (!visit.status().equals("ACTIVE")) throw conflict("Visit cannot close from current state");
@@ -147,7 +147,7 @@ public class TableVisitService {
                 OR (o.status IN ('REJECTED','CANCELLED') AND
                     p.aggregate_status NOT IN ('UNPAID','AWAITING_CASH','REFUNDED'))
             )
-            """, Integer.class, visitId);
+            """, Integer.class, dbUuid(visitId));
         if (unresolved != null && unresolved > 0) throw conflict("Visit has unresolved orders or payments");
         // Under the visit row lock, no guest can create another request and
         // no waiter can progress a loan. All pending or unreturned physical
@@ -155,12 +155,12 @@ public class TableVisitService {
         Boolean borrowed=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loans
                 WHERE visit_id=? AND status IN ('REQUESTED','ASSIGNED','IN_USE','RETURN_PENDING'))
-            """,Boolean.class,visitId);
+            """,Boolean.class,dbUuid(visitId));
         if (Boolean.TRUE.equals(borrowed)) {
             throw conflict("Visit has an outstanding physical game loan");
         }
-        jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", visitId);
-        jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", visitId);
+        jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", dbUuid(visitId));
+        jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", dbUuid(visitId));
         audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
         outbox.tableVisit(visitId, "TABLE_VISIT_CLOSED");
     }
@@ -169,15 +169,21 @@ public class TableVisitService {
         Boolean supervisor=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM staff_role_assignments
                           WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
-            """,Boolean.class,staffId);
+            """,Boolean.class,dbUuid(staffId));
         if(Boolean.TRUE.equals(supervisor))return;
         Boolean opener=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM table_visits WHERE id=? AND opened_by=?)
-            """,Boolean.class,visitId,staffId);
+            """,Boolean.class,dbUuid(visitId),dbUuid(staffId));
         if(!Boolean.TRUE.equals(opener)) {
             throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
                 "Waiter is not responsible for this visit");
         }
+    }
+
+    /** Preserve PostgreSQL native UUID binding; serialize MySQL CHAR(36). */
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private VisitRow readVisit(java.sql.ResultSet rs) throws java.sql.SQLException {
