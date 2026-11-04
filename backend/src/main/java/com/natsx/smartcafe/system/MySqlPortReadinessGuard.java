@@ -92,6 +92,8 @@ public final class MySqlPortReadinessGuard
     private static boolean hasStrictTlsMode(String query) {
         if (query == null || query.isBlank()) return false;
         boolean verified = false;
+        boolean trustedCa = false;
+        boolean explicitType = false;
         for (String item : query.split("&")) {
             String[] pair = item.split("=", 2);
             if (pair.length != 2) continue;
@@ -100,6 +102,15 @@ public final class MySqlPortReadinessGuard
             if (key.equals("sslmode")) {
                 if (!"VERIFY_IDENTITY".equals(value) || verified) return false;
                 verified = true;
+            }
+            if (key.equals("trustcertificatekeystoreurl")) {
+                if (trustedCa
+                    || !"file:/tmp/scs-aiven-truststore.p12".equals(value)) return false;
+                trustedCa = true;
+            }
+            if (key.equals("trustcertificatekeystoretype")) {
+                if (explicitType || !"PKCS12".equals(value)) return false;
+                explicitType = true;
             }
             if (key.equals("allowpublickeyretrieval")
                 || key.equals("trustservercertificate")
@@ -110,7 +121,7 @@ public final class MySqlPortReadinessGuard
                 return false;
             }
         }
-        return verified;
+        return verified && trustedCa && explicitType;
     }
 
     private static IllegalStateException denied() {
