@@ -69,12 +69,16 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          docker compose --project-name scs-512m-smoke -f compose.yaml -f /tmp/scs-free-review-override.yml ps || true
+          POSTGRES_DB=smart_cafe POSTGRES_USER=smart_cafe POSTGRES_PASSWORD=disposable \
+          SCS_JOIN_THROTTLE_SECRET=disposable docker compose --project-name scs-512m-smoke \
+          -f compose.yaml -f /tmp/scs-free-review-override.yml ps || true
           docker inspect scs-512m-smoke-api-1 --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}}' || true
       - name: Destroy disposable CI data and containers
         if: always()
         shell: bash
         run: |
           if test -f /tmp/scs-free-review-override.yml; then
-            docker compose --project-name scs-512m-smoke -f compose.yaml -f /tmp/scs-free-review-override.yml down --volumes --remove-orphans || true
+            POSTGRES_DB=smart_cafe POSTGRES_USER=smart_cafe POSTGRES_PASSWORD=disposable \
+            SCS_JOIN_THROTTLE_SECRET=disposable docker compose --project-name scs-512m-smoke \
+            -f compose.yaml -f /tmp/scs-free-review-override.yml down --volumes --remove-orphans || true
           fi
