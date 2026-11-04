@@ -117,8 +117,8 @@ class MySqlCoreParityIntegrationTest {
         jdbc.update("INSERT INTO physical_games(id,name) VALUES (?,?)",
             game,"Synthetic game "+game);
         jdbc.update("""
-            INSERT INTO physical_game_copies(id,game_id,copy_code,condition)
-            VALUES (?,?,?,'AVAILABLE')
+            INSERT INTO physical_game_copies(id,game_id,copy_code)
+            VALUES (?,?,?)
             """,copy,game,code);
 
         var principal1=new com.natsx.smartcafe.identity.GuestPrincipal(
