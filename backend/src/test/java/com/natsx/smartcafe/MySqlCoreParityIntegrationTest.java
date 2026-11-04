@@ -100,6 +100,121 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlOccKitchenAndWaiterAdvanceOrderWithoutMarkingCashPaid() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        String category = id();
+        String menu = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest,visit,"Operations synthetic customer");
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category,"Operation test","mysql-ops-"+category);
+        jdbc.update("INSERT INTO menu_items(id,category_id,name,base_price_idr) VALUES (?,?,?,?)",
+            menu,category,"Kitchen menu",17000L);
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest),UUID.fromString(visit),"synthetic-ops-session");
+        var variants = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var outbox = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var carts = new com.natsx.smartcafe.orders.CartService(jdbc,variants);
+        var checkout = new com.natsx.smartcafe.orders.CashCheckoutService(
+            jdbc,carts,outbox,variants,false,"disabled");
+        var ops = new com.natsx.smartcafe.orders.CashWorkflowService(
+            jdbc,new com.natsx.smartcafe.audit.AuditTrail(jdbc),outbox,
+            new com.natsx.smartcafe.receipts.GuestReceiptService(jdbc));
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var order = tx.execute(status -> checkout.checkout(principal,
+            java.util.List.of(new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+                UUID.fromString(menu),1)),"mysql-ops-checkout"));
+        tx.executeWithoutResult(status -> ops.approve(
+            order.id(),UUID.fromString(staff),"ops-approve"));
+        UUID ticket = jdbc.queryForObject(
+            "SELECT id FROM kitchen_tickets WHERE order_id=?",
+            (rs,n) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+            order.id().toString());
+        var kitchenTicket = ops.kitchen().stream()
+            .filter(k -> k.id().equals(ticket)).findFirst().orElseThrow();
+        assertEquals("ACCEPTED",kitchenTicket.status());
+        assertEquals("Kitchen menu",kitchenTicket.lines().getFirst().name());
+
+        tx.executeWithoutResult(status -> ops.kitchenStart(
+            ticket,UUID.fromString(staff),"ops-start"));
+        tx.executeWithoutResult(status -> ops.kitchenReady(
+            ticket,UUID.fromString(staff),"ops-ready"));
+
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.executeWithoutResult(status ->
+                ops.served(order.id(),UUID.randomUUID(),"unauthorized-serve")));
+        tx.executeWithoutResult(status -> ops.served(
+            order.id(),UUID.fromString(staff),"ops-served"));
+
+        assertEquals("SERVED", jdbc.queryForObject(
+            "SELECT status FROM orders WHERE id=?",String.class,order.id().toString()));
+        assertEquals("AWAITING_CASH", jdbc.queryForObject("""
+            SELECT aggregate_status FROM payment_intents WHERE order_id=?
+            """,String.class,order.id().toString()));
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM receipts WHERE order_id=?",
+            Integer.class,order.id().toString()));
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_logs
+            WHERE operation='ORDER_SERVED' AND resource_id=?
+            """,Integer.class,order.id().toString()));
+    }
+
+    @Test
+    void mySqlOccRejectRestoresAllocatedStockAndKeepsPaymentUnpaid() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(),staff);
+        String guest = id();
+        String category = id();
+        String menu = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest,visit,"Rejected synthetic customer");
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category,"Rejection test","mysql-reject-"+category);
+        jdbc.update("INSERT INTO menu_items(id,category_id,name,base_price_idr) VALUES (?,?,?,?)",
+            menu,category,"Limited coffee",13000L);
+        jdbc.update("UPDATE item_availability SET limited_quantity=3 WHERE menu_item_id=?",menu);
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest),UUID.fromString(visit),"synthetic-reject-session");
+        var variants = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var outbox = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var checkout = new com.natsx.smartcafe.orders.CashCheckoutService(
+            jdbc,new com.natsx.smartcafe.orders.CartService(jdbc,variants),
+            outbox,variants,false,"disabled");
+        var ops = new com.natsx.smartcafe.orders.CashWorkflowService(
+            jdbc,new com.natsx.smartcafe.audit.AuditTrail(jdbc),outbox,
+            new com.natsx.smartcafe.receipts.GuestReceiptService(jdbc));
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var order = tx.execute(status -> checkout.checkout(principal,
+            java.util.List.of(new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+                UUID.fromString(menu),2)),"mysql-reject-once"));
+        assertEquals(1L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",
+            Long.class,menu));
+        tx.executeWithoutResult(status -> ops.reject(order.id(),
+            UUID.fromString(staff),"Customer changed their order","ops-reject"));
+        assertEquals(3L,jdbc.queryForObject(
+            "SELECT limited_quantity FROM item_availability WHERE menu_item_id=?",
+            Long.class,menu));
+        assertEquals("REJECTED",jdbc.queryForObject(
+            "SELECT status FROM orders WHERE id=?",String.class,order.id().toString()));
+        assertEquals("UNPAID",jdbc.queryForObject(
+            "SELECT aggregate_status FROM payment_intents WHERE order_id=?",
+            String.class,order.id().toString()));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.executeWithoutResult(status -> ops.reject(order.id(),
+                UUID.fromString(staff),"Reject again blocked","ops-replay")));
+    }
+
+    @Test
     void mySqlCashCheckoutFromCartChargesOnceAndKeepsPaymentUnpaid() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
