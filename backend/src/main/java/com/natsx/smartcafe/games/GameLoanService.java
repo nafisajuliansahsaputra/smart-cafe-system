@@ -449,7 +449,7 @@ public class GameLoanService {
             INSERT INTO physical_game_copy_condition_events
                 (copy_id,loan_id,actor_id,before_condition,after_condition,reason)
             VALUES (?,?,?,?,?,?)
-            """,copyId,loanId,actorId,before,after,reason);
+            """,dbUuid(copyId),dbUuid(loanId),dbUuid(actorId),before,after,reason);
     }
 
     /** An OPEN loss report must be reviewed before a routine handover/return
@@ -459,7 +459,7 @@ public class GameLoanService {
         Boolean open=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_game_loss_incidents
                 WHERE loan_id=? AND status='OPEN')
-            """,Boolean.class,loanId);
+            """,Boolean.class,dbUuid(loanId));
         if (Boolean.TRUE.equals(open))
             throw conflict("Manager must review the pending loss report first");
     }
@@ -477,7 +477,7 @@ public class GameLoanService {
     public LoanView cancel(UUID loanId, StaffPrincipal staff, String requestId) {
         Loan loan=lockLoanByVisit(loanId,staff);
         if (!loan.status().equals("REQUESTED")) throw conflict("Only unassigned requests may be cancelled");
-        jdbc.update("UPDATE physical_game_loans SET status='CANCELLED' WHERE id=?",loanId);
+        jdbc.update("UPDATE physical_game_loans SET status='CANCELLED' WHERE id=?",dbUuid(loanId));
         events.gameLoan(loanId,"GAME_LOAN_CANCELLED");
         audit.staff(staff.staffId(),"GAME_REQUEST_CANCELLED","GAME_LOAN",loanId,requestId);
         return one(loanId);
@@ -487,7 +487,7 @@ public class GameLoanService {
     public GameView addGame(String name, String description, StaffPrincipal staff, String requestId) {
         UUID id=UUID.randomUUID();
         jdbc.update("INSERT INTO physical_games(id,name,description) VALUES (?,?,?)",
-            id,name.strip(),description==null?null:description.strip());
+            dbUuid(id),name.strip(),description==null?null:description.strip());
         audit.staff(staff.staffId(),"GAME_CATALOG_CREATED","PHYSICAL_GAME",id,requestId);
         events.gameInventory(id);
         return new GameView(id,name.strip(),description==null?null:description.strip(),0);
@@ -497,12 +497,12 @@ public class GameLoanService {
     public UUID addCopy(UUID gameId, String code, StaffPrincipal staff, String requestId) {
         Boolean exists=jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM physical_games WHERE id=? AND active=true)
-            """,Boolean.class,gameId);
+            """,Boolean.class,dbUuid(gameId));
         if (!Boolean.TRUE.equals(exists)) throw missing();
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES (?,?,?)
-            """,id,gameId,code.strip());
+            """,dbUuid(id),dbUuid(gameId),code.strip());
         audit.staff(staff.staffId(),"GAME_COPY_REGISTERED","PHYSICAL_GAME_COPY",id,requestId);
         events.gameInventory(gameId);
         return id;
@@ -511,39 +511,46 @@ public class GameLoanService {
     private void requireActiveVisitExclusive(UUID visitId) {
         String state=jdbc.query("""
             SELECT status FROM table_visits WHERE id=? FOR UPDATE
-            """,rs->rs.next()?rs.getString(1):null,visitId);
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(visitId));
         if (!"ACTIVE".equals(state)) throw conflict("Table visit is no longer active");
     }
 
     private void requireActiveVisit(UUID visitId) {
         String state=jdbc.query("""
             SELECT status FROM table_visits WHERE id=? FOR SHARE
-            """,rs->rs.next()?rs.getString(1):null,visitId);
+            """,rs->rs.next()?rs.getString(1):null,dbUuid(visitId));
         if (!"ACTIVE".equals(state)) throw conflict("Table visit is no longer active");
     }
 
     private Loan lockLoanByVisit(UUID loanId, StaffPrincipal staff) {
         UUID visitId=jdbc.query("""
             SELECT visit_id FROM physical_game_loans WHERE id=?
-            """,rs->rs.next()?rs.getObject(1,UUID.class):null,loanId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"visit_id"):null,
+            dbUuid(loanId));
         if (visitId==null) throw missing();
         requireActiveVisit(visitId);
         if (!supervisor(staff)) {
             Boolean mine=jdbc.queryForObject("""
                 SELECT EXISTS(SELECT 1 FROM table_visits WHERE id=? AND opened_by=?)
-                """,Boolean.class,visitId,staff.staffId());
+                """,Boolean.class,dbUuid(visitId),dbUuid(staff.staffId()));
             if (!Boolean.TRUE.equals(mine)) throw new ApiFailureException(
                 HttpStatus.FORBIDDEN,"FORBIDDEN","Waiter is not responsible for this visit");
         }
+        String lockClause=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? " FOR UPDATE" : " FOR UPDATE OF l";
         return jdbc.query("""
             SELECT l.id,l.visit_id,l.guest_id,l.game_id,l.copy_id,l.status,c.copy_code
             FROM physical_game_loans l
             LEFT JOIN physical_game_copies c ON c.id=l.copy_id
-            WHERE l.id=? FOR UPDATE OF l
-            """,rs->rs.next()?new Loan(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getString("status"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "copy_id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "guest_id"),rs.getString("copy_code")):null,loanId);
+            WHERE l.id=?
+            """+lockClause,rs->rs.next()?new Loan(
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"visit_id"),rs.getString("status"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"game_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"copy_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"guest_id"),
+                rs.getString("copy_code")):null,dbUuid(loanId));
     }
 
     private LoanView one(UUID loanId) {
@@ -553,12 +560,13 @@ public class GameLoanService {
             JOIN table_visits v ON v.id=l.visit_id JOIN cafe_tables t ON t.id=v.table_id
             LEFT JOIN physical_game_copies c ON c.id=l.copy_id
             WHERE l.id=?
-            """,rs->rs.next()?map(rs):null,loanId);
+            """,rs->rs.next()?map(rs):null,dbUuid(loanId));
     }
     private LoanView map(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new LoanView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),
             rs.getString("name"),rs.getString("status"),rs.getString("table_code"),
-            rs.getString("copy_code"),rs.getTimestamp("requested_at").toInstant());
+            rs.getString("copy_code"),
+            com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("requested_at")));
     }
     private Object dbUuid(UUID value) {
         return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
