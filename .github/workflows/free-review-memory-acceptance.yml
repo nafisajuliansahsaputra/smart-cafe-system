@@ -1,0 +1,80 @@
+name: Free Review 512 MB Runtime Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "compose.yaml"
+      - ".github/workflows/free-review-memory-acceptance.yml"
+      - "docs/M7-FREE-CLOUD-REVIEW.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-512mb-free-container:
+    name: Real Java/Flyway/PostgreSQL startup within Render Free 512 MB ceiling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Start isolated DB and a memory-capped API
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Unique disposable local database with no real customer credentials.
+          export POSTGRES_DB=smart_cafe
+          export POSTGRES_USER=smart_cafe
+          export POSTGRES_PASSWORD
+          export SCS_JOIN_THROTTLE_SECRET
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          SCS_JOIN_THROTTLE_SECRET="$(openssl rand -hex 24)"
+          # Compose evaluates these values for services; do not persist .env.
+          cat > /tmp/scs-free-review-override.yml <<'YAML'
+          services:
+            db:
+              ports: []
+            api:
+              mem_limit: 512m
+              environment:
+                JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=20
+                SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "3"
+                SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "0"
+                SCS_PAYMENT_ENVIRONMENT: disabled
+                SCS_PAYMENT_SANDBOX_CHECKOUT_ENABLED: "false"
+          YAML
+          docker compose --project-name scs-512m-smoke -f compose.yaml -f /tmp/scs-free-review-override.yml up --build -d db api
+          limit="$(docker inspect scs-512m-smoke-api-1 --format '{{.HostConfig.Memory}}')"
+          test "$limit" = "536870912"
+          ready=false
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/system/status > /tmp/scs-status.json; then
+              if grep -q '"database":"connected"' /tmp/scs-status.json; then ready=true; break; fi
+            fi
+            if test "$(docker inspect scs-512m-smoke-api-1 --format '{{.State.OOMKilled}}')" = "true"; then
+              echo "The Java API exceeded 512 MB and was OOM-killed"
+              exit 1
+            fi
+            sleep 3
+          done
+          test "$ready" = "true"
+          curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'
+          test "$(docker inspect scs-512m-smoke-api-1 --format '{{.State.OOMKilled}}')" = "false"
+          docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' scs-512m-smoke-api-1
+          echo "Actual Java startup and database connectivity passed with 512 MB container limit"
+      - name: Print capped diagnostic logs on failure without secrets
+        if: failure()
+        shell: bash
+        run: |
+          docker compose --project-name scs-512m-smoke -f compose.yaml -f /tmp/scs-free-review-override.yml ps || true
+          docker inspect scs-512m-smoke-api-1 --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}}' || true
+      - name: Destroy disposable CI data and containers
+        if: always()
+        shell: bash
+        run: |
+          if test -f /tmp/scs-free-review-override.yml; then
+            docker compose --project-name scs-512m-smoke -f compose.yaml -f /tmp/scs-free-review-override.yml down --volumes --remove-orphans || true
+          fi
