@@ -21,7 +21,7 @@ CREATE TABLE physical_game_loss_incidents (
   loan_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   reported_by CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   reason VARCHAR(300) NOT NULL CHECK (CHAR_LENGTH(TRIM(reason)) BETWEEN 5 AND 300),
-  status VARCHAR(24) NOT NULL DEFAULT 'OPEN'
+  status VARCHAR(24) COLLATE utf8mb4_bin NOT NULL DEFAULT 'OPEN'
     CHECK (status IN ('OPEN','DISMISSED','CONFIRMED_LOST')),
   reported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   reviewed_by CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
