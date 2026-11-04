@@ -31,6 +31,18 @@ $preflight = Join-Path -Path $PSScriptRoot -ChildPath "test-mysql-host-preflight
 if (-not (Test-Path -LiteralPath $preflight -PathType Leaf)) {
     throw "Cannot find the audited MySQL host preflight script in $PSScriptRoot."
 }
+# Verify the child script parses before prompting for a password. A previous
+# malformed preflight file failed only after credentials had been entered.
+$parseTokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    $preflight, [ref]$parseTokens, [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+    $messages = @($parseErrors | ForEach-Object { $_.Message }) -join '; '
+    throw "Preflight script contains PowerShell syntax errors. Update the repository before entering credentials: $messages"
+}
+
 
 # Credentials are prompted directly by the official MySQL client editor.
 # Password must NEVER be supplied as an argument, environment value, file in
