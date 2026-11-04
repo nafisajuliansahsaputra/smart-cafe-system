@@ -230,10 +230,18 @@ public class CashCheckoutService {
             VALUES (?,?,?,?)
             """,dbUuid(orderId),selectedMethod,subtotal,
             "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING");
-        jdbc.update("""
-            INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
-            VALUES (?,'CASH_CHECKOUT',?,?,?,now()+interval '7 days')
-            """,guest.guestId(),key,hash,orderId);
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String idempotencyInsert = switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
+                VALUES (?,'CASH_CHECKOUT',?,?,?,now()+interval '7 days')
+                """;
+            case MYSQL -> """
+                INSERT INTO order_idempotency(actor_id,scope,idempotency_key,request_hash,order_id,expires_at)
+                VALUES (?,'CASH_CHECKOUT',?,?,?,DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 7 DAY))
+                """;
+        };
+        jdbc.update(idempotencyInsert, dbUuid(guest.guestId()), key, hash, dbUuid(orderId));
         outbox.order(orderId,"ORDER_SUBMITTED");
         return new Checkout(orderId,"SUBMITTED",
             "CASH".equals(selectedMethod)?"AWAITING_CASH":"PENDING",subtotal);
