@@ -5,6 +5,8 @@ on:
     paths:
       - "scripts/test-mysql-host-preflight.ps1"
       - "scripts/setup-aiven-review-windows.ps1"
+      - "scripts/test-aiven-flyway-windows.ps1"
+      - "backend/src/test/java/com/natsx/smartcafe/HostedAivenFlywayReview.java"
       - "docs/M8-HOSTED-MYSQL-PREFLIGHT.md"
       - ".github/workflows/mysql-host-preflight.yml"
   workflow_dispatch:
@@ -36,7 +38,8 @@ jobs:
           $parseErrors = $null
           foreach ($file in @(
             "scripts/test-mysql-host-preflight.ps1",
-            "scripts/setup-aiven-review-windows.ps1"
+            "scripts/setup-aiven-review-windows.ps1",
+            "scripts/test-aiven-flyway-windows.ps1"
           )) {
             $tokens = $null
             $parseErrors = $null
