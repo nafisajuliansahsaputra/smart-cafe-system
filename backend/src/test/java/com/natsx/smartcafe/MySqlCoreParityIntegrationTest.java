@@ -100,6 +100,97 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlPhysicalGameRequestAssignHandoverAndReturnNeverDoubleLoansCopy() {
+        String waiter1 = newStaff();
+        String waiter2 = newStaff();
+        String visit1 = newVisit(newTable(), waiter1);
+        String visit2 = newVisit(newTable(), waiter2);
+        String guest1 = id();
+        String guest2 = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest1,visit1,"Game borrowing guest");
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest2,visit2,"Second borrowing guest");
+        String game=id();
+        String copy=id();
+        String code="SC-GAME-"+copy;
+        jdbc.update("INSERT INTO physical_games(id,name) VALUES (?,?)",
+            game,"Synthetic game "+game);
+        jdbc.update("""
+            INSERT INTO physical_game_copies(id,game_id,copy_code,condition)
+            VALUES (?,?,?,'AVAILABLE')
+            """,copy,game,code);
+
+        var principal1=new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest1),UUID.fromString(visit1),"synthetic-guest-token-1");
+        var principal2=new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest2),UUID.fromString(visit2),"synthetic-guest-token-2");
+        var staff1=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(waiter1),"synthetic-waiter-1","token-1",java.util.Set.of("WAITER"));
+        var staff2=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(waiter2),"synthetic-waiter-2","token-2",java.util.Set.of("WAITER"));
+        var events=new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var service=new com.natsx.smartcafe.games.GameLoanService(
+            jdbc,new com.natsx.smartcafe.audit.AuditTrail(jdbc),events);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        assertEquals(1,service.catalog().stream().filter(g->g.id().equals(UUID.fromString(game)))
+            .findFirst().orElseThrow().availableCopies());
+
+        var first=tx.execute(status->service.request(principal1,UUID.fromString(game)));
+        var second=tx.execute(status->service.request(principal2,UUID.fromString(game)));
+        assertEquals("REQUESTED",first.status());
+        assertEquals("REQUESTED",second.status());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.request(principal1,UUID.fromString(game))));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.assign(first.id(),staff2,"wrong-waiter")));
+
+        var reserved=tx.execute(status->service.assign(first.id(),staff1,"assign-unit"));
+        assertEquals("ASSIGNED",reserved.status());
+        assertEquals(code,reserved.copyCode());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.assign(second.id(),staff2,"double-assign")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.handover(first.id(),"WRONG-CODE",staff1,"bad-handover")));
+
+        var handed=tx.execute(status->service.handover(first.id(),code,staff1,"handover-unit"));
+        assertEquals("IN_USE",handed.status());
+        assertEquals(code,handed.copyCode());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.requestReturn(principal2,first.id())));
+        var pending=tx.execute(status->service.requestReturn(principal1,first.id()));
+        assertEquals("RETURN_PENDING",pending.status());
+        assertEquals("RETURN_PENDING",tx.execute(status->
+            service.requestReturn(principal1,first.id())).status());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.assign(second.id(),staff2,"copy-still-out")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->service.returnCopy(first.id(),"BAD-SERIAL",staff1,"bad-return")));
+
+        var returned=tx.execute(status->service.returnCopy(
+            first.id(),code,staff1,"verified-return"));
+        assertEquals("RETURNED",returned.status());
+        assertEquals(1,service.catalog().stream().filter(g->g.id().equals(UUID.fromString(game)))
+            .findFirst().orElseThrow().availableCopies());
+        var secondAssigned=tx.execute(status->service.assign(second.id(),staff2,"assign-second"));
+        assertEquals("ASSIGNED",secondAssigned.status());
+        assertEquals(code,secondAssigned.copyCode());
+        tx.executeWithoutResult(status->service.handover(second.id(),code,staff2,"handover-second"));
+        tx.executeWithoutResult(status->service.returnCopy(second.id(),code,staff2,"return-second"));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM physical_game_loans
+            WHERE copy_id=? AND status IN ('ASSIGNED','IN_USE','RETURN_PENDING')
+            """,Integer.class,copy));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM outbox_events
+            WHERE aggregate_type='GAME_LOAN' AND aggregate_id=?
+              AND event_type='GAME_LOAN_RETURNED'
+            """,Integer.class,first.id().toString()));
+    }
+
+    @Test
     void mySqlWaiterCashTenderNeedsOpenTillAndIssuesOnePaidReceipt() {
         String waiter = newStaff();
         String cashier = newStaff();
