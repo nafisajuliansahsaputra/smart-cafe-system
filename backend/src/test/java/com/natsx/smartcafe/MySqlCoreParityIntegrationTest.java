@@ -122,7 +122,9 @@ class MySqlCoreParityIntegrationTest {
         UUID fromDb = jdbc.queryForObject(
             "SELECT table_id FROM table_visits WHERE id=?",
             (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"),
-            UUID.fromString(visit)
+            com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                UUID.fromString(visit),
+                com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc))
         );
         assertEquals(UUID.fromString(table), fromDb);
     }
@@ -269,12 +271,14 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
-    void mysqlJdbcAcceptsApplicationUuidParameterAndReadAdapter() {
+    void mysqlUuidDialectParameterAndReadAdapterRoundTrip() {
         UUID userId = UUID.randomUUID();
         jdbc.update("""
             INSERT INTO staff_users(id,login,password_hash)
             VALUES (?,?,?)
-            """, userId, "uuid-" + userId, "synthetic-test-hash");
+            """, com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                userId, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
+            "uuid-" + userId, "synthetic-test-hash");
         UUID fromDb = jdbc.queryForObject("""
             SELECT id FROM staff_users WHERE id=?
             """, (rs, n) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
