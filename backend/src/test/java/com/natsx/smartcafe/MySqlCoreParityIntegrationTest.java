@@ -24,6 +24,10 @@ class MySqlCoreParityIntegrationTest {
     @Container
     static final MySQLContainer mysql =
         new MySQLContainer(DockerImageName.parse("mysql:8.4"))
+            // MySQL binlog requires SUPER or trusted-function-creators for
+            // CREATE TRIGGER. Docker CI can set this explicitly; managed
+            // hosts MUST prove equivalent capability before any deployment.
+            .withCommand("--log-bin-trust-function-creators=1")
             .withDatabaseName("smart_cafe_mysql_test")
             .withUsername("cafe_test")
             .withPassword("test-only-local-mysql-pass");
