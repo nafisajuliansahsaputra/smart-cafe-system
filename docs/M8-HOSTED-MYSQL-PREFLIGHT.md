@@ -118,8 +118,9 @@ server or use your existing cafe database to run this probe.
 
 | Gate | Acceptance evidence |
 | --- | --- |
-| TLS | Session reports nonempty `Ssl_cipher`; client option file enforces `VERIFY_IDENTITY` |
-| Billing | Confirm **Free**, **1 GB**, and **$0/month**; Developer 8 GB is a paid tier after trial |\n| Version | Genuine MySQL 8.x, not simply a MySQL-compatible wire protocol |
+| TLS | Session reports nonempty `Ssl_cipher`; the client enforces `VERIFY_IDENTITY` and uses the CA |
+| Billing | Confirm **Free**, **1 GB**, and **$0/month**; Developer 8 GB is a paid tier after trial |
+| Version | Genuine MySQL 8.x, not simply a MySQL-compatible wire protocol |
 | Trigger privileges | One scratch trigger created, fired with intended error, and dropped |
 | Financial state collation | `PAID` accepted, lowercase `paid` rejected by database CHECK |
 | Cleanup | Scratch database dropped; no shared schema modified |
