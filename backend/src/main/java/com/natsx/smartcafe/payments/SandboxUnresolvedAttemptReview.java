@@ -82,8 +82,8 @@ public final class SandboxUnresolvedAttemptReview {
             LIMIT ? OFFSET ?
             """,(rs,n)->{
                 Timestamp evidenceAt=rs.getTimestamp("last_received");
-                return new Item(rs.getObject("id",UUID.class),
-                    rs.getObject("order_id",UUID.class),rs.getString("method"),
+                return new Item(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                    com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("method"),
                     rs.getLong("amount_idr"),rs.getString("provider_reference"),
                     rs.getString("attempt_state"),rs.getString("payment_state"),
                     rs.getTimestamp("expires_at").toInstant(),rs.getBoolean("overdue"),
