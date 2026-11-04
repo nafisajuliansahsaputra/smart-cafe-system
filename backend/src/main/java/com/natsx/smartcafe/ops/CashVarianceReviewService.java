@@ -49,13 +49,13 @@ public class CashVarianceReviewService {
             ORDER BY s.closed_at DESC,s.id DESC
             LIMIT 21 OFFSET ?
             """,(rs,n)->new Case(
-                rs.getObject("id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getTimestamp("closed_at").toInstant(),
                 rs.getLong("expected_drawer_idr"),rs.getLong("counted_cash_idr"),
                 rs.getLong("difference_idr"),rs.getString("action_code"),
                 rs.getTimestamp("action_at")==null?null:
                     rs.getTimestamp("action_at").toInstant(),
-                rs.getObject("actor_staff_id",UUID.class)),page*20);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id")),page*20);
         return new CasePage(page,rows.size()>20,
             rows.stream().limit(20).toList());
     }
@@ -69,8 +69,8 @@ public class CashVarianceReviewService {
             FROM cash_variance_review_actions
             WHERE shift_id=? ORDER BY created_at DESC,id DESC LIMIT 100
             """,(rs,n)->new ReviewAction(
-                rs.getObject("id",UUID.class),rs.getObject("shift_id",UUID.class),
-                rs.getObject("actor_staff_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
                 rs.getTimestamp("created_at").toInstant()),shiftId);
     }
@@ -97,8 +97,8 @@ public class CashVarianceReviewService {
             FROM cash_variance_review_actions
             WHERE shift_id=? AND idempotency_key=?
             """,(rs,n)->new StoredAction(new ReviewAction(
-                rs.getObject("id",UUID.class),rs.getObject("shift_id",UUID.class),
-                rs.getObject("actor_staff_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
                 rs.getTimestamp("created_at").toInstant()),
                 rs.getString("idempotency_key")),shiftId,key);
@@ -126,8 +126,8 @@ public class CashVarianceReviewService {
             SELECT id,shift_id,actor_staff_id,action_code,note,created_at
             FROM cash_variance_review_actions WHERE id=?
             """,(rs,n)->new ReviewAction(
-                rs.getObject("id",UUID.class),rs.getObject("shift_id",UUID.class),
-                rs.getObject("actor_staff_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
                 rs.getTimestamp("created_at").toInstant()),id);
     }
