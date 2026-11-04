@@ -1,6 +1,6 @@
 -- MySQL 8: physical-unit loan signals use a durable sequence, no guest PII.
-CREATE INDEX idx_outbox_live_game_pending
-  ON outbox_events(aggregate_type,live_published_at,created_at,id);
+-- V11's idx_outbox_live_pending already covers all aggregate types here.
+-- Do not duplicate the same four-column outbox index on free-tier storage.
 CREATE TABLE live_game_signals (
   sequence_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   outbox_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
