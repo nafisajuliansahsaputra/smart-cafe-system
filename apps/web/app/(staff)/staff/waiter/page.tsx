@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { logoutStaff } from "../actions";
 import { captureCashTender, markOrderServed } from "../fulfillment-actions";
-import { canUseWaiter, idr, localTime, staffIdentity, waiterTasks } from "@/lib/staff-server";
+import { canUseWaiter, idr, localTime, staffIdentity } from "@/lib/staff-server";
+import { waiterTaskPage } from "@/lib/staff-waiter-task-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ const notices: Record<string, string> = {
 export default async function WaiterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; page?: string }>;
 }) {
   const identity = await staffIdentity();
   if (identity.kind === "signed-out") redirect("/staff/login?status=expired");
@@ -29,29 +30,38 @@ export default async function WaiterPage({
       <p>Identitas staf tidak dapat diverifikasi. Tidak ada aksi yang diizinkan.</p><Link href="/staff">Kembali</Link></main>
   );
   if (!canUseWaiter(identity.staff.roles)) notFound();
-  const { notice } = await searchParams;
+  const { notice, page: rawPage } = await searchParams;
   const message = notice && Object.hasOwn(notices, notice) ? notices[notice] : null;
-  const result = await waiterTasks();
+  const validPage = rawPage === undefined || /^(0|[1-9][0-9]{0,3})$/.test(rawPage);
+  const page = validPage ? Number(rawPage ?? "0") : -1;
+  const result = await waiterTaskPage(page);
   if (!result.ok && result.status === 401) redirect("/staff/login?status=expired");
   return (
     <main className="staff-shell staff-wide">
       <header className="staff-header">
         <div><div className="staff-eyebrow">SMART CAFE / WAITER</div><h1>Pengantaran &amp; Cash</h1>
-          <p className="staff-muted">Waiter hanya melihat tugas meja yang menjadi tanggung jawabnya. Admin/kasir melihat semua tugas.</p></div>
+          <p className="staff-muted">Tagihan cash belum lunas ditampilkan lebih dulu, lalu pesanan siap diantar. Tugas tetap dibatasi menurut kewenangan staf.</p></div>
         <form action={logoutStaff}><button className="staff-secondary">Keluar</button></form>
       </header>
       <nav className="staff-breadcrumb"><Link href="/staff">Ruang staf</Link><span>/</span><strong>Waiter</strong><span>/</span>
         <Link href="/staff/games">Pinjaman permainan</Link></nav>
       <div className="staff-live-line"><LiveRefresh url={`/staff/live?topic=waiter`} /></div>
-      <form method="GET"><button className="staff-secondary" type="submit">Segarkan tugas</button></form>
+      <form method="GET">
+        {page > 0 && <input type="hidden" name="page" value={String(page)} />}
+        <button className="staff-secondary" type="submit">Segarkan tugas</button>
+      </form>
       {message && <p className="staff-notice" role="status">{message}</p>}
       {!result.ok && <section className="staff-panel"><h2>Daftar tugas tidak tersedia</h2>
-        <p role="alert">Tidak ada status yang bisa dikonfirmasi. Cek koneksi dan hak akses.</p></section>}
-      {result.ok && result.data.length === 0 && <section className="staff-panel">
+        <p role="alert">{result.status === 400
+          ? "Halaman tugas tidak valid. Gunakan nomor halaman yang tersedia."
+          : result.status === 403
+          ? "Akses ke daftar tugas ditolak oleh backend."
+          : "Tidak ada status yang bisa dikonfirmasi. Cek koneksi dan hak akses."}</p></section>}
+      {result.ok && result.data.items.length === 0 && <section className="staff-panel">
         <h2>Tidak ada tugas pengantaran</h2><p>Belum ada pesanan siap diantar atau menunggu cash.</p></section>}
       {result.ok && (
         <div className="staff-task-grid">
-          {result.data.map((task) => (
+          {result.data.items.map((task) => (
             <article className="staff-panel staff-task-card" key={task.orderId}
               aria-labelledby={`waiter-task-${task.orderId}`}>
               <div className="staff-task-head"><h2 id={`waiter-task-${task.orderId}`}>Meja {task.tableCode}</h2>
@@ -97,6 +107,21 @@ export default async function WaiterPage({
             </article>
           ))}
         </div>
+      )}
+      {result.ok && (
+        <nav className="staff-breadcrumb" aria-label="Halaman tugas waiter">
+          {result.data.page > 0 &&
+            <Link className="staff-link-button" href={`/staff/waiter?page=${result.data.page - 1}`}>
+              Halaman sebelumnya
+            </Link>}
+          <span role="status">
+            {result.data.total} tugas cocok · halaman {result.data.page + 1} · 25 per halaman
+          </span>
+          {result.data.hasNext && result.data.page < 1000 &&
+            <Link className="staff-link-button" href={`/staff/waiter?page=${result.data.page + 1}`}>
+              Halaman berikutnya
+            </Link>}
+        </nav>
       )}
       <p className="staff-footnote">Mode pengembangan. Kebijakan cash-at-handover masih provisional. Uang sungguhan, QRIS/VA, dan rekonsiliasi produksi belum diizinkan.</p>
     </main>
