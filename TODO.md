@@ -949,9 +949,11 @@ channel, hosted staging, backup retention/PITR and an owner-signed release.
   disposable preview database, with no payment credentials.
 - [ ] Verify real hosted JVM memory, migration startup, platform cold starts
   and fully remote frontend-to-backend connectivity.
-- [ ] Implement and audit a one-time safe **remote** ADMIN enrollment flow;
-  local dev-bootstrap and known browser fixture accounts must never be
-  exposed via a public backend.
+- [x] Implement a strictly guarded, single-use hosted REVIEW ADMIN bootstrap
+  for a fresh Neon database only, with early Flyway preflight and unit tests.
+- [ ] Verify hosted one-time admin enrollment and the subsequent removal of
+  temporary credentials in a real Render + Neon environment; never publish
+  known browser fixture users on an internet-facing backend.
 - [ ] Run isolated hosted customer/cashier/kitchen/waiter lifecycle with only
   dummy data; owner must review the hosted URL before portfolio publication.
 
