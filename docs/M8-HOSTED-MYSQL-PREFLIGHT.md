@@ -202,6 +202,23 @@ mvn -version
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-aiven-flyway-windows.ps1 -HostName "YOUR_SERVICE_HOST.aivencloud.com" -Port YOUR_SERVICE_PORT -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
 ```
 
+If `java -version` succeeds but `mvn` is not recognized, the repo
+has no Maven wrapper. Run the checksum-pinned, non-admin Maven 3.9.16
+bootstrap once **in the same PowerShell session**:
+
+```powershell
+git pull --ff-only
+. .\scripts\setup-maven-windows.ps1
+mvn -version
+```
+
+The leading `. ` dot-source operator is intentional: it activates Maven
+only in the current session without modifying Windows machine PATH.
+The script checks Apache's published SHA-512 digest before extracting
+the official binary ZIP into `%LOCALAPPDATA%\SmartCafe\tools`.
+Repeat the dot-source command in future PowerShell windows, or add its
+installed `bin` directory to your own PATH later. No admin access required.
+
 The script first re-runs the **read-only** TLS/host check using the
 existing login-path. It then requires explicitly typing
 `MIGRATE-SCRATCH-ONLY` before prompting for the Aiven password
