@@ -34,6 +34,15 @@ class JdbcSqlDialectTest {
     }
 
     @Test
+    void uuidParameterPreservesNativePostgresAndEncodesMySqlChar36() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        assertEquals(id, JdbcUuid.parameter(id, JdbcSqlDialect.Vendor.POSTGRESQL));
+        assertEquals(id.toString(), JdbcUuid.parameter(id, JdbcSqlDialect.Vendor.MYSQL));
+        assertEquals(null, JdbcUuid.parameter(null, JdbcSqlDialect.Vendor.MYSQL));
+        assertThrows(NullPointerException.class, () -> JdbcUuid.parameter(id, null));
+    }
+
+    @Test
     void postgresQueriesRemainIdentical() {
         assertEquals(
             "INSERT INTO staff_login_throttles(login_hash) VALUES (?) ON CONFLICT DO NOTHING",
