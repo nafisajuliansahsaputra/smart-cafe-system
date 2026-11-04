@@ -10,17 +10,19 @@ The portfolio must not describe MySQL as operational until proven.
 
 - Existing **PostgreSQL 17/18** implementation remains the functional MVP,
   with 31 Flyway migrations and backend cash/payment/game flow tests.
-- **MySQL stage 1-2 is implemented:** opt-in `db/mysql/V1-V10`
+- **MySQL stage 1-2 is implemented:** opt-in `db/mysql/V1-V14`
   foundational tables, staff/guest revocable sessions, table-visit unique
   active-visit constraint, immutable order financial snapshots, immutable
-  paid-only receipts, limited-stock triggers, cart/variant groups and
-  HMAC-only guest join throttles. MySQL expressions/trigger syntax are native MySQL 8.
+  paid-only receipts, limited-stock triggers, cart/variant groups,
+  HMAC-only guest join throttles, live outbox signals and serialized
+  physical-game copy uniqueness. MySQL expressions/trigger syntax are native MySQL 8.
 - Added `mysql-connector-j`, `flyway-mysql` and MySQL 8.4 Testcontainers.
 - `MySqlCoreParityIntegrationTest` creates a disposable MySQL instance,
   migrates it using `classpath:db/mysql`, and rejects duplicate active
   table visits, invalid FK/capacity, unpaid or mismatched receipts, and
   mutable issued receipt/order financial data. It also verifies the
-  automatic item-stock trigger and case-insensitive unique item variants.
+  automatic item-stock trigger, case-insensitive unique item variants,
+  and exclusive physical game loan assignments.
 - **Runtime default remains PostgreSQL; MySQL backend is fail-closed before
   Flyway.** It must not be pointed at Aiven/other public MySQL yet.
 
@@ -54,7 +56,7 @@ with unprotected API-only checks to bypass hosting limitations.
 
 ## Required before an actual MySQL deployment
 
-- Port MySQL equivalents of **V11-V31** in the exact order and preserve
+- Port MySQL equivalents of **V15-V31** in the exact order and preserve
   unique, foreign key, check, append-only and concurrency behavior.
   Several PG partial unique indexes need generated nullable columns.
 - Replace PG-specific SQL in backend services, e.g. advisory transaction
