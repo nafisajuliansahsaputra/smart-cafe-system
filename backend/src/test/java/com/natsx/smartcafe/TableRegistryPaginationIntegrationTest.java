@@ -138,4 +138,77 @@ class TableRegistryPaginationIntegrationTest {
         String admin=login("ADMIN");
         assertEquals(25,page(admin,0,"").path("pageSize").asInt());
     }
+    @Test
+    void waiterFloorPagesPast250AndScopesLiveVisitToOwnerOrSupervisor() throws Exception {
+        String owner=login("WAITER");
+        String otherWaiter=login("WAITER");
+        String cashier=login("CASHIER");
+        String kitchen=login("KITCHEN");
+        String group="WF" + UUID.randomUUID().toString().substring(0,8).toUpperCase(Locale.ROOT);
+        UUID firstTable=null;
+        for (int i=1; i<=253; i++) {
+            UUID id=UUID.randomUUID();
+            if (i==1) firstTable=id;
+            String code=group + "-" + String.format(Locale.ROOT,"%03d",i);
+            jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
+                id,code,code.toLowerCase(Locale.ROOT),4);
+        }
+        var first=mvc.perform(get("/api/v1/waiter/tables/page")
+            .param("page","0").param("q",group)
+            .header("Authorization","Bearer " + owner)).andReturn().getResponse();
+        assertEquals(200,first.getStatus());
+        assertTrue(first.getHeader("Cache-Control").contains("no-store"));
+        assertFalse(first.getContentAsString().contains("joinProof"));
+        var data=mapper.readTree(first.getContentAsString()).path("data");
+        assertEquals(253,data.path("total").asInt());
+        assertEquals(25,data.path("pageSize").asInt());
+        assertEquals(25,data.path("items").size());
+        assertTrue(data.path("hasNext").asBoolean());
+        var last=mvc.perform(get("/api/v1/waiter/tables/page")
+            .param("page","10").param("q",group.toLowerCase(Locale.ROOT))
+            .header("Authorization","Bearer " + owner)).andReturn().getResponse();
+        assertEquals(200,last.getStatus());
+        var lastData=mapper.readTree(last.getContentAsString()).path("data");
+        assertEquals(3,lastData.path("items").size());
+        assertFalse(lastData.path("hasNext").asBoolean());
+        assertTrue(lastData.path("items").get(2).path("tableCode")
+            .asText().endsWith("-253"));
+
+        var opened=mvc.perform(post("/api/v1/waiter/table-visits")
+            .header("Authorization","Bearer " + owner)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\\\"tableId\\\":\\\"" + firstTable + "\\\"}"))
+            .andReturn().getResponse();
+        assertEquals(200,opened.getStatus(),opened.getContentAsString());
+        String visitId=mapper.readTree(opened.getContentAsString()).path("data")
+            .path("id").asText();
+        for (var actor : new String[] {owner,otherWaiter,cashier}) {
+            var scoped=mvc.perform(get("/api/v1/waiter/tables/page")
+                .param("q",group + "-001")
+                .header("Authorization","Bearer " + actor)).andReturn().getResponse();
+            assertEquals(200,scoped.getStatus());
+            assertFalse(scoped.getContentAsString().contains("joinProof"));
+            var row=mapper.readTree(scoped.getContentAsString()).path("data")
+                .path("items").get(0);
+            assertTrue(row.path("activeVisit").asBoolean());
+            if (actor.equals(otherWaiter)) {
+                assertTrue(row.path("manageableVisitId").isNull());
+                assertTrue(row.path("proofExpiresAt").isNull());
+            } else {
+                assertEquals(visitId,row.path("manageableVisitId").asText());
+                assertFalse(row.path("proofExpiresAt").isNull());
+            }
+        }
+        assertEquals(400,mvc.perform(get("/api/v1/waiter/tables/page")
+            .param("page","1001")
+            .header("Authorization","Bearer " + owner)).andReturn().getResponse().getStatus());
+        assertEquals(400,mvc.perform(get("/api/v1/waiter/tables/page")
+            .param("q","%")
+            .header("Authorization","Bearer " + owner)).andReturn().getResponse().getStatus());
+        assertEquals(401,mvc.perform(get("/api/v1/waiter/tables/page"))
+            .andReturn().getResponse().getStatus());
+        assertEquals(403,mvc.perform(get("/api/v1/waiter/tables/page")
+            .header("Authorization","Bearer " + kitchen)).andReturn().getResponse().getStatus());
+    }
+
 }
