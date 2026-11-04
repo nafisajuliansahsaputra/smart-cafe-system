@@ -80,7 +80,7 @@ public class StaffAuthService {
         String token = SecureToken.generate();
         Instant expires = now.plus(SESSION_TTL);
         jdbc.update("INSERT INTO staff_sessions(token_hash, staff_user_id, expires_at) VALUES (?,?,?)",
-            SecureToken.sha256(token), user.id(), java.sql.Timestamp.from(expires));
+            SecureToken.sha256(token), dbUuid(user.id()), java.sql.Timestamp.from(expires));
         jdbc.update("DELETE FROM staff_login_throttles WHERE login_hash=?", loginHash);
         return new LoginResult(token, expires, null);
     }
@@ -99,8 +99,14 @@ public class StaffAuthService {
         StaffRow user = matches.getFirst();
         Set<String> roles = jdbc.query("""
             SELECT role_key FROM staff_role_assignments WHERE staff_user_id=?
-            """, (rs, row) -> rs.getString("role_key"), user.id()).stream().collect(Collectors.toUnmodifiableSet());
+            """, (rs, row) -> rs.getString("role_key"), dbUuid(user.id())).stream().collect(Collectors.toUnmodifiableSet());
         return new StaffPrincipal(user.id(), user.login(), tokenHash, roles);
+    }
+
+    /** PostgreSQL uses native UUID; MySQL uses ASCII CHAR(36). */
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     @Transactional
