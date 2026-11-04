@@ -41,7 +41,7 @@ class MySqlCoreParityIntegrationTest {
         // Never pick PostgreSQL's 31 migrations for a MySQL database.
         var flyway = Flyway.configure().dataSource(ds).locations("classpath:db/mysql").load();
         var result = flyway.migrate();
-        assertEquals(5, result.migrationsExecuted);
+        assertEquals(10, result.migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
     }
 
@@ -131,6 +131,43 @@ class MySqlCoreParityIntegrationTest {
             jdbc.update("DELETE FROM receipts WHERE id=?", receipt));
         assertThrows(DataAccessException.class, () ->
             jdbc.update("UPDATE orders SET total_idr=100 WHERE id=?", order));
+    }
+
+    @Test
+    void menuStockTriggerAndVariantGroupingWorkUnderMySqlConstraints() {
+        String category = id();
+        String item = id();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category, "Test category", "mysql-" + category);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr)
+            VALUES (?,?,?,?)
+            """, item, category, "Synthetic item", 25000L);
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_availability WHERE menu_item_id=?",
+            Integer.class, item));
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE item_availability SET limited_quantity=-1 WHERE menu_item_id=?",
+                item));
+
+        String groupOne = id();
+        String groupTwo = id();
+        jdbc.update("""
+            INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
+            VALUES (?,?,?,?)
+            """, groupOne, item, "Size", true);
+        jdbc.update("""
+            INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
+            VALUES (?,?,?,?)
+            """, groupTwo, item, "Milk", false);
+        assertEquals(2, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM menu_variant_groups WHERE menu_item_id=?",
+            Integer.class, item));
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("""
+                INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
+                VALUES (?,?,?,?)
+                """, id(), item, "size", true));
     }
 
     @Test
