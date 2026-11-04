@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# One current attempt per PR. New pushes supersede stale queued results.
+concurrency:
+  group: mysql8-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mysql8-financial-core:
     name: MySQL 8.4 core Flyway / paid-only receipt / immutable ledgers
