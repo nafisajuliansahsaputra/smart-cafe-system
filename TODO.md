@@ -891,3 +891,15 @@ See docs/M7-OPERATIONAL-AUDIT-REVIEW.md. The audit view reflects real records; i
 
 See `docs/M7-OCC-QUEUE-PAGINATION.md`. Source is a stacked draft only,
 not yet an approved main-branch or live merchant feature.
+
+### M7 waiter task queue money-first pagination (stacked draft)
+- [x] Add server-side PostgreSQL page for real waiter delivery/cash work
+  (25 tasks/page) with first-class cash-due priority and stable sorting.
+- [x] Preserve ordinary waiter visit ownership, kitchen deny, and legacy API.
+- [x] Add 111 synthetic-order Postgres role, ordering and page-boundary
+  tests plus browser invalid-page/real-cash-flow regression coverage.
+- [ ] Verify exact-head source and candidate-to-main CI, mobile accessibility
+  and physical cash handoff procedures before owner-authorized release.
+
+See `docs/M7-WAITER-TASK-PAGINATION.md`. This changes no financial
+write path or merchant integration and does not touch `main`.
