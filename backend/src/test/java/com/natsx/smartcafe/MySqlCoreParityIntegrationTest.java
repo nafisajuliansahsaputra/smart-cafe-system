@@ -100,6 +100,126 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlWaiterCashTenderNeedsOpenTillAndIssuesOnePaidReceipt() {
+        String waiter = newStaff();
+        String cashier = newStaff();
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            waiter, "WAITER");
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            cashier, "CASHIER");
+        String visit = newVisit(newTable(), waiter);
+        String guest = id();
+        String category = id();
+        String menu = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest,visit,"Synthetic cash customer");
+        jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
+            category,"Cash test","mysql-cash-"+category);
+        jdbc.update("INSERT INTO menu_items(id,category_id,name,base_price_idr) VALUES (?,?,?,?)",
+            menu,category,"Cash meal",16000L);
+
+        var principal = new com.natsx.smartcafe.identity.GuestPrincipal(
+            UUID.fromString(guest),UUID.fromString(visit),"synthetic-cash-session");
+        var variants = new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        var outbox = new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var receipts = new com.natsx.smartcafe.receipts.GuestReceiptService(jdbc);
+        var cart = new com.natsx.smartcafe.orders.CartService(jdbc,variants);
+        var checkout = new com.natsx.smartcafe.orders.CashCheckoutService(
+            jdbc,cart,outbox,variants,false,"disabled");
+        var ops = new com.natsx.smartcafe.orders.CashWorkflowService(
+            jdbc,new com.natsx.smartcafe.audit.AuditTrail(jdbc),outbox,receipts);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        var order = tx.execute(status -> checkout.checkout(principal,
+            java.util.List.of(new com.natsx.smartcafe.orders.CashCheckoutService.Line(
+                UUID.fromString(menu),1)),"cash-tender-"+UUID.randomUUID().toString().replace("-","")));
+        UUID orderId = order.id();
+        UUID waiterId = UUID.fromString(waiter);
+        tx.executeWithoutResult(status -> ops.approve(orderId,waiterId,"cash-approve"));
+        UUID ticketId=jdbc.queryForObject(
+            "SELECT id FROM kitchen_tickets WHERE order_id=?",
+            (rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+            orderId.toString());
+
+        UUID intentId=jdbc.queryForObject(
+            "SELECT id FROM payment_intents WHERE order_id=?",
+            (rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+            orderId.toString());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> ops.capture(
+                intentId,20000L,"waiter-cash-0001",waiterId,"cash-premature")));
+
+        tx.executeWithoutResult(status -> ops.kitchenStart(ticketId,waiterId,"cash-start"));
+        tx.executeWithoutResult(status -> ops.kitchenReady(ticketId,waiterId,"cash-ready"));
+        tx.executeWithoutResult(status -> ops.served(orderId,waiterId,"cash-served"));
+
+        // MySQL requires an active till row as a transactional lock.
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> ops.capture(
+                intentId,20000L,"waiter-cash-0001",waiterId,"cash-no-shift")));
+
+        String shift = id();
+        jdbc.update("""
+            INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
+            VALUES (?,?,50000,?)
+            """,shift,cashier,"open-"+shift);
+
+        var paid=tx.execute(status -> ops.capture(
+            intentId,20000L,"waiter-cash-0001",waiterId,"cash-collected"));
+        assertEquals("PAID",paid.paymentStatus());
+        assertEquals(20000L,paid.receivedIdr());
+        assertEquals(4000L,paid.changeGivenIdr());
+        org.junit.jupiter.api.Assertions.assertNotNull(paid.receiptId());
+
+        var replay=tx.execute(status -> ops.capture(
+            intentId,20000L,"waiter-cash-0001",waiterId,"cash-replay"));
+        assertEquals(paid.receiptId(),replay.receiptId());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            () -> tx.execute(status -> ops.capture(
+                intentId,21000L,"waiter-cash-0001",waiterId,"cash-changed-amount")));
+        assertEquals(1,jdbc.queryForObject(
+            "SELECT COUNT(*) FROM cash_tenders WHERE payment_intent_id=?",
+            Integer.class,intentId.toString()));
+        assertEquals(1,jdbc.queryForObject(
+            "SELECT COUNT(*) FROM receipts WHERE order_id=?",
+            Integer.class,orderId.toString()));
+        assertEquals("PAID",jdbc.queryForObject(
+            "SELECT aggregate_status FROM payment_intents WHERE id=?",
+            String.class,intentId.toString()));
+        var ownReceipt=receipts.ownReceiptForOrder(orderId,principal);
+        assertEquals(paid.receiptId(),ownReceipt.id());
+        assertEquals(16000L,ownReceipt.totalIdr());
+        UUID tenderId=jdbc.queryForObject(
+            "SELECT id FROM cash_tenders WHERE payment_intent_id=?",
+            (rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+            intentId.toString());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM cash_tender_handoffs WHERE tender_id=?
+              AND cash_shift_id=? AND waiter_staff_id=? AND received_at IS NULL
+            """,Integer.class,tenderId.toString(),shift,waiter));
+
+        // Synthetic acknowledgment and settlement close the test till.
+        // Production handoff verification still requires CashDrawerShiftService E2E.
+        jdbc.update("""
+            UPDATE cash_tender_handoffs
+            SET received_by=?,received_at=CURRENT_TIMESTAMP(6),acknowledgment_key=?
+            WHERE tender_id=? AND received_at IS NULL
+            """,cashier,"ack-"+tenderId,tenderId.toString());
+        jdbc.update("""
+            UPDATE cash_drawer_shifts
+            SET closed_at=CURRENT_TIMESTAMP(6),closed_by=?,close_key=?,
+                counted_cash_idr=66000,recorded_cash_idr=16000,
+                expected_drawer_idr=66000,difference_idr=0,
+                closing_reason='Synthetic cash verification complete'
+            WHERE id=? AND closed_at IS NULL
+            """,cashier,"close-"+shift,shift);
+        assertEquals(0,jdbc.queryForObject(
+            "SELECT COUNT(*) FROM cash_drawer_shifts WHERE closed_at IS NULL",
+            Integer.class));
+    }
+
+    @Test
     void mySqlCashReceiptIsIssuedOnlyAfterPaidAndOwnedByGuest() {
         String staff = newStaff();
         String visit = newVisit(newTable(), staff);
