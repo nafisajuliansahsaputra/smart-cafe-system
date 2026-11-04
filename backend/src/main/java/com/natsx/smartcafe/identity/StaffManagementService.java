@@ -43,7 +43,7 @@ public class StaffManagementService {
             ORDER BY lower(u.login),u.id
             LIMIT 26 OFFSET ?
             """,(rs,n)->new Entry(
-                rs.getObject("id",UUID.class),rs.getString("login"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("login"),
                 rs.getBoolean("enabled"),
                 rs.getString("role_keys").isEmpty()?List.of():
                     Arrays.asList(rs.getString("role_keys").split(",")),

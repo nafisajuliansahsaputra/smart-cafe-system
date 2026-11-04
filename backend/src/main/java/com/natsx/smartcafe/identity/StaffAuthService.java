@@ -43,7 +43,8 @@ public class StaffAuthService {
         String loginHash = SecureToken.sha256(login);
         Instant now = Instant.now();
 
-        jdbc.update("INSERT INTO staff_login_throttles(login_hash) VALUES (?) ON CONFLICT DO NOTHING", loginHash);
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.ensureStaffLoginThrottle(
+            com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)), loginHash);
         var attempts = jdbc.queryForMap(
             "SELECT window_started_at, failed_attempts, locked_until FROM staff_login_throttles WHERE login_hash=? FOR UPDATE",
             loginHash);
@@ -62,7 +63,7 @@ public class StaffAuthService {
 
         List<StaffRow> users = jdbc.query(
             "SELECT id, login, password_hash, enabled FROM staff_users WHERE lower(login)=? FOR UPDATE",
-            (rs, row) -> new StaffRow(rs.getObject("id", UUID.class), rs.getString("login"),
+            (rs, row) -> new StaffRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("login"),
                 rs.getString("password_hash"), rs.getBoolean("enabled")),
             login);
         StaffRow user = users.isEmpty() ? null : users.getFirst();
@@ -92,7 +93,7 @@ public class StaffAuthService {
             SELECT u.id, u.login, u.password_hash, u.enabled FROM staff_sessions s
             JOIN staff_users u ON u.id = s.staff_user_id
             WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > now() AND u.enabled=true
-            """, (rs, row) -> new StaffRow(rs.getObject("id", UUID.class), rs.getString("login"),
+            """, (rs, row) -> new StaffRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("login"),
                 rs.getString("password_hash"), rs.getBoolean("enabled")), tokenHash);
         if (matches.isEmpty()) return null;
         StaffRow user = matches.getFirst();

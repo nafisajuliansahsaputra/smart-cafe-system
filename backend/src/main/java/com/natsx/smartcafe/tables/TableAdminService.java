@@ -66,7 +66,7 @@ public class TableAdminService {
             SELECT id,table_code,public_alias,capacity,status
             FROM cafe_tables WHERE id=? FOR UPDATE
             """, rs -> rs.next() ? new TableInfo(
-                rs.getObject("id", UUID.class), rs.getString("table_code"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("table_code"),
                 rs.getString("public_alias"), rs.getInt("capacity"),
                 rs.getString("status")) : null, id);
         if (current == null) {

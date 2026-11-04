@@ -40,7 +40,7 @@ public class VariantPricingService {
         var groups=jdbc.query("""
             SELECT id,name,required FROM menu_variant_groups
             WHERE menu_item_id=? AND active=true ORDER BY id FOR SHARE
-            """,(rs,n)->new Group(rs.getObject("id",UUID.class),
+            """,(rs,n)->new Group(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("name"),rs.getBoolean("required")),menuItemId);
         if(groups.size()>MAX_GROUPS)throw invalid();
 
@@ -54,8 +54,8 @@ public class VariantPricingService {
                 SELECT o.id,o.group_id,o.option_key,o.label,o.price_delta_idr
                 FROM menu_variant_options o
                 WHERE o.id=? AND o.active=true FOR SHARE OF o
-                """,(rs,n)->new Option(rs.getObject("id",UUID.class),
-                    rs.getObject("group_id",UUID.class),rs.getString("option_key"),
+                """,(rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                    com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "group_id"),rs.getString("option_key"),
                     rs.getString("label"),rs.getLong("price_delta_idr")),id);
             if(rows.size()!=1)throw invalid();
             var option=rows.getFirst();

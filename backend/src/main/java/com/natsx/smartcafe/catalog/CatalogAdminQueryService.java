@@ -50,7 +50,7 @@ public class CatalogAdminQueryService {
             ORDER BY m.name, m.id
             LIMIT ? OFFSET ?
             """, (rs, index) -> new CatalogAdminService.Item(
-                rs.getObject("id", UUID.class), rs.getObject("category_id", UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "category_id"),
                 rs.getString("name"), rs.getLong("base_price_idr"),
                 rs.getString("availability"), rs.getLong("revision"),
                 rs.getString("description"),rs.getString("image_url")),

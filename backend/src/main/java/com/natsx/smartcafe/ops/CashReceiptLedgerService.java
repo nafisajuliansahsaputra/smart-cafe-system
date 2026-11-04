@@ -57,9 +57,9 @@ public class CashReceiptLedgerService {
             ORDER BY r.issued_at DESC, r.id DESC
             LIMIT 21 OFFSET ?
             """, (rs, n) -> new CashReceiptItem(
-                rs.getObject("receipt_id", UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "receipt_id"),
                 rs.getLong("receipt_number"),
-                rs.getObject("order_id", UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),
                 rs.getString("table_code"),
                 rs.getLong("total_idr"),
                 rs.getTimestamp("issued_at").toInstant()),

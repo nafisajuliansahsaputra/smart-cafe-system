@@ -1,0 +1,45 @@
+name: MySQL 8 Port Parity (isolated, no merchant or external DB)
+
+on:
+  pull_request:
+    paths:
+      - "backend/pom.xml"
+      - "backend/src/main/resources/db/mysql/**"
+      - "backend/src/main/java/com/natsx/smartcafe/system/MySqlPortReadinessGuard.java"
+      - "backend/src/test/java/com/natsx/smartcafe/MySqlCoreParityIntegrationTest.java"
+      - ".github/workflows/mysql8-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One current attempt per PR. New pushes supersede stale queued results.
+concurrency:
+  group: mysql8-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mysql8-financial-core:
+    name: MySQL 8.4 core Flyway / paid-only receipt / immutable ledgers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Run MySQL-specific real database negative tests
+        working-directory: backend
+        run: mvn -B -ntp -Dtest=MySqlCoreParityIntegrationTest test
+      - name: Guard against touching production databases
+        run: |
+          test ! -f .env
+          test ! -f backend/.env
+          test ! -f apps/web/.env

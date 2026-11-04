@@ -73,18 +73,18 @@ public final class SandboxReconciliationReview {
             ORDER BY e.received_at DESC,e.id DESC
             LIMIT ? OFFSET ?
             """,(rs,n)->new Evidence(
-                rs.getObject("id",UUID.class),rs.getString("provider_event_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("provider_event_id"),
                 rs.getString("provider_reference"),rs.getString("classification"),
                 rs.getString("observed_state"),rs.getString("method"),
                 rs.getLong("reported_amount_idr"),
                 rs.getString("reported_currency"),
                 rs.getString("reported_environment"),
                 rs.getTimestamp("received_at").toInstant(),
-                rs.getObject("attempt_id",UUID.class),rs.getString("attempt_state"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "attempt_id"),rs.getString("attempt_state"),
                 rs.getString("payment_state"),rs.getString("triage_action"),
                 rs.getTimestamp("triage_at")==null?null:
                     rs.getTimestamp("triage_at").toInstant(),
-                rs.getObject("triage_actor",UUID.class)),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "triage_actor")),
             classification,classification,SIZE+1,page*SIZE);
         return new Page(page,classification,rows.size()>SIZE,
             List.copyOf(rows.subList(0,Math.min(rows.size(),SIZE))),

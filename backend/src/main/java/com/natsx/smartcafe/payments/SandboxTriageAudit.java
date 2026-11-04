@@ -50,7 +50,7 @@ public final class SandboxTriageAudit {
             SELECT id FROM sandbox_payment_event_inbox
             WHERE id=? AND provider_key='SANDBOX_FAKE'
             FOR UPDATE
-            """,(rs,n)->rs.getObject("id",UUID.class),evidenceId);
+            """,(rs,n)->com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),evidenceId);
         if(evidence.isEmpty())throw new ApiFailureException(HttpStatus.NOT_FOUND,
             "NOT_FOUND","Sandbox evidence not found");
 
@@ -79,9 +79,9 @@ public final class SandboxTriageAudit {
     }
 
     private Action fromRow(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new Action(rs.getObject("id",UUID.class),
-            rs.getObject("evidence_id",UUID.class),
-            rs.getObject("actor_staff_id",UUID.class),
+        return new Action(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "evidence_id"),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
             rs.getString("action_code"),
             rs.getTimestamp("created_at").toInstant());
     }

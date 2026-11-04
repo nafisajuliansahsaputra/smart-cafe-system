@@ -56,7 +56,7 @@ public class GameLoanService {
                   )
             ),0) AS available
             FROM physical_games g WHERE g.active=true ORDER BY g.name LIMIT 100
-            """, (rs,n)->new GameView(rs.getObject("id",UUID.class),
+            """, (rs,n)->new GameView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("name"),rs.getString("description"),rs.getInt("available")));
     }
 
@@ -155,7 +155,7 @@ public class GameLoanService {
               AND NOT EXISTS(SELECT 1 FROM physical_game_loans l
                   WHERE l.copy_id=c.id AND l.status IN ('ASSIGNED','IN_USE','RETURN_PENDING'))
             ORDER BY c.copy_code LIMIT 1 FOR UPDATE OF c SKIP LOCKED
-            """,rs->rs.next()?rs.getObject("id",UUID.class):null,loan.gameId());
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"):null,loan.gameId());
         if (copy==null) throw conflict("No available physical copy for this game");
         jdbc.update("""
             UPDATE physical_game_loans SET copy_id=?,status='ASSIGNED',
@@ -248,8 +248,8 @@ public class GameLoanService {
             SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
             FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
             ORDER BY g.name,c.copy_code LIMIT 250
-            """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
-                rs.getObject("game_id",UUID.class),rs.getString("name"),
+            """,(rs,n)->new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")));
     }
 
@@ -276,8 +276,8 @@ public class GameLoanService {
               AND (?='' OR c.condition=?)
             ORDER BY c.copy_code,c.id
             LIMIT ? OFFSET ?
-            """,(rs,n)->new CopyView(rs.getObject("id",UUID.class),
-                rs.getObject("game_id",UUID.class),rs.getString("name"),
+            """,(rs,n)->new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")),
             q,q,q,filter,filter,size+1,page*size);
         boolean hasNext=rows.size()>size && page<2000; // Never link beyond validated cap.
@@ -297,7 +297,7 @@ public class GameLoanService {
             JOIN staff_users s ON s.id=e.actor_id
             ORDER BY e.recorded_at DESC,e.id DESC LIMIT 100
             """,(rs,n)->new ConditionHistoryView(
-                rs.getObject("id",UUID.class),rs.getObject("copy_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "copy_id"),
                 rs.getString("name"),rs.getString("copy_code"),
                 rs.getString("before_condition"),rs.getString("after_condition"),
                 rs.getString("reason"),rs.getString("actor_login"),
@@ -334,7 +334,7 @@ public class GameLoanService {
             ORDER BY e.recorded_at DESC,e.id DESC
             LIMIT ? OFFSET ?
             """,(rs,n)->new ConditionHistoryView(
-                rs.getObject("id",UUID.class),rs.getObject("copy_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "copy_id"),
                 rs.getString("name"),rs.getString("copy_code"),
                 rs.getString("before_condition"),rs.getString("after_condition"),
                 rs.getString("reason"),rs.getString("actor_login"),
@@ -378,8 +378,8 @@ public class GameLoanService {
             SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
             FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
             WHERE c.id=?
-            """,rs->rs.next()?new CopyView(rs.getObject("id",UUID.class),
-                rs.getObject("game_id",UUID.class),rs.getString("name"),
+            """,rs->rs.next()?new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")):null,copyId);
     }
 
@@ -399,7 +399,7 @@ public class GameLoanService {
             SELECT game_id,copy_code,condition
             FROM physical_game_copies WHERE id=? FOR UPDATE
             """,rs->rs.next()?new RecoveryCopy(
-                rs.getObject("game_id",UUID.class),rs.getString("copy_code"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("copy_code"),
                 rs.getString("condition")):null,copyId);
         if (copy==null) throw missing();
         if (!"LOST".equals(copy.condition())) throw conflict("Copy is not marked LOST");
@@ -431,8 +431,8 @@ public class GameLoanService {
             SELECT c.id,c.game_id,g.name,c.copy_code,c.condition
             FROM physical_game_copies c JOIN physical_games g ON g.id=c.game_id
             WHERE c.id=?
-            """,rs->rs.next()?new CopyView(rs.getObject("id",UUID.class),
-                rs.getObject("game_id",UUID.class),rs.getString("name"),
+            """,rs->rs.next()?new CopyView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),rs.getString("name"),
                 rs.getString("copy_code"),rs.getString("condition")):null,copyId);
     }
 
@@ -533,10 +533,10 @@ public class GameLoanService {
             FROM physical_game_loans l
             LEFT JOIN physical_game_copies c ON c.id=l.copy_id
             WHERE l.id=? FOR UPDATE OF l
-            """,rs->rs.next()?new Loan(rs.getObject("id",UUID.class),
-                rs.getObject("visit_id",UUID.class),rs.getString("status"),
-                rs.getObject("game_id",UUID.class),rs.getObject("copy_id",UUID.class),
-                rs.getObject("guest_id",UUID.class),rs.getString("copy_code")):null,loanId);
+            """,rs->rs.next()?new Loan(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getString("status"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "copy_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "guest_id"),rs.getString("copy_code")):null,loanId);
     }
 
     private LoanView one(UUID loanId) {
@@ -549,7 +549,7 @@ public class GameLoanService {
             """,rs->rs.next()?map(rs):null,loanId);
     }
     private LoanView map(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new LoanView(rs.getObject("id",UUID.class),rs.getObject("game_id",UUID.class),
+        return new LoanView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "game_id"),
             rs.getString("name"),rs.getString("status"),rs.getString("table_code"),
             rs.getString("copy_code"),rs.getTimestamp("requested_at").toInstant());
     }

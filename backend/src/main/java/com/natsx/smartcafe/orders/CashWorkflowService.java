@@ -45,7 +45,7 @@ public class CashWorkflowService {
             JOIN table_visits v ON v.id=o.visit_id JOIN cafe_tables t ON t.id=v.table_id
             JOIN payment_intents p ON p.order_id=o.id
             ORDER BY o.created_at DESC LIMIT 100
-            """,(rs,n)->new OpsOrder(rs.getObject("id",UUID.class),rs.getString("table_code"),
+            """,(rs,n)->new OpsOrder(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("table_code"),
                 rs.getString("status"),rs.getString("aggregate_status"),rs.getLong("total_idr")));
     }
 
@@ -87,7 +87,7 @@ public class CashWorkflowService {
         var allocations=jdbc.query("""
             SELECT menu_item_id,quantity,released_at FROM order_stock_allocations
             WHERE order_id=? ORDER BY menu_item_id FOR UPDATE
-            """,(rs,n)->new StockAllocation(rs.getObject("menu_item_id",UUID.class),
+            """,(rs,n)->new StockAllocation(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "menu_item_id"),
                 rs.getInt("quantity"),rs.getTimestamp("released_at")),orderId);
         Integer lines=jdbc.queryForObject("SELECT count(*) FROM order_lines WHERE order_id=?",
             Integer.class,orderId);
@@ -126,8 +126,8 @@ public class CashWorkflowService {
             JOIN table_visits v ON v.id=o.visit_id JOIN cafe_tables t ON t.id=v.table_id
             WHERE k.status IN ('ACCEPTED','PREPARING','READY')
             ORDER BY k.admitted_at ASC LIMIT 100
-            """,(rs,n)->new TicketRowView(rs.getObject("id",UUID.class),
-                rs.getObject("order_id",UUID.class),rs.getString("table_code"),rs.getString("status")));
+            """,(rs,n)->new TicketRowView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("table_code"),rs.getString("status")));
         return tickets.stream().map(ticket->{
             var lines=jdbc.query("""
                 SELECT name_snapshot,quantity,notes,variant_snapshot->>'label' AS variant_label
@@ -166,8 +166,8 @@ public class CashWorkflowService {
                 WHEN 'PREPARING' THEN 0 WHEN 'ACCEPTED' THEN 1 ELSE 2 END,
                 k.admitted_at ASC,k.id ASC
             LIMIT ? OFFSET ?
-            """,(rs,n)->new TicketRowView(rs.getObject("id",UUID.class),
-                rs.getObject("order_id",UUID.class),rs.getString("table_code"),
+            """,(rs,n)->new TicketRowView(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("table_code"),
                 rs.getString("status")),KITCHEN_PAGE_SIZE+1,page*KITCHEN_PAGE_SIZE);
         boolean hasNext=rows.size()>KITCHEN_PAGE_SIZE;
         var selected=rows.subList(0,Math.min(KITCHEN_PAGE_SIZE,rows.size()));
@@ -326,27 +326,27 @@ public class CashWorkflowService {
 
     private TicketRow findTicket(UUID id) {
         return jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=?",
-            rs->rs.next()?new TicketRow(rs.getObject("id",UUID.class),
-                rs.getObject("order_id",UUID.class),rs.getString("status")):null,id);
+            rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
     }
     private TicketRow lockTicket(UUID id) {
         var found=jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=? FOR UPDATE",
-            rs->rs.next()?new TicketRow(rs.getObject("id",UUID.class),
-                rs.getObject("order_id",UUID.class),rs.getString("status")):null,id);
+            rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
         if(found==null)throw missing();
         return found;
     }
     private OrderRow lockOrder(UUID id) {
         var result=jdbc.query("SELECT id,status,visit_id,total_idr FROM orders WHERE id=? FOR UPDATE",
-            rs->rs.next()?new OrderRow(rs.getObject("id",UUID.class),rs.getString("status"),
-                rs.getObject("visit_id",UUID.class),rs.getLong("total_idr")):null,id);
+            rs->rs.next()?new OrderRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getLong("total_idr")):null,id);
         if(result==null)throw missing();
         return result;
     }
     private PaymentRow lockPaymentByOrder(UUID orderId) {
         var result=jdbc.query("""
             SELECT id,aggregate_status,amount_due_idr FROM payment_intents WHERE order_id=? FOR UPDATE
-            """,rs->rs.next()?new PaymentRow(rs.getObject("id",UUID.class),rs.getString("aggregate_status"),
+            """,rs->rs.next()?new PaymentRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("aggregate_status"),
                 rs.getLong("amount_due_idr")):null,orderId);
         if(result==null)throw missing();
         return result;

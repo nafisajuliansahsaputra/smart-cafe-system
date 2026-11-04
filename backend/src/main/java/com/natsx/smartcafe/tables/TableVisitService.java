@@ -180,7 +180,7 @@ public class TableVisitService {
     }
 
     private VisitRow readVisit(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new VisitRow(rs.getObject("id", UUID.class), rs.getString("status"),
+        return new VisitRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("status"),
             rs.getString("join_secret_hash"), rs.getTimestamp("join_proof_expires_at").toInstant());
     }
 

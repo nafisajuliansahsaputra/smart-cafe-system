@@ -27,7 +27,7 @@ public class GuestOrderDetailService {
             SELECT o.id,o.status,p.aggregate_status,p.method_selected,o.total_idr,o.created_at
             FROM orders o JOIN payment_intents p ON p.order_id=o.id
             WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
-            """,(rs,n)->new Order(rs.getObject("id",UUID.class),rs.getString("status"),
+            """,(rs,n)->new Order(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
                 rs.getString("aggregate_status"),rs.getString("method_selected"),rs.getLong("total_idr"),
                 rs.getTimestamp("created_at").toInstant()),
             orderId,guest.guestId(),guest.visitId());

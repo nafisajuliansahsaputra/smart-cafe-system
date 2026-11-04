@@ -68,7 +68,7 @@ public class OrderControlQueryService {
     }
 
     private List<QueueItem> readQueue(String sql, List<Object> arguments) {
-        return jdbc.query(sql, (rs,n) -> new QueueItem(rs.getObject("id", UUID.class),
+        return jdbc.query(sql, (rs,n) -> new QueueItem(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
             rs.getString("table_code"), rs.getString("status"),
             rs.getString("aggregate_status"), rs.getLong("total_idr"),
             rs.getTimestamp("created_at").toInstant()), arguments.toArray());
@@ -109,7 +109,7 @@ public class OrderControlQueryService {
             FROM orders o JOIN table_visits v ON v.id=o.visit_id
             JOIN cafe_tables t ON t.id=v.table_id
             JOIN payment_intents p ON p.order_id=o.id WHERE o.id=?
-            """,(rs,n)->new Base(rs.getObject("id",UUID.class),rs.getString("table_code"),
+            """,(rs,n)->new Base(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("table_code"),
                 rs.getString("status"),rs.getString("aggregate_status"),rs.getLong("subtotal_idr"),
                 rs.getLong("tax_idr"),rs.getLong("service_fee_idr"),rs.getLong("total_idr"),
                 rs.getString("method_selected"),rs.getTimestamp("created_at").toInstant()),id);

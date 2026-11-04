@@ -60,12 +60,12 @@ public class StaffTableQueryService {
             ORDER BY t.table_code,t.id
             LIMIT ? OFFSET ?
             """, (rs,n) -> {
-                UUID visitId = rs.getObject("visit_id", UUID.class);
-                UUID openerId = rs.getObject("opened_by", UUID.class);
+                UUID visitId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id");
+                UUID openerId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by");
                 boolean canManage = visitId != null
                     && (supervisor || staff.staffId().equals(openerId));
                 var expires = canManage ? rs.getTimestamp("join_proof_expires_at") : null;
-                return new TableRow(rs.getObject("id", UUID.class),
+                return new TableRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                     rs.getString("table_code"), rs.getString("public_alias"),
                     rs.getInt("capacity"), rs.getString("status"),
                     visitId != null, canManage ? visitId : null,
@@ -89,13 +89,13 @@ public class StaffTableQueryService {
             ORDER BY t.table_code,t.id
             LIMIT 250
             """, (rs,n) -> {
-                UUID visitId = rs.getObject("visit_id", UUID.class);
-                UUID openerId = rs.getObject("opened_by", UUID.class);
+                UUID visitId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id");
+                UUID openerId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by");
                 boolean canManage = visitId != null
                     && (supervisor || staff.staffId().equals(openerId));
                 var expires = canManage ? rs.getTimestamp("join_proof_expires_at") : null;
                 return new TableRow(
-                    rs.getObject("id", UUID.class), rs.getString("table_code"),
+                    com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("table_code"),
                     rs.getString("public_alias"), rs.getInt("capacity"),
                     rs.getString("status"), visitId != null,
                     canManage ? visitId : null,
