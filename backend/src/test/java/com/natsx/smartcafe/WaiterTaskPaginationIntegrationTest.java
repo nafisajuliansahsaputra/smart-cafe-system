@@ -181,12 +181,16 @@ class WaiterTaskPaginationIntegrationTest {
         Staff waiter = login("WAITER"), otherWaiter = login("WAITER");
         Staff cashier = login("CASHIER"), manager = login("MANAGER");
         Staff kitchen = login("KITCHEN"), admin = login("ADMIN");
+        // Both test methods share this class's Testcontainers database. Compare
+        // supervisors against the initial count instead of assuming no fixtures
+        // from the earlier 111-row pagination scenario are present.
+        int existingTasks = page(cashier.token(), 0).path("total").asInt();
         UUID[] visit = visit(waiter);
         readyOrders(visit[0], visit[1], 2);
         assertEquals(2, page(waiter.token(), 0).path("total").asInt());
         assertEquals(0, page(otherWaiter.token(), 0).path("total").asInt());
         for (Staff supervisor : new Staff[] {cashier,manager,admin}) {
-            assertEquals(2, page(supervisor.token(), 0).path("total").asInt());
+            assertEquals(existingTasks + 2, page(supervisor.token(), 0).path("total").asInt());
         }
         assertEquals(403, mvc.perform(get("/api/v1/waiter/orders/tasks/page")
             .header("Authorization", "Bearer " + kitchen.token()))
