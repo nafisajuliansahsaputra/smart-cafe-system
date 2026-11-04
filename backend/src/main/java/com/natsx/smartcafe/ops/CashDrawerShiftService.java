@@ -69,8 +69,8 @@ public class CashDrawerShiftService {
             WHERE h.cash_shift_id=? AND h.received_at IS NULL
             ORDER BY t.recorded_at,h.tender_id LIMIT 50
             """,(rs,n)->new PendingHandoff(
-                rs.getObject("tender_id",UUID.class),
-                rs.getObject("waiter_staff_id",UUID.class),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "tender_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "waiter_staff_id"),
                 rs.getString("login"),rs.getString("table_code"),
                 Math.subtractExact(rs.getLong("amount_received_idr"),
                     rs.getLong("change_given_idr")),
@@ -191,9 +191,9 @@ public class CashDrawerShiftService {
             FROM cash_tender_handoffs h
             JOIN cash_tenders t ON t.id=h.tender_id
             WHERE h.tender_id=? AND h.cash_shift_id=? FOR UPDATE OF h
-            """,(rs,n)->new HandoffRow(rs.getObject("cash_shift_id",UUID.class),
-                rs.getObject("waiter_staff_id",UUID.class),
-                rs.getObject("received_by",UUID.class),
+            """,(rs,n)->new HandoffRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "cash_shift_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "waiter_staff_id"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "received_by"),
                 rs.getTimestamp("received_at")==null?null:
                     rs.getTimestamp("received_at").toInstant(),
                 rs.getString("acknowledgment_key"),
@@ -238,10 +238,10 @@ public class CashDrawerShiftService {
 
     private Stored map(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
         Timestamp closed = rs.getTimestamp("closed_at");
-        return new Stored(rs.getObject("id", UUID.class),
-            rs.getObject("opened_by", UUID.class), rs.getTimestamp("opened_at").toInstant(),
+        return new Stored(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by"), rs.getTimestamp("opened_at").toInstant(),
             rs.getLong("opening_float_idr"), closed == null ? null : closed.toInstant(),
-            rs.getObject("closed_by", UUID.class),
+            com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "closed_by"),
             (Long)rs.getObject("recorded_cash_idr"),
             (Long)rs.getObject("expected_drawer_idr"),
             (Long)rs.getObject("counted_cash_idr"),
