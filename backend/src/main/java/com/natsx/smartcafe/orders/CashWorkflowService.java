@@ -310,12 +310,12 @@ public class CashWorkflowService {
         Boolean supervisor = jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM staff_role_assignments
                           WHERE staff_user_id=? AND role_key IN ('CASHIER','MANAGER','ADMIN'))
-            """, Boolean.class, staffId);
+            """, Boolean.class, dbUuid(staffId));
         if (Boolean.TRUE.equals(supervisor)) return;
         Boolean assigned = jdbc.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM orders o JOIN table_visits v ON v.id=o.visit_id
                           WHERE o.id=? AND v.opened_by=?)
-            """, Boolean.class, orderId, staffId);
+            """, Boolean.class, dbUuid(orderId), dbUuid(staffId));
         if (!Boolean.TRUE.equals(assigned)) {
             throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
                 "Waiter is not responsible for this visit");
@@ -325,19 +325,19 @@ public class CashWorkflowService {
     private TicketRow findTicket(UUID id) {
         return jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=?",
             rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,dbUuid(id));
     }
     private TicketRow lockTicket(UUID id) {
         var found=jdbc.query("SELECT id,order_id,status FROM kitchen_tickets WHERE id=? FOR UPDATE",
             rs->rs.next()?new TicketRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("status")):null,dbUuid(id));
         if(found==null)throw missing();
         return found;
     }
     private OrderRow lockOrder(UUID id) {
         var result=jdbc.query("SELECT id,status,visit_id,total_idr FROM orders WHERE id=? FOR UPDATE",
             rs->rs.next()?new OrderRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
-                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getLong("total_idr")):null,id);
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "visit_id"),rs.getLong("total_idr")):null,dbUuid(id));
         if(result==null)throw missing();
         return result;
     }
@@ -345,7 +345,7 @@ public class CashWorkflowService {
         var result=jdbc.query("""
             SELECT id,aggregate_status,amount_due_idr FROM payment_intents WHERE order_id=? FOR UPDATE
             """,rs->rs.next()?new PaymentRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("aggregate_status"),
-                rs.getLong("amount_due_idr")):null,orderId);
+                rs.getLong("amount_due_idr")):null,dbUuid(orderId));
         if(result==null)throw missing();
         return result;
     }
