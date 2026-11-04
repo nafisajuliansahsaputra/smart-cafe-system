@@ -138,6 +138,51 @@ public class CashWorkflowService {
         }).toList();
     }
 
+    public record KitchenPage(int page,int pageSize,long total,boolean hasNext,
+                              List<KitchenTicket> items) {}
+    private static final int KITCHEN_PAGE_SIZE=25;
+    private static final String KITCHEN_FROM = """
+        FROM kitchen_tickets k
+        JOIN orders o ON o.id=k.order_id
+        JOIN table_visits v ON v.id=o.visit_id
+        JOIN cafe_tables t ON t.id=v.table_id
+        WHERE k.status IN ('ACCEPTED','PREPARING','READY')
+        """;
+
+    /**
+     * PREPARING tickets must not be hidden by newer READY acknowledgments.
+     * ACCEPTED work follows, then READY. Oldest work wins within each lane.
+     * Every page and its count use one PostgreSQL repeatable-read snapshot.
+     */
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public KitchenPage kitchenPage(int page) {
+        if(page<0||page>1000) throw new ApiFailureException(HttpStatus.BAD_REQUEST,
+            "INVALID_INPUT","Invalid kitchen ticket page");
+        Long total=jdbc.queryForObject("SELECT count(*) " + KITCHEN_FROM,Long.class);
+        var rows=jdbc.query("""
+            SELECT k.id,k.order_id,t.table_code,k.status
+            """ + KITCHEN_FROM + """
+            ORDER BY CASE k.status
+                WHEN 'PREPARING' THEN 0 WHEN 'ACCEPTED' THEN 1 ELSE 2 END,
+                k.admitted_at ASC,k.id ASC
+            LIMIT ? OFFSET ?
+            """,(rs,n)->new TicketRowView(rs.getObject("id",UUID.class),
+                rs.getObject("order_id",UUID.class),rs.getString("table_code"),
+                rs.getString("status")),KITCHEN_PAGE_SIZE+1,page*KITCHEN_PAGE_SIZE);
+        boolean hasNext=rows.size()>KITCHEN_PAGE_SIZE;
+        var selected=rows.subList(0,Math.min(KITCHEN_PAGE_SIZE,rows.size()));
+        var items=selected.stream().map(ticket->{
+            var lines=jdbc.query("""
+                SELECT name_snapshot,quantity,notes,variant_snapshot->>'label' AS variant_label
+                FROM order_lines WHERE order_id=? ORDER BY name_snapshot
+                """,(rs,n)->new KitchenLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
+                rs.getString("notes"),rs.getString("variant_label")),ticket.orderId());
+            return new KitchenTicket(ticket.id(),ticket.orderId(),ticket.tableCode(),
+                ticket.status(),lines);
+        }).toList();
+        return new KitchenPage(page,KITCHEN_PAGE_SIZE,total==null?0:total,hasNext,items);
+    }
+
     private record TicketRowView(UUID id,UUID orderId,String tableCode,String status) {}
 
     @Transactional
