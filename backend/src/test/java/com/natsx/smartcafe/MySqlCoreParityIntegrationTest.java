@@ -41,7 +41,7 @@ class MySqlCoreParityIntegrationTest {
         // Never pick PostgreSQL's 31 migrations for a MySQL database.
         var flyway = Flyway.configure().dataSource(ds).locations("classpath:db/mysql").load();
         var result = flyway.migrate();
-        assertEquals(10, result.migrationsExecuted);
+        assertEquals(14, result.migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
     }
 
@@ -168,6 +168,62 @@ class MySqlCoreParityIntegrationTest {
                 INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
                 VALUES (?,?,?,?)
                 """, id(), item, "size", true));
+    }
+
+    @Test
+    void serializedGameCopiesCannotBeDoubleLoanedAndVisitRequestsAreUnique() {
+        String staff = newStaff();
+        String table1 = newTable();
+        String table2 = newTable();
+        String visit1 = newVisit(table1, staff);
+        String visit2 = newVisit(table2, staff);
+        String guest1 = id();
+        String guest2 = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest1, visit1, "Synthetic guest A");
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest2, visit2, "Synthetic guest B");
+        String game = id();
+        String copy = id();
+        jdbc.update("INSERT INTO physical_games(id,name) VALUES (?,?)",
+            game, "Synthetic game " + game);
+        jdbc.update("INSERT INTO physical_game_copies(id,game_id,copy_code) VALUES (?,?,?)",
+            copy, game, "CP-" + copy);
+
+        String waiting = id();
+        jdbc.update("""
+            INSERT INTO physical_game_loans(id,visit_id,guest_id,game_id)
+            VALUES (?,?,?,?)
+            """, waiting, visit1, guest1, game);
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+            INSERT INTO physical_game_loans(id,visit_id,guest_id,game_id)
+            VALUES (?,?,?,?)
+            """, id(), visit1, guest1, game));
+        jdbc.update("UPDATE physical_game_loans SET status='CANCELLED' WHERE id=?", waiting);
+
+        String assigned = id();
+        jdbc.update("""
+            INSERT INTO physical_game_loans(
+                id,visit_id,guest_id,game_id,copy_id,status,assigned_at)
+            VALUES (?,?,?,?,?,'ASSIGNED',CURRENT_TIMESTAMP(6))
+            """, assigned, visit1, guest1, game, copy);
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+            INSERT INTO physical_game_loans(
+                id,visit_id,guest_id,game_id,copy_id,status,assigned_at)
+            VALUES (?,?,?,?,?,'ASSIGNED',CURRENT_TIMESTAMP(6))
+            """, id(), visit2, guest2, game, copy));
+        jdbc.update("""
+            UPDATE physical_game_loans
+            SET status='RETURNED',
+                handed_over_at=CURRENT_TIMESTAMP(6),
+                returned_at=CURRENT_TIMESTAMP(6)
+            WHERE id=?
+            """, assigned);
+        jdbc.update("""
+            INSERT INTO physical_game_loans(
+                id,visit_id,guest_id,game_id,copy_id,status,assigned_at)
+            VALUES (?,?,?,?,?,'ASSIGNED',CURRENT_TIMESTAMP(6))
+            """, id(), visit2, guest2, game, copy);
     }
 
     @Test
