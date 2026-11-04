@@ -155,3 +155,28 @@ Passing this check confirms the *remote host prerequisites only*. It is not
 proof of MySQL application readiness, full V1-V31 Flyway migration, financial
 transaction parity, deployment authorization or unrestricted free uptime.
 Keep `MySqlPortReadinessGuard` in place until all those separate gates pass.
+
+## Hosted Aiven Free evidence and next test (2026-11-05 WIB)
+
+Owner-provided Windows output confirms a **Free-1-1gb** Aiven MySQL 8.4.11
+instance successfully passes hostname-verified CA/TLS connection, binary
+logging, `log_bin_trust_function_creators=1`, a scratch trigger
+creation/execution, strict payment-state CHECK enforcement and scratch
+database deletion. This proves **host prerequisites**, not full MySQL POS
+application parity.
+
+A dedicated **manual opt-in** Flyway remote rehearsal is now on the
+`feat/m8-host-mysql-preflight` stacked draft branch:
+
+- `scripts/test-aiven-flyway-windows.ps1` (local PowerShell prompt and
+  ephemeral process-environment password; no hosted CI credential);
+- `HostedAivenFlywayReview` (TLS-verified JDBC, random `scs_m8_*` schema,
+  actual V1–14 then V15–31 Flyway migration, validation and cleanup).
+
+**Status:** This hosted Flyway rehearsal has not yet been executed by
+the owner, nor has it passed on the actual Aiven database. The MySQL
+application startup guard remains in place; PostgreSQL app operation,
+real payment providers and portfolio are unchanged.
+
+Full details: [M8 hosted MySQL preflight](M8-HOSTED-MYSQL-PREFLIGHT.md).
+
