@@ -67,7 +67,7 @@ public final class SandboxDigitalAttemptService {
                 SELECT p.id,p.method_selected FROM payment_intents p
                 JOIN orders o ON o.id=p.order_id
                 WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
-                """,(rs,n)->new OwnedIntent(rs.getObject("id",UUID.class),
+                """,(rs,n)->new OwnedIntent(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                     rs.getString("method_selected")),
                 orderId,guest.guestId(),guest.visitId());
             if(ownership.isEmpty())throw new ApiFailureException(
@@ -84,7 +84,7 @@ public final class SandboxDigitalAttemptService {
                     String method=rs.getString("method");
                     String hint="QRIS".equals(method)?"FAKE_QRIS_NOT_PAYABLE":
                         "FAKE_VA_NOT_PAYABLE";
-                    return new Attempt(rs.getObject("id",UUID.class),orderId,
+                    return new Attempt(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),orderId,
                         method,rs.getLong("amount_idr"),
                         rs.getString("provider_reference"),rs.getString("state"),
                         rs.getTimestamp("expires_at").toInstant(),hint,
@@ -108,7 +108,7 @@ public final class SandboxDigitalAttemptService {
             JOIN table_visits v ON v.id=o.visit_id
             WHERE o.id=? AND o.guest_id=? AND o.visit_id=?
             FOR UPDATE OF p
-            """,(rs,n)->new Intent(rs.getObject("id",UUID.class),
+            """,(rs,n)->new Intent(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("method_selected"),rs.getString("aggregate_status"),
                 rs.getLong("amount_due_idr"),rs.getLong("amount_paid_idr"),
                 rs.getLong("total_idr"),rs.getString("currency"),
@@ -132,7 +132,7 @@ public final class SandboxDigitalAttemptService {
             SELECT id,method,amount_idr,provider_reference,state,expires_at
             FROM digital_payment_attempts
             WHERE payment_intent_id=? AND idempotency_key=?
-            """,(rs,n)->new Stored(rs.getObject("id",UUID.class),
+            """,(rs,n)->new Stored(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("method"),rs.getLong("amount_idr"),
                 rs.getString("provider_reference"),rs.getString("state"),
                 rs.getTimestamp("expires_at").toInstant()),
