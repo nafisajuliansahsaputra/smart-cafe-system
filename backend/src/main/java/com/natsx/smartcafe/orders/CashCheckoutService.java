@@ -92,7 +92,7 @@ public class CashCheckoutService {
             FROM order_idempotency i JOIN orders o ON o.id=i.order_id
             JOIN payment_intents p ON p.order_id=o.id
             WHERE i.actor_id=? AND i.scope='CASH_CHECKOUT' AND i.idempotency_key=?
-            """,(rs,n)->new Existing(rs.getObject("id",UUID.class),
+            """,(rs,n)->new Existing(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                 rs.getString("request_hash"),rs.getString("status"),rs.getLong("total_idr"),
                 rs.getString("aggregate_status")),guest.guestId(),key);
         if(!prior.isEmpty()) {
@@ -160,7 +160,7 @@ public class CashCheckoutService {
             FROM order_idempotency i JOIN orders o ON o.id=i.order_id
             JOIN payment_intents p ON p.order_id=o.id
             WHERE i.actor_id=? AND i.scope='CASH_CHECKOUT' AND i.idempotency_key=?
-            """, (rs,n)->new Existing(rs.getObject("order_id",UUID.class),rs.getString("request_hash"),
+            """, (rs,n)->new Existing(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),rs.getString("request_hash"),
                 rs.getString("status"),rs.getLong("total_idr"),rs.getString("aggregate_status")),
             guest.guestId(),key);
         if (!existing.isEmpty()) {
@@ -184,7 +184,7 @@ public class CashCheckoutService {
                 JOIN menu_categories c ON c.id=i.category_id
                 WHERE i.id=? AND i.availability='AVAILABLE' AND c.active=true
                 FOR SHARE OF i
-                """,(rs,n)->new MenuRow(rs.getObject("id",UUID.class),rs.getString("name"),
+                """,(rs,n)->new MenuRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
                     rs.getLong("base_price_idr")),line.menuItemId());
             if(found.isEmpty()) throw failure(HttpStatus.CONFLICT,"OUT_OF_STOCK",
                 "Item is unavailable");
@@ -270,7 +270,7 @@ public class CashCheckoutService {
             SELECT o.id,o.status,o.total_idr,p.aggregate_status FROM orders o
             JOIN payment_intents p ON p.order_id=o.id
             WHERE o.guest_id=? AND o.visit_id=? ORDER BY o.created_at DESC LIMIT 100
-            """,(rs,n)->new Checkout(rs.getObject("id",UUID.class),rs.getString("status"),
+            """,(rs,n)->new Checkout(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("status"),
                 rs.getString("aggregate_status"),rs.getLong("total_idr")),
             guest.guestId(),guest.visitId());
     }
