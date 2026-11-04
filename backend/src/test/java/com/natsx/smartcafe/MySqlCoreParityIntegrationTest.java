@@ -41,7 +41,7 @@ class MySqlCoreParityIntegrationTest {
         // Never pick PostgreSQL's 31 migrations for a MySQL database.
         var flyway = Flyway.configure().dataSource(ds).locations("classpath:db/mysql").load();
         var result = flyway.migrate();
-        assertEquals(14, result.migrationsExecuted);
+        assertEquals(31, result.migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
     }
 
@@ -224,6 +224,90 @@ class MySqlCoreParityIntegrationTest {
                 id,visit_id,guest_id,game_id,copy_id,status,assigned_at)
             VALUES (?,?,?,?,?,'ASSIGNED',CURRENT_TIMESTAMP(6))
             """, id(), visit2, guest2, game, copy);
+    }
+
+    @Test
+    void atMostOneActiveCashShiftAndClosedShiftIsImmutable() {
+        String staff = newStaff();
+        String first = id();
+        jdbc.update("""
+            INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
+            VALUES (?,?,?,?)
+            """, first, staff, 20000L, "open-" + first);
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+            INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
+            VALUES (?,?,?,?)
+            """, id(), staff, 30000L, "open-" + id()));
+
+        jdbc.update("""
+            UPDATE cash_drawer_shifts
+            SET closed_at=CURRENT_TIMESTAMP(6),closed_by=?,close_key=?,
+                counted_cash_idr=20000,recorded_cash_idr=0,
+                expected_drawer_idr=20000,difference_idr=0,closing_reason='test close'
+            WHERE id=?
+            """, staff, "close-" + first, first);
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE cash_drawer_shifts SET closing_reason='changed' WHERE id=?", first));
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("DELETE FROM cash_drawer_shifts WHERE id=?", first));
+        jdbc.update("""
+            INSERT INTO cash_drawer_shifts(id,opened_by,opening_float_idr,open_key)
+            VALUES (?,?,?,?)
+            """, id(), staff, 30000L, "open-" + id());
+    }
+
+    @Test
+    void fakeDigitalAttemptsCannotAttachToCashOrCreateDuplicatePendingCharges() {
+        String staff = newStaff();
+        String visit = newVisit(newTable(), staff);
+        String guest = id();
+        jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+            guest, visit, "Synthetic guest");
+        String order = id();
+        jdbc.update("""
+            INSERT INTO orders(id,visit_id,guest_id,subtotal_idr,total_idr,pricing_policy_version)
+            VALUES (?,?,?,?,?,?)
+            """, order, visit, guest, 35000L, 35000L, "test-v1");
+        String intent = id();
+        jdbc.update("""
+            INSERT INTO payment_intents(id,order_id,method_selected,amount_due_idr,aggregate_status)
+            VALUES (?,?,?,?,?)
+            """, intent, order, "CASH", 35000L, "AWAITING_CASH");
+
+        String fakeRef = "FAKE_" + id().replace("-", "");
+        String firstAttempt = id();
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+            INSERT INTO digital_payment_attempts(
+                id,payment_intent_id,method,provider_key,provider_reference,
+                idempotency_key,amount_idr,expires_at)
+            VALUES (?,?,?,?,?,?,?,DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 10 MINUTE))
+            """, firstAttempt, intent, "QRIS", "SANDBOX_FAKE", fakeRef,
+            "sandbox_fake_key_00001", 35000L));
+
+        jdbc.update("UPDATE payment_intents SET method_selected='QRIS',aggregate_status='PENDING' WHERE id=?",
+            intent);
+        jdbc.update("""
+            INSERT INTO digital_payment_attempts(
+                id,payment_intent_id,method,provider_key,provider_reference,
+                idempotency_key,amount_idr,expires_at)
+            VALUES (?,?,?,?,?,?,?,DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 10 MINUTE))
+            """, firstAttempt, intent, "QRIS", "SANDBOX_FAKE", fakeRef,
+            "sandbox_fake_key_00001", 35000L);
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+            INSERT INTO digital_payment_attempts(
+                id,payment_intent_id,method,provider_key,provider_reference,
+                idempotency_key,amount_idr,expires_at)
+            VALUES (?,?,?,?,?,?,?,DATE_ADD(CURRENT_TIMESTAMP(6),INTERVAL 10 MINUTE))
+            """, id(), intent, "QRIS", "SANDBOX_FAKE",
+            "FAKE_" + id().replace("-", ""), "sandbox_fake_key_00002", 35000L));
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE digital_payment_attempts SET state='SUCCEEDED' WHERE id=?",
+                firstAttempt));
+        jdbc.update("UPDATE digital_payment_attempts SET state='PENDING' WHERE id=?",
+            firstAttempt);
+        assertThrows(DataAccessException.class, () ->
+            jdbc.update("UPDATE digital_payment_attempts SET amount_idr=5 WHERE id=?",
+                firstAttempt));
     }
 
     @Test
