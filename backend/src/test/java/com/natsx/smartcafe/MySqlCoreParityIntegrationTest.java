@@ -33,6 +33,7 @@ class MySqlCoreParityIntegrationTest {
             .withPassword("test-only-local-mysql-pass");
 
     static JdbcTemplate jdbc;
+    static DriverManagerDataSource dataSource;
 
     @BeforeAll
     static void migrate() {
@@ -55,6 +56,7 @@ class MySqlCoreParityIntegrationTest {
         // Applying the current head a second time must be a no-op.
         assertEquals(0, upgraded.migrate().migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
+        dataSource = ds;
     }
 
     private static String id() {
@@ -95,6 +97,70 @@ class MySqlCoreParityIntegrationTest {
             WHERE id=?
             """, first);
         newVisit(table, staff);
+    }
+
+    @Test
+    void guestJoinThrottleRejectsTheTwentyFifthAttemptWithinSameTenMinuteWindow() {
+        // Exercise the real service's three HMAC buckets and transaction
+        // boundary, not merely the vendor SQL chosen by a unit test.
+        var limiter = new com.natsx.smartcafe.tables.GuestJoinThrottle(
+            jdbc, "synthetic-test-secret-32-plus-bytes-never-production");
+        var tx = new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        String alias = "throttle-" + UUID.randomUUID();
+        String client = "192.0.2.40";
+
+        for (int i = 0; i < 24; i++) {
+            assertEquals(Boolean.TRUE, tx.execute(status -> limiter.allow(alias, client)));
+        }
+        assertEquals(Boolean.FALSE, tx.execute(status -> limiter.allow(alias, client)));
+
+        // Only hashed buckets may be stored. The three rows should represent
+        // peer, table and pair, with no plain IP address or QR alias.
+        assertEquals(3, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM guest_join_throttles WHERE attempts > 0",
+            Integer.class));
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM guest_join_throttles WHERE bucket_hash LIKE ?",
+            Integer.class, "%192.0.2.40%"));
+    }
+
+    @Test
+    void guestJoinThrottleMySqlIncrementsResetsExpiredWindowAndPurges() {
+        var dialect = com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL;
+        var statement = com.natsx.smartcafe.common.db.JdbcSqlDialect.consumeGuestJoinThrottle(dialect);
+        String key = UUID.randomUUID().toString().replace("-", "") +
+            UUID.randomUUID().toString().replace("-", "");
+
+        jdbc.update(statement, key);
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+        jdbc.update(statement, key);
+        assertEquals(2, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+
+        // Simulate an expired fixed-window bucket. A new attempt must
+        // reset to one rather than carrying a stale lockout indefinitely.
+        jdbc.update("""
+            UPDATE guest_join_throttles
+            SET window_started_at=NOW(6)-INTERVAL 11 MINUTE
+            WHERE bucket_hash=?
+            """, key);
+        jdbc.update(statement, key);
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT attempts FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
+
+        jdbc.update("""
+            UPDATE guest_join_throttles
+            SET updated_at=NOW(6)-INTERVAL 3 DAY WHERE bucket_hash=?
+            """, key);
+        jdbc.update(com.natsx.smartcafe.common.db.JdbcSqlDialect.purgeGuestJoinThrottle(dialect));
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM guest_join_throttles WHERE bucket_hash=?",
+            Integer.class, key));
     }
 
     @Test

@@ -48,6 +48,56 @@ public final class JdbcSqlDialect {
     }
 
     /**
+     * Increment a fixed 10-minute guest-join bucket atomically.
+     *
+     * PostgreSQL can return the updated row from INSERT ... ON CONFLICT.
+     * MySQL needs a separate SELECT ... FOR UPDATE in the same transaction;
+     * the unique-key upsert itself serializes concurrent increments.
+     * Update attempts BEFORE window_started_at, preserving the previous
+     * window boundary for the expiry decision on MySQL.
+     */
+    public static String consumeGuestJoinThrottle(Vendor vendor) {
+        return switch (vendor) {
+            case POSTGRESQL -> """
+                INSERT INTO guest_join_throttles (bucket_hash,window_started_at,attempts,updated_at)
+                VALUES (?,now(),1,now())
+                ON CONFLICT (bucket_hash) DO UPDATE SET
+                  attempts = CASE
+                    WHEN guest_join_throttles.window_started_at <= now() - interval '10 minutes'
+                      THEN 1 ELSE guest_join_throttles.attempts + 1 END,
+                  window_started_at = CASE
+                    WHEN guest_join_throttles.window_started_at <= now() - interval '10 minutes'
+                      THEN now() ELSE guest_join_throttles.window_started_at END,
+                  updated_at=now()
+                RETURNING attempts
+                """;
+            case MYSQL -> """
+                INSERT INTO guest_join_throttles (bucket_hash,window_started_at,attempts,updated_at)
+                VALUES (?,NOW(6),1,NOW(6))
+                ON DUPLICATE KEY UPDATE
+                  attempts = IF(window_started_at <= NOW(6) - INTERVAL 10 MINUTE,
+                                1, attempts + 1),
+                  window_started_at = IF(window_started_at <= NOW(6) - INTERVAL 10 MINUTE,
+                                         NOW(6), window_started_at),
+                  updated_at = NOW(6)
+                """;
+        };
+    }
+
+    public static String purgeGuestJoinThrottle(Vendor vendor) {
+        return switch (vendor) {
+            case POSTGRESQL -> """
+                DELETE FROM guest_join_throttles
+                WHERE updated_at < now() - interval '2 days'
+                """;
+            case MYSQL -> """
+                DELETE FROM guest_join_throttles
+                WHERE updated_at < NOW(6) - INTERVAL 2 DAY
+                """;
+        };
+    }
+
+    /**
      * Never overwrite an existing cart's visit ID when an insert collides.
      * A new guest ID belongs to one visit only.
      */

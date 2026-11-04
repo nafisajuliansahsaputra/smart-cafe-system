@@ -43,6 +43,24 @@ class JdbcSqlDialectTest {
     }
 
     @Test
+    void guestJoinThrottleHasSafeDialectSpecificStatements() {
+        var mysql = JdbcSqlDialect.consumeGuestJoinThrottle(JdbcSqlDialect.Vendor.MYSQL);
+        assertTrue(mysql.contains("ON DUPLICATE KEY UPDATE"));
+        assertTrue(mysql.contains("INTERVAL 10 MINUTE"));
+        assertTrue(!mysql.contains("RETURNING attempts"));
+        assertTrue(!mysql.contains("INSERT IGNORE"));
+        assertTrue(JdbcSqlDialect.purgeGuestJoinThrottle(JdbcSqlDialect.Vendor.MYSQL)
+            .contains("INTERVAL 2 DAY"));
+
+        var postgres = JdbcSqlDialect.consumeGuestJoinThrottle(JdbcSqlDialect.Vendor.POSTGRESQL);
+        assertTrue(postgres.contains("ON CONFLICT (bucket_hash) DO UPDATE"));
+        assertTrue(postgres.contains("RETURNING attempts"));
+        assertTrue(postgres.contains("interval '10 minutes'"));
+        assertTrue(JdbcSqlDialect.purgeGuestJoinThrottle(JdbcSqlDialect.Vendor.POSTGRESQL)
+            .contains("interval '2 days'"));
+    }
+
+    @Test
     void postgresQueriesRemainIdentical() {
         assertEquals(
             "INSERT INTO staff_login_throttles(login_hash) VALUES (?) ON CONFLICT DO NOTHING",
