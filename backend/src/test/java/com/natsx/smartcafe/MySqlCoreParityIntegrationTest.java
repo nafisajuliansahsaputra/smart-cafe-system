@@ -22,8 +22,8 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class MySqlCoreParityIntegrationTest {
     @Container
-    static final MySQLContainer<?> mysql =
-        new MySQLContainer<>(DockerImageName.parse("mysql:8.4"))
+    static final MySQLContainer mysql =
+        new MySQLContainer(DockerImageName.parse("mysql:8.4"))
             .withDatabaseName("smart_cafe_mysql_test")
             .withUsername("cafe_test")
             .withPassword("test-only-local-mysql-pass");
