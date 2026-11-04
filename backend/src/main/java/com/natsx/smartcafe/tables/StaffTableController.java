@@ -9,6 +9,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,6 +20,15 @@ public class StaffTableController {
 
     public StaffTableController(StaffTableQueryService query) {
         this.query = query;
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<ApiEnvelope<StaffTableQueryService.TablePage>> listPage(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "") String q,
+        @AuthenticationPrincipal StaffPrincipal staff, HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiEnvelope.of(query.page(staff, page, q), RequestIdFilter.get(request)));
     }
 
     @GetMapping
