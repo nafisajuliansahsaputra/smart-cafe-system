@@ -8,7 +8,7 @@ CREATE TABLE live_order_signals (
   sequence_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   outbox_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
   order_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  event_type VARCHAR(120) NOT NULL,
+  event_type VARCHAR(120) COLLATE utf8mb4_bin NOT NULL,
   published_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   FOREIGN KEY (outbox_id) REFERENCES outbox_events(id),
   FOREIGN KEY (order_id) REFERENCES orders(id)
