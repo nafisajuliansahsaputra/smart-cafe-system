@@ -38,10 +38,22 @@ class MySqlCoreParityIntegrationTest {
     static void migrate() {
         DriverManagerDataSource ds = new DriverManagerDataSource(
             mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
-        // Never pick PostgreSQL's 31 migrations for a MySQL database.
-        var flyway = Flyway.configure().dataSource(ds).locations("classpath:db/mysql").load();
-        var result = flyway.migrate();
-        assertEquals(31, result.migrationsExecuted);
+        // A real staged upgrade, not a Flyway baseline shortcut:
+        // first deploy V1-V14, then migrate that same disposable database
+        // to V31. Both stages execute all scripts, retaining history.
+        // This covers a fresh database and a forward-only upgrade path.
+        var initial = Flyway.configure().dataSource(ds)
+            .locations("classpath:db/mysql")
+            .target("14")
+            .load();
+        assertEquals(14, initial.migrate().migrationsExecuted);
+
+        var upgraded = Flyway.configure().dataSource(ds)
+            .locations("classpath:db/mysql")
+            .load();
+        assertEquals(17, upgraded.migrate().migrationsExecuted);
+        // Applying the current head a second time must be a no-op.
+        assertEquals(0, upgraded.migrate().migrationsExecuted);
         jdbc = new JdbcTemplate(ds);
     }
 
@@ -83,6 +95,38 @@ class MySqlCoreParityIntegrationTest {
             WHERE id=?
             """, first);
         newVisit(table, staff);
+    }
+
+    @Test
+    void mySqlGuestJoinUsesSharedLockOnVisitAliasWithoutLockingPublicTable() {
+        String staff = newStaff();
+        String table = newTable();
+        String visit = newVisit(table, staff);
+
+        String visitId = jdbc.queryForObject("""
+            SELECT v.id
+            FROM cafe_tables t JOIN table_visits v ON v.table_id=t.id
+            WHERE t.public_alias=? AND v.status='ACTIVE'
+            FOR SHARE OF v
+            """, (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id").toString(),
+            "mysql-" + table);
+
+        assertEquals(visit, visitId);
+    }
+
+    @Test
+    void mySqlVisitForeignKeyReadsUuidThroughDialectAdapter() {
+        String staff = newStaff();
+        String table = newTable();
+        String visit = newVisit(table, staff);
+        UUID fromDb = jdbc.queryForObject(
+            "SELECT table_id FROM table_visits WHERE id=?",
+            (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"),
+            com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                UUID.fromString(visit),
+                com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc))
+        );
+        assertEquals(UUID.fromString(table), fromDb);
     }
 
     @Test
@@ -227,12 +271,14 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
-    void mysqlJdbcAcceptsApplicationUuidParameterAndReadAdapter() {
+    void mysqlUuidDialectParameterAndReadAdapterRoundTrip() {
         UUID userId = UUID.randomUUID();
         jdbc.update("""
             INSERT INTO staff_users(id,login,password_hash)
             VALUES (?,?,?)
-            """, userId, "uuid-" + userId, "synthetic-test-hash");
+            """, com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+                userId, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)),
+            "uuid-" + userId, "synthetic-test-hash");
         UUID fromDb = jdbc.queryForObject("""
             SELECT id FROM staff_users WHERE id=?
             """, (rs, n) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),

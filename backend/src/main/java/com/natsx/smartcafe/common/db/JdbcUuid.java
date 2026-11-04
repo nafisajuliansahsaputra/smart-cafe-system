@@ -34,6 +34,19 @@ public final class JdbcUuid {
         throw new SQLException("Unsupported UUID column representation", "22018");
     }
 
+    /**
+     * Bind UUID values using the database's actual storage type. MySQL
+     * Connector/J serializes a raw java.util.UUID when sent via setObject,
+     * which is NOT a valid CHAR(36) value. PostgreSQL requires its native UUID.
+     * A null remains null; this method never changes the UUID identity.
+     */
+    public static Object parameter(UUID value, JdbcSqlDialect.Vendor vendor) {
+        return switch (java.util.Objects.requireNonNull(vendor, "vendor")) {
+            case POSTGRESQL -> value;
+            case MYSQL -> value == null ? null : value.toString();
+        };
+    }
+
     private static UUID parse(String value) throws SQLException {
         try {
             // Reject malformed or shortened RFC-style representations.
