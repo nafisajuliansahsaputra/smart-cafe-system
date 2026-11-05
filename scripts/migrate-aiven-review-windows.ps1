@@ -10,9 +10,7 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
-    [string]$CaFile,
-
-    [string]$LoginPath = 'smartcafe_review'
+    [string]$CaFile
 )
 
 # One-time owner-local migration of scs_review_natsx only. Requires JDK 21,
@@ -25,7 +23,6 @@ $backend = Join-Path $root 'backend'
 $caPath = (Resolve-Path -LiteralPath $CaFile).Path
 $null = Get-Command java -ErrorAction Stop
 $maven = Get-Command mvn -ErrorAction Stop
-$mysql = Get-Command mysql -ErrorAction Stop
 if (-not (Test-Path (Join-Path $backend 'pom.xml'))) {
     throw 'Backend source was not found. Run this from the expected Git branch.'
 }
@@ -33,16 +30,7 @@ if (-not (Test-Path (Join-Path $backend 'src/test/java/com/natsx/smartcafe/Hoste
     throw 'HostedAivenPersistentReview.java is missing. Update to the review-migration branch.'
 }
 
-Write-Host 'Checking TLS-verified read-only Aiven MySQL connectivity ...'
-$mysqlArgs = @(
-    "--login-path=$LoginPath", "--host=$HostName", "--port=$Port",
-    '--ssl-mode=VERIFY_IDENTITY', "--ssl-ca=$caPath",
-    '--batch', '--skip-column-names', '-e', 'SELECT VERSION()'
-)
-& $mysql.Source @mysqlArgs
-if ($LASTEXITCODE -ne 0) {
-    throw 'Read-only MySQL connection failed. Database has NOT been modified.'
-}
+Write-Host 'The Java runner will verify Aiven TLS, schema identity and the absence of business records before any schema change.'
 
 Write-Host ''
 Write-Host 'TARGET: ONLY scs_review_natsx on this Aiven Free MySQL server.'
