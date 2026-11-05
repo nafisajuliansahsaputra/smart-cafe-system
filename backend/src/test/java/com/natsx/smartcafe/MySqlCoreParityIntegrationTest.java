@@ -100,6 +100,89 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlCatalogCrudStockCasAndVariantsWorkWithRealServices() {
+        String adminId=newStaff();
+        var actor=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(adminId),"synthetic-menu-admin","token",
+            java.util.Set.of("MANAGER"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        var audit=new com.natsx.smartcafe.audit.AuditTrail(jdbc);
+        var catalog=new com.natsx.smartcafe.catalog.CatalogAdminService(
+            jdbc,new com.natsx.smartcafe.catalog.CatalogImagePolicy(""));
+        var stock=new com.natsx.smartcafe.catalog.MenuAvailabilityService(jdbc);
+        var variants=new com.natsx.smartcafe.catalog.VariantCatalogService(jdbc,audit);
+        var pricing=new com.natsx.smartcafe.catalog.VariantPricingService(jdbc);
+        String suffix=id();
+        var category=tx.execute(status->catalog.createCategory(
+            "Test beverages "+suffix,"mysql-drinks-"+suffix,actor,"create-category"));
+        assertEquals(true,category.active());
+        var hidden=tx.execute(status->catalog.createItem(
+            category.id(),"Test Latte "+suffix,25000L,"Initial description",null,
+            actor,"create-menu-item"));
+        assertEquals("HIDDEN",hidden.availability());
+        assertEquals(1L,hidden.revision());
+        assertEquals(category.id(),hidden.categoryId());
+
+        var visible=tx.execute(status->catalog.changeItem(
+            hidden.id(),category.id(),"Updated Latte "+suffix,28000L,"AVAILABLE",
+            hidden.revision(),"New description","",actor,"show-menu-item"));
+        assertEquals(2L,visible.revision());
+        assertEquals(28000L,visible.priceIdr());
+        assertEquals(null,visible.imageUrl());
+        assertEquals("New description",visible.description());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->catalog.changeItem(
+                hidden.id(),category.id(),"Stale Price",10L,"AVAILABLE",
+                hidden.revision(),null,null,actor,"stale-revision")));
+        assertEquals(2L,catalog.detail(hidden.id()).revision());
+
+        var quantity=stock.current(hidden.id());
+        var limited=tx.execute(status->stock.set(hidden.id(),true,3L,
+            quantity.version(),"Synthetic stock limit",actor,"stock-3"));
+        assertEquals(3L,limited.limitedQuantity());
+        assertEquals(quantity.version()+1,limited.version());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->stock.set(hidden.id(),false,0L,
+                quantity.version(),"Stale stock edit",actor,"stale-stock")));
+        assertEquals(3L,stock.current(hidden.id()).limitedQuantity());
+
+        var group=tx.execute(status->variants.createGroup(
+            hidden.id(),"Milk option",false,actor,"create-variant-group"));
+        assertEquals(1,variants.adminGroups(hidden.id()).size());
+        var option=tx.execute(status->variants.createOption(
+            group.id(),"oat","Oat milk",3000L,actor,"create-oat"));
+        assertEquals("oat",option.key());
+        var newOption=tx.execute(status->variants.editOption(
+            option.id(),"Oat Milk",4000L,true,option.revision(),
+            actor,"change-oat-price"));
+        assertEquals(2L,newOption.revision());
+        assertEquals(4000L,newOption.priceDeltaIdr());
+        var required=tx.execute(status->variants.editGroup(
+            group.id(),"Milk choice",true,true,group.revision(),
+            actor,"make-variant-required"));
+        assertEquals(true,required.required());
+        assertEquals(1,variants.publicGroups(hidden.id()).size());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->pricing.resolveSelections(hidden.id(),java.util.List.of())));
+        var selection=tx.execute(status->pricing.resolveSelections(
+            hidden.id(),java.util.List.of(option.id())));
+        assertEquals(4000L,selection.totalDeltaIdr());
+        assertEquals(1,selection.choices().size());
+
+        var disabled=tx.execute(status->catalog.setCategoryActive(
+            category.id(),false,actor,"hide-category"));
+        assertEquals(false,disabled.active());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->variants.publicGroups(hidden.id()));
+        assertEquals(3L,stock.current(hidden.id()).limitedQuantity());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_logs WHERE resource_type='MENU_ITEM'
+              AND resource_id=? AND operation='MENU_STOCK_UPDATED'
+            """,Integer.class,hidden.id().toString()));
+    }
+
+    @Test
     void mysqlSingleUseAdminBootstrapUsesDurableRoleRowForTransactionLock() {
         var managerId=UUID.randomUUID();
         var tx=new org.springframework.transaction.support.TransactionTemplate(
