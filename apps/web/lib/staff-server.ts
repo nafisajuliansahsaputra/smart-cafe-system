@@ -59,7 +59,12 @@ export async function staffApi(
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(6000),
+      // The synthetic Aiven container may take ~20 seconds to cold-start.
+      // Production and local systems retain the tighter default deadline.
+      signal: AbortSignal.timeout(
+        process.env.VERCEL_ENV === "preview" && process.env.API_INTERNAL_URL
+          ? 30000 : 6000,
+      ),
     });
     let payload: unknown;
     try {
