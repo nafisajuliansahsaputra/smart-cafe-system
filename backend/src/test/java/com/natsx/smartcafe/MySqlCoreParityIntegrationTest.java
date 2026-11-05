@@ -100,6 +100,35 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlSingleUseAdminBootstrapUsesDurableRoleRowForTransactionLock() {
+        var managerId=UUID.randomUUID();
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        tx.executeWithoutResult(status->{
+            assertEquals(true,org.springframework.transaction.support.
+                TransactionSynchronizationManager.isActualTransactionActive());
+            assertEquals("ADMIN",jdbc.queryForObject("""
+                SELECT role_key FROM staff_roles WHERE role_key='ADMIN' FOR UPDATE
+                """,String.class));
+            var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+            Object idValue=com.natsx.smartcafe.common.db.JdbcUuid.parameter(managerId,vendor);
+            jdbc.update("""
+                INSERT INTO staff_users(id,login,password_hash)
+                VALUES (?,?,?)
+                """,idValue,"bootstrap-"+managerId.toString().substring(0,8),
+                "synthetic-only-hash");
+            jdbc.update("""
+                INSERT INTO staff_role_assignments(staff_user_id,role_key)
+                VALUES (?,'ADMIN')
+                """,idValue);
+        });
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM staff_role_assignments
+            WHERE staff_user_id=? AND role_key='ADMIN'
+            """,Integer.class,managerId.toString()));
+    }
+
+    @Test
     void mySqlPhysicalTableRegistrationJoinRotationAndVisitClosureAreConsistent() {
         String waiter = newStaff();
         jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
