@@ -64,12 +64,14 @@ public class StaffTableQueryService {
                 UUID openerId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by");
                 boolean canManage = visitId != null
                     && (supervisor || staff.staffId().equals(openerId));
-                var expires = canManage ? rs.getTimestamp("join_proof_expires_at") : null;
+                java.time.Instant expires = canManage
+                    ? com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                        rs.getObject("join_proof_expires_at")) : null;
                 return new TableRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
                     rs.getString("table_code"), rs.getString("public_alias"),
                     rs.getInt("capacity"), rs.getString("status"),
                     visitId != null, canManage ? visitId : null,
-                    expires == null ? null : expires.toInstant());
+                    expires);
             }, keyword, keyword, keyword, PAGE_SIZE + 1, page * PAGE_SIZE);
         boolean hasNext = rows.size() > PAGE_SIZE;
         return new TablePage(page, PAGE_SIZE, hasNext, count == null ? 0 : count,
@@ -93,13 +95,15 @@ public class StaffTableQueryService {
                 UUID openerId = com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "opened_by");
                 boolean canManage = visitId != null
                     && (supervisor || staff.staffId().equals(openerId));
-                var expires = canManage ? rs.getTimestamp("join_proof_expires_at") : null;
+                java.time.Instant expires = canManage
+                    ? com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                        rs.getObject("join_proof_expires_at")) : null;
                 return new TableRow(
                     com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("table_code"),
                     rs.getString("public_alias"), rs.getInt("capacity"),
                     rs.getString("status"), visitId != null,
                     canManage ? visitId : null,
-                    expires == null ? null : expires.toInstant());
+                    expires);
             });
     }
 }
