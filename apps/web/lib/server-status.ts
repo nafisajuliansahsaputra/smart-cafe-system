@@ -11,7 +11,11 @@ export async function fetchSystemStatus(): Promise<ApiStatus | null> {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // Status code only. Never emit upstream URL, response body or headers.
+      console.warn("SCS_REVIEW_STATUS_UPSTREAM_HTTP", response.status);
+      return null;
+    }
     const envelope: unknown = await response.json();
     if (
       typeof envelope !== "object" ||
@@ -38,7 +42,11 @@ export async function fetchSystemStatus(): Promise<ApiStatus | null> {
       database: data.database,
       configuredTables: data.configuredTables,
     };
-  } catch {
+  } catch (error) {
+    // Error CLASS only, never error.message which may contain the URL.
+    console.warn("SCS_REVIEW_STATUS_UPSTREAM_EXCEPTION",
+      error instanceof Error ? error.name : "unknown",
+      process.env.API_INTERNAL_URL ? "configured" : "missing");
     return null;
   }
 }
