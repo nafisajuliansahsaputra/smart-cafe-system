@@ -31,4 +31,9 @@ if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
     java -cp '/app/scs-review-diagnostic:/app/scs-review-mysql-driver.jar' \
       ReviewMySqlPreflight
 fi
+# Fast startup only for the isolated, strictly verified Aiven review.
+# Other deployments retain their original JVM settings.
+if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    exec java -XX:TieredStopAtLevel=1 -jar /app/app.jar
+fi
 exec java -jar /app/app.jar
