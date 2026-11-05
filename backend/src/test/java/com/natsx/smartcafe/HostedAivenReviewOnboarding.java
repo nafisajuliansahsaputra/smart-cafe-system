@@ -137,15 +137,33 @@ final class HostedAivenReviewOnboarding {
                     item(con,tea,"Lemon Tea",22000,"Teh lemon dingin.");
                     item(con,pastry,"Butter Croissant",24000,"Croissant mentega.");
                     item(con,pastry,"Chocolate Croissant",29000,"Croissant cokelat.");
+                    String chess=UUID.randomUUID().toString();
+                    String cards=UUID.randomUUID().toString();
+                    insert(con,"INSERT INTO physical_games(id,name,description,active) "
+                        +"VALUES (?,?,?,true)",chess,"Catur","Permainan strategi dua pemain.");
+                    insert(con,"INSERT INTO physical_games(id,name,description,active) "
+                        +"VALUES (?,?,?,true)",cards,"Kartu Warna","Permainan kartu keluarga.");
+                    for (String code : List.of("CHESS-01")) {
+                        insert(con,"INSERT INTO physical_game_copies "
+                            +"(id,game_id,copy_code) VALUES (?,?,?)",
+                            UUID.randomUUID().toString(),chess,code);
+                    }
+                    for (String code : List.of("CARDS-01","CARDS-02")) {
+                        insert(con,"INSERT INTO physical_game_copies "
+                            +"(id,game_id,copy_code) VALUES (?,?,?)",
+                            UUID.randomUUID().toString(),cards,code);
+                    }
                     assertEquals(1,count(con,"SELECT COUNT(*) FROM staff_users"));
                     assertEquals(1,count(con,
                         "SELECT COUNT(*) FROM staff_role_assignments WHERE role_key='ADMIN'"));
                     assertEquals(5,count(con,"SELECT COUNT(*) FROM cafe_tables"));
                     assertEquals(3,count(con,"SELECT COUNT(*) FROM menu_categories"));
                     assertEquals(7,count(con,"SELECT COUNT(*) FROM menu_items"));
+                    assertEquals(2,count(con,"SELECT COUNT(*) FROM physical_games"));
+                    assertEquals(3,count(con,"SELECT COUNT(*) FROM physical_game_copies"));
                     con.commit();
                     System.out.println("PASS: synthetic review administrator and 5 tables, "
-                        + "3 categories, 7 items created. Real payments remain disabled.");
+                        + "3 categories, 7 items, 2 games, 3 game copies created. Real payments remain disabled.");
                 } catch (Exception | Error ex) {
                     con.rollback();
                     throw ex;
