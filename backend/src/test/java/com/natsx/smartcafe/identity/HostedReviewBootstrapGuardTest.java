@@ -155,12 +155,12 @@ class HostedReviewBootstrapGuardTest {
             assertThrows(IllegalStateException.class,
                 ()->check(vars,AIVEN_URL),key);
         }
-        var wrong=mysqlEnv();
-        wrong.put("SCS_FLYWAY_LOCATIONS","classpath:db/migration");
-        assertThrows(IllegalStateException.class,()->check(wrong,AIVEN_URL));
-        wrong=mysqlEnv();
-        wrong.put("SCS_PAYMENT_ENVIRONMENT","production");
-        assertThrows(IllegalStateException.class,()->check(wrong,AIVEN_URL));
+        var wrongMigration=mysqlEnv();
+        wrongMigration.put("SCS_FLYWAY_LOCATIONS","classpath:db/migration");
+        assertThrows(IllegalStateException.class,()->check(wrongMigration,AIVEN_URL));
+        var wrongPayment=mysqlEnv();
+        wrongPayment.put("SCS_PAYMENT_ENVIRONMENT","production");
+        assertThrows(IllegalStateException.class,()->check(wrongPayment,AIVEN_URL));
     }
 
     @Test
