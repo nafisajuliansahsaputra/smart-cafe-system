@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Single-use bootstrap on an EMPTY dedicated Neon review database only.
+ * Single-use bootstrap on an EMPTY, isolated Neon or Aiven review database.
  * Turn the profile OFF and REMOVE both credentials immediately after the
  * first successful deploy, before any regular public review traffic.
  */
@@ -46,8 +46,22 @@ public final class HostedReviewAdminBootstrap implements ApplicationRunner {
         HostedReviewBootstrapGuard.requireSafeConfiguration(
             System.getenv(), environment.getActiveProfiles(), runtime);
 
-        // Prevent simultaneous replicas from seeing zero users independently.
-        jdbc.execute("SELECT pg_advisory_xact_lock(872646211)");
+        // Serialize competing initializers on a guaranteed, permanent
+        // ADMIN role row (provisioned by Flyway V1) on MySQL. The InnoDB
+        // FOR UPDATE lock persists through this transaction's commit,
+        // unlike a pooled-connection GET_LOCK. Preserve PostgreSQL's original
+        // transaction-scoped advisory lock for Neon.
+        var vendor = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        if (vendor == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL) {
+            String lockedRole = jdbc.queryForObject(
+                "SELECT role_key FROM staff_roles WHERE role_key='ADMIN' FOR UPDATE",
+                String.class);
+            if (!"ADMIN".equals(lockedRole)) {
+                throw new IllegalStateException("Admin role was not migrated");
+            }
+        } else {
+            jdbc.execute("SELECT pg_advisory_xact_lock(872646211)");
+        }
         Long users = jdbc.queryForObject("SELECT count(*) FROM staff_users", Long.class);
         if (users == null || users != 0L) {
             throw new IllegalStateException(
@@ -58,10 +72,11 @@ public final class HostedReviewAdminBootstrap implements ApplicationRunner {
         String login = System.getenv("SCS_REVIEW_BOOTSTRAP_USERNAME")
             .toLowerCase(Locale.ROOT);
         String hash = encoder.encode(System.getenv("SCS_REVIEW_BOOTSTRAP_PASSWORD"));
+        Object key = com.natsx.smartcafe.common.db.JdbcUuid.parameter(id,vendor);
         jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
-            id, login, hash);
+            key, login, hash);
         jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,'ADMIN')",
-            id);
+            key);
         // Never write login, password, hash, ID or database URL to logs.
     }
 }
