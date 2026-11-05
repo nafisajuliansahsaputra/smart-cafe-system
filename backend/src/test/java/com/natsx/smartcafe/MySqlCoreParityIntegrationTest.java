@@ -100,6 +100,71 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlCashVarianceManagerInvestigationAndWibReportsPreserveLedger() {
+        String cashierId=newStaff();
+        String managerId=newStaff();
+        var cashier=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(cashierId),"synthetic-cashier","hash",java.util.Set.of("CASHIER"));
+        var manager=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(managerId),"synthetic-manager","hash",java.util.Set.of("MANAGER"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        var shifts=new com.natsx.smartcafe.ops.CashDrawerShiftService(jdbc);
+        var variance=new com.natsx.smartcafe.ops.CashVarianceReviewService(jdbc);
+        var daily=new com.natsx.smartcafe.ops.DailyCashReportService(jdbc);
+        var ledger=new com.natsx.smartcafe.ops.CashReceiptLedgerService(jdbc);
+
+        var opened=tx.execute(status->shifts.open(
+            cashier,50000L,"open-"+id(),"variance-open"));
+        var closed=tx.execute(status->shifts.close(
+            opened.id(),cashier,48000L,"close-"+id(),
+            "Synthetic cash drawer recount required","variance-close"));
+        assertEquals("CLOSED",closed.state());
+        assertEquals(-2000L,closed.differenceIdr());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->variance.cases(cashier,0));
+
+        var cases=variance.cases(manager,0).items();
+        var found=cases.stream().filter(entry->entry.shiftId().equals(opened.id()))
+            .findFirst().orElseThrow();
+        assertEquals(-2000L,found.differenceIdr());
+        String key="review-"+id();
+        var first=tx.execute(status->variance.add(manager,opened.id(),
+            "REQUEST_RECOUNT","Recount requested; synthetic cash mismatch",
+            key,"variance-review-created"));
+        assertEquals("REQUEST_RECOUNT",first.actionCode());
+        var replay=tx.execute(status->variance.add(manager,opened.id(),
+            "REQUEST_RECOUNT","Recount requested; synthetic cash mismatch",
+            key,"variance-review-replay"));
+        assertEquals(first.id(),replay.id());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->variance.add(manager,opened.id(),
+                "DOCUMENT_EVIDENCE","Different evidence cannot reuse the key",
+                key,"variance-review-key-conflict")));
+        assertEquals(1,variance.history(manager,opened.id()).size());
+        assertEquals(first.id(),variance.history(manager,opened.id()).getFirst().id());
+        assertEquals("REQUEST_RECOUNT",variance.cases(manager,0).items().stream()
+            .filter(entry->entry.shiftId().equals(opened.id()))
+            .findFirst().orElseThrow().latestAction());
+
+        String today=java.time.LocalDate.now(
+            java.time.ZoneId.of("Asia/Jakarta")).toString();
+        var report=daily.daily(today);
+        assertEquals("Asia/Jakarta",report.timezone());
+        assertEquals("IDR",report.currency());
+        assertEquals(true,report.grossCollectedIdr()>=0L);
+        var receipts=ledger.byDay(today,"0");
+        assertEquals(today,receipts.date());
+        assertEquals("IDR",receipts.currency());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->ledger.byDay(today,"-1"));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_logs
+            WHERE operation='CASH_VARIANCE_REVIEW' AND resource_id=?
+            """,Integer.class,opened.id().toString()));
+    }
+
+    @Test
     void mysqlStaffProvisionActivationPasswordRotationAndAuditRemainRevocable() {
         String adminId=newStaff();
         var admin=new com.natsx.smartcafe.identity.StaffPrincipal(
