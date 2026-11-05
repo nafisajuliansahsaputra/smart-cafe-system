@@ -43,35 +43,25 @@ public final class ReviewMySqlPreflight {
                 +"WHERE trigger_schema=DATABASE() AND trigger_name='order_snapshot_no_update'");
             long receiptsRows=receiptsTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM receipts");
-            long countedBusinessTables=0;
-            long nonEmptyBusinessTables=0;
-            try (PreparedStatement names=connection.prepareStatement(
-                    "SELECT table_name FROM information_schema.tables "
-                    +"WHERE table_schema=DATABASE() AND table_type='BASE TABLE' "
-                    +"AND table_name NOT IN ('flyway_schema_history','staff_roles')");
-                 ResultSet tables=names.executeQuery()) {
-                while(tables.next()) {
-                    String table=tables.getString(1);
-                    if (!table.matches("[a-z][a-z0-9_]*")) {
-                        throw new IllegalStateException("Unexpected review SQL table identifier");
-                    }
-                    countedBusinessTables++;
-                    if (scalar(connection,"SELECT COUNT(*) FROM `"+table+"`")>0) {
-                        nonEmptyBusinessTables++;
-                    }
-                }
-            }
             long applied=historyTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1");
             long failed=historyTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success=0");
             long failedV4=historyTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE version='4' AND success=0");
+            // This preflight runs on every Vercel cold start. Never scan all
+            // business tables over the network: the 31 Flyway migrations were
+            // verified in an explicit owner-local, data-safe recovery.
+            // Fail closed unless the fixed isolated review schema is complete.
+            if (historyTable!=1 || applied!=31 || failed!=0 || failedV4!=0
+                || receiptsTable!=1 || receiptUpdateTrigger!=1
+                || receiptDeleteTrigger!=1 || orderSnapshotTrigger!=1) {
+                throw new IllegalStateException(
+                    "Isolated review schema must be fully migrated to V31");
+            }
             System.out.printf(
-                "%s historyTable=%d applied=%d failed=%d failedV4=%d receipts=%d receiptRows=%d businessTables=%d nonEmptyBusinessTables=%d receiptUpdateTrigger=%d receiptDeleteTrigger=%d orderSnapshotTrigger=%d%n",
-                PREFIX,historyTable,applied,failed,failedV4,receiptsTable,
-                receiptsRows,countedBusinessTables,nonEmptyBusinessTables,
-                receiptUpdateTrigger,receiptDeleteTrigger,orderSnapshotTrigger);
+                "%s applied=%d failed=%d v31_verified=true receiptRows=%d%n",
+                PREFIX,applied,failed,receiptsRows);
         } catch (SQLException ex) {
             // Never print a driver exception: it can contain the whole JDBC URL.
             System.err.println(PREFIX+" connection_or_read_error");
