@@ -64,7 +64,7 @@ public class TableVisitService {
         jdbc.update("""
             INSERT INTO table_visits(id,table_id,status,opened_by,join_secret_hash,join_proof_expires_at)
             VALUES (?,?,'ACTIVE',?,?,?)
-            """, dbUuid(id), dbUuid(tableId), dbUuid(staffId), SecureToken.sha256(proof), Timestamp.from(expires));
+            """, dbUuid(id), dbUuid(tableId), dbUuid(staffId), SecureToken.sha256(proof), dbUtc(expires));
         audit.staff(staffId, "TABLE_VISIT_OPENED", "TABLE_VISIT", id, requestId);
         outbox.tableVisit(id, "TABLE_VISIT_OPENED");
         return new VisitOpened(id, tableId, proof, expires);
@@ -84,7 +84,7 @@ public class TableVisitService {
         jdbc.update("""
             UPDATE table_visits SET join_secret_hash=?,join_proof_expires_at=?,
                 rotation_version=rotation_version+1,version=version+1 WHERE id=?
-            """, SecureToken.sha256(proof), Timestamp.from(expires), dbUuid(visitId));
+            """, SecureToken.sha256(proof), dbUtc(expires), dbUuid(visitId));
         UUID tableId = jdbc.queryForObject("SELECT table_id FROM table_visits WHERE id=?",
             (rs, row) -> com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "table_id"), dbUuid(visitId));
         audit.staff(staffId, "TABLE_JOIN_PROOF_ROTATED", "TABLE_VISIT", visitId, requestId);
@@ -99,8 +99,10 @@ public class TableVisitService {
             SELECT v.id,v.status,v.join_secret_hash,v.join_proof_expires_at
             FROM cafe_tables t JOIN table_visits v ON v.table_id=t.id
             WHERE t.public_alias=? AND v.status='ACTIVE'
-            FOR SHARE OF v
-            """, rs -> rs.next() ? readVisit(rs) : null, alias);
+            """ + (com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+                == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+                ? " FOR SHARE" : " FOR SHARE OF v"),
+            rs -> rs.next() ? readVisit(rs) : null, alias);
         if (visit == null || visit.proofExpiresAt().isBefore(Instant.now())) throw missing();
         byte[] supplied = SecureToken.sha256(joinProof).getBytes(StandardCharsets.US_ASCII);
         byte[] stored = visit.proofHash().getBytes(StandardCharsets.US_ASCII);
@@ -159,8 +161,8 @@ public class TableVisitService {
         if (Boolean.TRUE.equals(borrowed)) {
             throw conflict("Visit has an outstanding physical game loan");
         }
-        jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=now(),version=version+1 WHERE id=?", dbUuid(visitId));
-        jdbc.update("UPDATE guest_sessions SET revoked_at=now() WHERE visit_id=? AND revoked_at IS NULL", dbUuid(visitId));
+        jdbc.update("UPDATE table_visits SET status='CLOSED',closed_at=" + dbNow() + ",version=version+1 WHERE id=?", dbUuid(visitId));
+        jdbc.update("UPDATE guest_sessions SET revoked_at=" + dbNow() + " WHERE visit_id=? AND revoked_at IS NULL", dbUuid(visitId));
         audit.staff(staffId, "TABLE_VISIT_CLOSED", "TABLE_VISIT", visitId, requestId);
         outbox.tableVisit(visitId, "TABLE_VISIT_CLOSED");
     }
@@ -186,9 +188,23 @@ public class TableVisitService {
             value, com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
+    private Object dbUtc(Instant value) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? java.time.LocalDateTime.ofInstant(value, java.time.ZoneOffset.UTC)
+            : Timestamp.from(value);
+    }
+
+    private String dbNow() {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "UTC_TIMESTAMP(6)" : "now()";
+    }
+
     private VisitRow readVisit(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new VisitRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("status"),
-            rs.getString("join_secret_hash"), rs.getTimestamp("join_proof_expires_at").toInstant());
+            rs.getString("join_secret_hash"),
+            com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(rs.getObject("join_proof_expires_at")));
     }
 
     private ApiFailureException missing() {
