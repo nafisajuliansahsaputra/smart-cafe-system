@@ -59,9 +59,12 @@ public class AuditReviewService {
         params.add(PAGE_SIZE + 1);
         params.add(offset);
         List<AuditRow> rows = jdbc.query(sql, (rs, index) ->
-            new AuditRow(rs.getObject("id", UUID.class), rs.getString("operation"),
-                rs.getString("resource_type"), rs.getObject("resource_id", UUID.class),
-                rs.getString("actor_display"), rs.getTimestamp("occurred_at").toInstant()),
+            new AuditRow(com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"),
+                rs.getString("operation"),rs.getString("resource_type"),
+                com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"resource_id"),
+                rs.getString("actor_display"),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("occurred_at"))),
             params.toArray());
         boolean hasNext = rows.size() > PAGE_SIZE;
         return new AuditPage(page, PAGE_SIZE, hasNext,
