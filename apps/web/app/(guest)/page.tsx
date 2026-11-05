@@ -53,7 +53,7 @@ export default async function HomePage({
               <Link href="/showcase" className="home-button home-button-primary">Jelajahi demo <span aria-hidden="true">↗</span></Link>
               <a href="#workflow" className="home-button home-button-outline">Lihat cara kerja <span aria-hidden="true">↓</span></a>
             </div>
-            <div className="home-hero-foot"><span className="home-foot-icon" aria-hidden="true">✳</span><span><ReviewBackendStatus /><br />Preview menggunakan data sintetis. Pembayaran nyata dinonaktifkan.</span></div>
+            <div className="home-hero-foot"><span className="home-foot-icon" aria-hidden="true">✳</span><span><ReviewBackendStatus /><br />Demo menggunakan data simulasi, bukan transaksi nyata.</span></div>
           </div>
 
           <div className="home-stage" aria-label="Ilustrasi antarmuka pemesanan dan operasional kafe">
