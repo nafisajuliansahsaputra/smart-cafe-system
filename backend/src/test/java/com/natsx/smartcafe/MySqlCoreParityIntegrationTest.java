@@ -111,6 +111,10 @@ class MySqlCoreParityIntegrationTest {
         var tables=new com.natsx.smartcafe.tables.TableAdminService(jdbc,audit);
         var visits=new com.natsx.smartcafe.tables.TableVisitService(jdbc,audit,events);
         var registry=new com.natsx.smartcafe.tables.TableRegistryQueryService(jdbc);
+        var staffTables=new com.natsx.smartcafe.tables.StaffTableQueryService(jdbc);
+        var guestSessions=new com.natsx.smartcafe.identity.GuestSessionService(jdbc);
+        var otherWaiter=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(newStaff()),"other-waiter","different",java.util.Set.of("WAITER"));
         var tx=new org.springframework.transaction.support.TransactionTemplate(
             new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
         String code="R"+id().substring(0,8).toUpperCase(java.util.Locale.ROOT);
@@ -129,6 +133,12 @@ class MySqlCoreParityIntegrationTest {
             created.id(),UUID.fromString(waiter),"open-table-visit"));
         assertEquals(true,visits.entry(alias).activeVisit());
         assertEquals(true,opened.proofExpiresAt().isAfter(java.time.Instant.now()));
+        var ownerRow=staffTables.page(manager,0,alias).items().getFirst();
+        assertEquals(opened.id(),ownerRow.manageableVisitId());
+        assertEquals(true,ownerRow.proofExpiresAt().isAfter(java.time.Instant.now()));
+        var nonOwnerRow=staffTables.page(otherWaiter,0,alias).items().getFirst();
+        assertEquals(null,nonOwnerRow.manageableVisitId());
+        assertEquals(null,nonOwnerRow.proofExpiresAt());
         assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
             ()->tx.execute(status->visits.open(
                 created.id(),UUID.fromString(waiter),"duplicate-active-visit")));
@@ -150,6 +160,8 @@ class MySqlCoreParityIntegrationTest {
         assertEquals(opened.id(),entered.visitId());
         assertEquals("Synthetic Cafe Guest",
             visits.currentVisit(entered.guestId(),entered.visitId()).displayName());
+        assertEquals(entered.guestId(),guestSessions.authenticate(
+            entered.accessToken()).guestId());
         assertEquals(1,jdbc.queryForObject("""
             SELECT COUNT(*) FROM guest_sessions WHERE visit_id=? AND revoked_at IS NULL
             """,Integer.class,entered.visitId().toString()));
@@ -157,6 +169,7 @@ class MySqlCoreParityIntegrationTest {
         tx.executeWithoutResult(status->visits.close(
             opened.id(),UUID.fromString(waiter),"close-table-visit"));
         assertEquals(false,visits.entry(alias).activeVisit());
+        assertEquals(null,guestSessions.authenticate(entered.accessToken()));
         assertEquals(0,jdbc.queryForObject("""
             SELECT COUNT(*) FROM guest_sessions WHERE visit_id=? AND revoked_at IS NULL
             """,Integer.class,entered.visitId().toString()));
