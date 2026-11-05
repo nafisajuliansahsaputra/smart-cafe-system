@@ -35,8 +35,8 @@ public class DailyCashReportService {
             catch (DateTimeParseException ex) { throw invalidDate(); }
         }
         if (day.getYear() < 2000 || day.getYear() > 2100) throw invalidDate();
-        Timestamp start = Timestamp.from(day.atStartOfDay(WIB).toInstant());
-        Timestamp end = Timestamp.from(day.plusDays(1).atStartOfDay(WIB).toInstant());
+        Object start = dbUtc(day.atStartOfDay(WIB).toInstant());
+        Object end = dbUtc(day.plusDays(1).atStartOfDay(WIB).toInstant());
         var totals = jdbc.queryForObject("""
             SELECT COUNT(*) AS paid_orders, COALESCE(SUM(r.total_idr),0) AS gross_idr
             FROM receipts r
@@ -66,6 +66,18 @@ public class DailyCashReportService {
             ), start, end);
         return new DailyCashReport(day.toString(), WIB.getId(), "IDR",
             totals[0], totals[1], topItems);
+    }
+
+    /**
+     * WIB day boundaries are converted to UTC instants, then represented
+     * as UTC DATETIME(6) wall-clock values on MySQL. PostgreSQL keeps
+     * native timestamp-with-zone precision.
+     */
+    private Object dbUtc(java.time.Instant value) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? java.time.LocalDateTime.ofInstant(value,java.time.ZoneOffset.UTC)
+            : Timestamp.from(value);
     }
 
     private ApiFailureException invalidDate() {

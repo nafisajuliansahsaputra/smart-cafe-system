@@ -42,8 +42,8 @@ public class CashReceiptLedgerService {
         int page = Integer.parseInt(pageParam);
         if (page > 1000) throw invalid("Page exceeds maximum");
 
-        Timestamp start = Timestamp.from(day.atStartOfDay(WIB).toInstant());
-        Timestamp end = Timestamp.from(day.plusDays(1).atStartOfDay(WIB).toInstant());
+        Object start = dbUtc(day.atStartOfDay(WIB).toInstant());
+        Object end = dbUtc(day.plusDays(1).atStartOfDay(WIB).toInstant());
         var rows = jdbc.query("""
             SELECT r.id AS receipt_id, r.receipt_number, r.order_id,
                    t.table_code, r.total_idr, r.issued_at
@@ -62,11 +62,24 @@ public class CashReceiptLedgerService {
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "order_id"),
                 rs.getString("table_code"),
                 rs.getLong("total_idr"),
-                rs.getTimestamp("issued_at").toInstant()),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("issued_at"))),
             start, end, page * PAGE_SIZE);
         boolean hasNext = rows.size() > PAGE_SIZE;
         return new CashReceiptPage(day.toString(), WIB.getId(), "IDR",
             page, hasNext, hasNext ? List.copyOf(rows.subList(0, PAGE_SIZE)) : rows);
+    }
+
+    /**
+     * WIB day boundaries are converted to UTC instants, then represented
+     * as UTC DATETIME(6) wall-clock values on MySQL. PostgreSQL keeps
+     * native timestamp-with-zone precision.
+     */
+    private Object dbUtc(java.time.Instant value) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? java.time.LocalDateTime.ofInstant(value,java.time.ZoneOffset.UTC)
+            : Timestamp.from(value);
     }
 
     private ApiFailureException invalid(String message) {

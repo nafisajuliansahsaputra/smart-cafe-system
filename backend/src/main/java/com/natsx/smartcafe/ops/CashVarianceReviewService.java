@@ -39,22 +39,22 @@ public class CashVarianceReviewService {
                    s.difference_idr,a.action_code,a.created_at AS action_at,
                    a.actor_staff_id
             FROM cash_drawer_shifts s
-            LEFT JOIN LATERAL (
-              SELECT action_code,created_at,actor_staff_id
-              FROM cash_variance_review_actions
-              WHERE shift_id=s.id
-              ORDER BY created_at DESC,id DESC LIMIT 1
-            ) a ON true
+            LEFT JOIN cash_variance_review_actions a ON a.id=(
+              SELECT latest.id FROM cash_variance_review_actions latest
+              WHERE latest.shift_id=s.id
+              ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1
+            )
             WHERE s.closed_at IS NOT NULL AND s.difference_idr<>0
             ORDER BY s.closed_at DESC,s.id DESC
             LIMIT 21 OFFSET ?
             """,(rs,n)->new Case(
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),
-                rs.getTimestamp("closed_at").toInstant(),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("closed_at")),
                 rs.getLong("expected_drawer_idr"),rs.getLong("counted_cash_idr"),
                 rs.getLong("difference_idr"),rs.getString("action_code"),
-                rs.getTimestamp("action_at")==null?null:
-                    rs.getTimestamp("action_at").toInstant(),
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("action_at")),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id")),page*20);
         return new CasePage(page,rows.size()>20,
             rows.stream().limit(20).toList());
@@ -72,7 +72,8 @@ public class CashVarianceReviewService {
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
-                rs.getTimestamp("created_at").toInstant()),shiftId);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("created_at"))),dbUuid(shiftId));
     }
 
     @Transactional
@@ -100,8 +101,9 @@ public class CashVarianceReviewService {
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
-                rs.getTimestamp("created_at").toInstant()),
-                rs.getString("idempotency_key")),shiftId,key);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("created_at"))),
+                rs.getString("idempotency_key")),dbUuid(shiftId),key);
         if (!prior.isEmpty()) {
             ReviewAction existing=prior.getFirst().action();
             if (existing.actorId().equals(actor.staffId()) &&
@@ -115,13 +117,22 @@ public class CashVarianceReviewService {
             INSERT INTO cash_variance_review_actions
                 (id,shift_id,actor_staff_id,action_code,note,idempotency_key)
             VALUES (?,?,?,?,?,?)
-            """,id,shiftId,actor.staffId(),code,clean,key);
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
-                resource_id,reason,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',?,'CASH_VARIANCE_REVIEW','CASH_DRAWER_SHIFT',?,?,?,
-                jsonb_build_object('reviewAction',CAST(? AS text)))
-            """,actor.staffId(),shiftId,clean,requestId,code);
+            """,dbUuid(id),dbUuid(shiftId),dbUuid(actor.staffId()),code,clean,key);
+        String auditSql=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_VARIANCE_REVIEW','CASH_DRAWER_SHIFT',?,?,?,
+                    JSON_OBJECT('reviewAction',?))
+                """
+            : """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                    resource_id,reason,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'CASH_VARIANCE_REVIEW','CASH_DRAWER_SHIFT',?,?,?,
+                    jsonb_build_object('reviewAction',CAST(? AS text)))
+                """;
+        jdbc.update(auditSql,dbUuid(actor.staffId()),dbUuid(shiftId),clean,requestId,code);
         return jdbc.queryForObject("""
             SELECT id,shift_id,actor_staff_id,action_code,note,created_at
             FROM cash_variance_review_actions WHERE id=?
@@ -129,7 +140,8 @@ public class CashVarianceReviewService {
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "shift_id"),
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "actor_staff_id"),
                 rs.getString("action_code"),rs.getString("note"),
-                rs.getTimestamp("created_at").toInstant()),id);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("created_at"))),dbUuid(id));
     }
 
     private void requireVariance(UUID shiftId,boolean lock) {
@@ -137,13 +149,18 @@ public class CashVarianceReviewService {
             SELECT closed_at,difference_idr FROM cash_drawer_shifts WHERE id=?
             """+(lock?" FOR UPDATE":""),(rs,n)->new boolean[]{
                 rs.getTimestamp("closed_at")!=null,
-                rs.getLong("difference_idr")!=0},shiftId);
+                rs.getLong("difference_idr")!=0},dbUuid(shiftId));
         if (rows.isEmpty()) throw new ApiFailureException(
             HttpStatus.NOT_FOUND,"NOT_FOUND","Cash shift is not available");
         if (!rows.getFirst()[0] || !rows.getFirst()[1]) {
             throw conflict("Only closed shifts with nonzero differences require review");
         }
     }
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
     private void requireManager(StaffPrincipal actor) {
         if (actor==null || actor.roles().stream().noneMatch(
             r->r.equals("MANAGER") || r.equals("ADMIN"))) {
