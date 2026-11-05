@@ -100,6 +100,76 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mysqlStaffProvisionActivationPasswordRotationAndAuditRemainRevocable() {
+        String adminId=newStaff();
+        var admin=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(adminId),"synthetic-review-admin","hash",
+            java.util.Set.of("ADMIN"));
+        var passwords=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+        var staff=new com.natsx.smartcafe.identity.StaffManagementService(jdbc,passwords);
+        var auth=new com.natsx.smartcafe.identity.StaffAuthService(jdbc,passwords);
+        var password=new com.natsx.smartcafe.identity.StaffPasswordService(jdbc,passwords);
+        var audit=new com.natsx.smartcafe.audit.AuditReviewService(jdbc);
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+
+        String login="aaa"+id().substring(0,10);
+        String firstPassword="ExampleOnlyFirstPassword1234!";
+        String nextPassword="ExampleOnlySecondPassword5678!";
+        var created=tx.execute(status->staff.create(admin,login,firstPassword,
+            "WAITER","Create synthetic waiter only","staff-created"));
+        assertEquals(false,created.enabled());
+        assertEquals("WAITER",created.role());
+        assertEquals(login,created.login());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->staff.create(admin,login,firstPassword,
+                "WAITER","Duplicate synthetic waiter","duplicate-staff")));
+        var entry=staff.list(0).items().stream()
+            .filter(item->item.id().equals(created.id())).findFirst().orElseThrow();
+        assertEquals(false,entry.enabled());
+        assertEquals(java.util.List.of("WAITER"),entry.roles());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.executeWithoutResult(status->staff.change(
+                created.id(),admin,false,false,
+                "Unchanged status must fail","deny-no-op")));
+
+        tx.executeWithoutResult(status->staff.change(
+            created.id(),admin,true,false,"Approve test waiter","enable-staff"));
+        assertEquals(true,staff.list(0).items().stream()
+            .filter(item->item.id().equals(created.id())).findFirst()
+            .orElseThrow().enabled());
+        var loginResult=tx.execute(status->auth.login(login,firstPassword));
+        assertEquals(null,loginResult.failure());
+        var principal=auth.authenticate(loginResult.token());
+        assertEquals(created.id(),principal.staffId());
+        assertEquals(java.util.Set.of("WAITER"),principal.roles());
+
+        assertEquals(com.natsx.smartcafe.identity.StaffPasswordService.Result.INVALID_CURRENT,
+            tx.execute(status->password.change(principal,"wrong-password",
+                nextPassword,"bad-current")));
+        assertEquals(com.natsx.smartcafe.identity.StaffPasswordService.Result.CHANGED,
+            tx.execute(status->password.change(principal,firstPassword,
+                nextPassword,"rotate-password")));
+        assertEquals(null,auth.authenticate(loginResult.token()));
+        var newLogin=tx.execute(status->auth.login(login,nextPassword));
+        assertEquals(null,newLogin.failure());
+        assertEquals(created.id(),auth.authenticate(newLogin.token()).staffId());
+        tx.executeWithoutResult(status->staff.change(
+            created.id(),admin,false,true,"Disable synthetic waiter","disable-staff"));
+        assertEquals(null,auth.authenticate(newLogin.token()));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM staff_sessions
+            WHERE staff_user_id=? AND revoked_at IS NULL
+            """,Integer.class,created.id().toString()));
+        assertEquals(true,audit.list(0,"staff_password_changed").items().stream()
+            .anyMatch(item->created.id().equals(item.resourceId())));
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM audit_logs
+            WHERE operation='STAFF_PROVISIONED' AND resource_id=?
+            """,Integer.class,created.id().toString()));
+    }
+
+    @Test
     void mysqlCatalogCrudStockCasAndVariantsWorkWithRealServices() {
         String adminId=newStaff();
         var actor=new com.natsx.smartcafe.identity.StaffPrincipal(
