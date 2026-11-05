@@ -2,8 +2,8 @@
 # Build an ephemeral JSSE truststore from the Aiven PUBLIC CA only for
 # the deliberately opt-in synthetic MySQL review. No secrets in image.
 set -eu
-if [ "\${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
-    if [ -z "\${SCS_AIVEN_CA_PEM_BASE64:-}" ]; then
+if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    if [ -z "${SCS_AIVEN_CA_PEM_BASE64:-}" ]; then
         echo 'MySQL review refused: Aiven public CA not configured.' >&2
         exit 1
     fi
@@ -26,5 +26,14 @@ if [ "\${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
     fi
     rm -f "$ca_file"
     trap - EXIT
+    # Inspect only immutable Flyway metadata and object presence before
+    # Spring starts. No SQL writes, Flyway repair, customer data or secrets.
+    java -cp '/app/scs-review-diagnostic:/app/scs-review-mysql-driver.jar' \
+      ReviewMySqlPreflight
+fi
+# Fast startup only for the isolated, strictly verified Aiven review.
+# Other deployments retain their original JVM settings.
+if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    exec java -XX:TieredStopAtLevel=1 -jar /app/app.jar
 fi
 exec java -jar /app/app.jar

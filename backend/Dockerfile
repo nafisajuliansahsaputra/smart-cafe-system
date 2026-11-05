@@ -2,6 +2,7 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /source
 COPY pom.xml .
 COPY src ./src
+COPY review-diagnostic ./review-diagnostic
 # Bound retries to transient Maven Central 429/502/503/504 only.
 # Compilation/test failures are never retried or treated as successful builds.
 RUN set -eu; \
@@ -21,11 +22,24 @@ RUN set -eu; \
     done; \
     exit 1
 
+# The diagnostic has no Spring context. The driver is copied from the same
+# audited Maven dependency set used by the actual application. It does not
+# perform repairs, data mutations or schema migrations.
+RUN set -eu; \
+    driver="$(find /root/.m2/repository/com/mysql/mysql-connector-j \
+      -type f -name '*.jar' | head -n 1)"; \
+    test -n "$driver"; \
+    cp "$driver" /tmp/scs-review-mysql-driver.jar; \
+    mkdir -p /tmp/scs-review-diagnostic; \
+    javac -d /tmp/scs-review-diagnostic review-diagnostic/ReviewMySqlPreflight.java
+
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd --system --uid 10001 cafe
 COPY --from=build /source/target/smart-cafe-backend-0.1.0-SNAPSHOT.jar app.jar
 COPY --chown=cafe:cafe docker-review-entrypoint.sh /app/docker-review-entrypoint.sh
+COPY --from=build --chown=cafe:cafe /tmp/scs-review-mysql-driver.jar /app/scs-review-mysql-driver.jar
+COPY --from=build --chown=cafe:cafe /tmp/scs-review-diagnostic /app/scs-review-diagnostic
 USER cafe
 EXPOSE 8080
 # Review startup builds its CA truststore in /tmp only when opt-in is true.
