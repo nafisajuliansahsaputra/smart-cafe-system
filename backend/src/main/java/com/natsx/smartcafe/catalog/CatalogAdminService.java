@@ -39,7 +39,7 @@ public class CatalogAdminService {
         UUID id=UUID.randomUUID();
         try {
             jdbc.update("INSERT INTO menu_categories(id,name,slug) VALUES (?,?,?)",
-                id,name.strip(),slug);
+                dbUuid(id),name.strip(),slug);
         }catch(DuplicateKeyException ex) { throw conflict("Category slug already exists"); }
         audit(actor,"CATEGORY_CREATED","MENU_CATEGORY",id,requestId);
         return new Category(id,name.strip(),slug,true);
@@ -47,12 +47,12 @@ public class CatalogAdminService {
 
     @Transactional
     public Category setCategoryActive(UUID id,boolean active,StaffPrincipal actor,String requestId) {
-        int changed=jdbc.update("UPDATE menu_categories SET active=? WHERE id=?",active,id);
+        int changed=jdbc.update("UPDATE menu_categories SET active=? WHERE id=?",active,dbUuid(id));
         if(changed==0)throw missing();
         audit(actor,active?"CATEGORY_ENABLED":"CATEGORY_DISABLED","MENU_CATEGORY",id,requestId);
         return jdbc.queryForObject("SELECT id,name,slug,active FROM menu_categories WHERE id=?",
             (rs,n)->new Category(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
-                rs.getString("slug"),rs.getBoolean("active")),id);
+                rs.getString("slug"),rs.getBoolean("active")),dbUuid(id));
     }
 
     @Transactional(readOnly=true)
@@ -72,13 +72,13 @@ public class CatalogAdminService {
         String safeImage=imagePolicy.validate(imageUrl);
         if(categoryId==null)throw invalid("Category required");
         Integer category=jdbc.queryForObject("SELECT count(*) FROM menu_categories WHERE id=?",
-            Integer.class,categoryId);
+            Integer.class,dbUuid(categoryId));
         if(category==null || category==0)throw missing();
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO menu_items(id,category_id,name,description,image_url,base_price_idr,availability)
             VALUES (?,?,?,?,?,?,'HIDDEN')
-            """,id,categoryId,name.strip(),
+            """,dbUuid(id),dbUuid(categoryId),name.strip(),
             safeDescription == null || safeDescription.isEmpty() ? null : safeDescription,
             safeImage == null || safeImage.isEmpty() ? null : safeImage,price);
         audit(actor,"MENU_ITEM_CREATED","MENU_ITEM",id,requestId);
@@ -97,8 +97,29 @@ public class CatalogAdminService {
             !List.of("AVAILABLE","SOLD_OUT","HIDDEN").contains(availability))
             throw invalid("Invalid catalog update");
         Integer category=jdbc.queryForObject("SELECT count(*) FROM menu_categories WHERE id=?",
-            Integer.class,categoryId);
+            Integer.class,dbUuid(categoryId));
         if(category==null || category==0)throw missing();
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        if(vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL) {
+            // MySQL has no UPDATE ... RETURNING. A conditional update keeps
+            // the same optimistic revision check, and the subsequent read
+            // sees the winning row within the same @Transactional boundary.
+            int changed=jdbc.update("""
+                UPDATE menu_items
+                SET category_id=?,name=?,base_price_idr=?,availability=?,
+                    description=CASE WHEN ? IS NULL THEN description ELSE NULLIF(?, '') END,
+                    image_url=CASE WHEN ? IS NULL THEN image_url ELSE NULLIF(?, '') END,
+                    revision=revision+1
+                WHERE id=? AND revision=?
+                """,dbUuid(categoryId),name.strip(),price,availability,
+                safeDescription,safeDescription,safeImage,safeImage,dbUuid(id),expectedRevision);
+            if(changed!=1) {
+                detail(id);
+                throw conflict("Item was modified; refresh its revision");
+            }
+            audit(actor,"MENU_ITEM_CHANGED","MENU_ITEM",id,requestId);
+            return detail(id);
+        }
         var edited=jdbc.query("""
             UPDATE menu_items
             SET category_id=?,name=?,base_price_idr=?,availability=?,
@@ -109,8 +130,8 @@ public class CatalogAdminService {
                 revision=revision+1
             WHERE id=? AND revision=?
             RETURNING id,category_id,name,base_price_idr,availability,revision,description,image_url
-            """,(rs,n)->readItem(rs),categoryId,name.strip(),price,availability,
-            safeDescription,safeDescription,safeImage,safeImage,id,expectedRevision);
+            """,(rs,n)->readItem(rs),dbUuid(categoryId),name.strip(),price,availability,
+            safeDescription,safeDescription,safeImage,safeImage,dbUuid(id),expectedRevision);
         if(edited.isEmpty()){
             detail(id);
             throw conflict("Item was modified; refresh its revision");
@@ -124,9 +145,14 @@ public class CatalogAdminService {
         var rows=jdbc.query("""
             SELECT id,category_id,name,base_price_idr,availability,revision,description,image_url
             FROM menu_items WHERE id=?
-            """,(rs,n)->readItem(rs),id);
+            """,(rs,n)->readItem(rs),dbUuid(id));
         if(rows.isEmpty())throw missing();
         return rows.getFirst();
+    }
+
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private Item readItem(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -140,7 +166,7 @@ public class CatalogAdminService {
         jdbc.update("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,resource_id,correlation_id)
             VALUES ('STAFF',?,?,?,?,?)
-            """,actor.staffId(),operation,type,id,requestId);
+            """,dbUuid(actor.staffId()),operation,type,dbUuid(id),requestId);
     }
 
     private void checkName(String name) {

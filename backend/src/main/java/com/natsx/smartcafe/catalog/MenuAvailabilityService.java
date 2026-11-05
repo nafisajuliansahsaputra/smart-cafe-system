@@ -22,7 +22,7 @@ public class MenuAvailabilityService {
             SELECT available,limited_quantity,version FROM item_availability WHERE menu_item_id=?
             """,(rs,n)->new Availability(id,rs.getBoolean("available"),
                 rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
-                rs.getLong("version")),id);
+                rs.getLong("version")),dbUuid(id));
         if(found.isEmpty())throw notFound();
         return found.getFirst();
     }
@@ -33,25 +33,50 @@ public class MenuAvailabilityService {
         if(expectedVersion<0 || quantity!=null && quantity<0)
             throw new ApiFailureException(HttpStatus.BAD_REQUEST,"VALIDATION_ERROR",
                 "Stock quantity or expected version is invalid");
-        var changed=jdbc.query("""
-            UPDATE item_availability
-            SET available=?, limited_quantity=?, version=version+1
-            WHERE menu_item_id=? AND version=?
-            RETURNING available,limited_quantity,version
-            """,(rs,n)->new Availability(itemId,rs.getBoolean("available"),
-                rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
-                rs.getLong("version")),available,quantity,itemId,expectedVersion);
-        if(changed.isEmpty()) {
-            current(itemId); // Differentiates missing catalog item from stale version.
-            throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",
-                "Inventory has changed; fetch the latest version");
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        Availability updated;
+        if(vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL) {
+            // MySQL 8 does not support UPDATE ... RETURNING. The revision
+            // predicate and the transaction held through the following read
+            // preserve compare-and-swap under simultaneous stock edits.
+            int rows=jdbc.update("""
+                UPDATE item_availability
+                SET available=?,limited_quantity=?,version=version+1
+                WHERE menu_item_id=? AND version=?
+                """,available,quantity,dbUuid(itemId),expectedVersion);
+            if(rows!=1) {
+                current(itemId);
+                throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",
+                    "Inventory has changed; fetch the latest version");
+            }
+            updated=current(itemId);
+        } else {
+            var changed=jdbc.query("""
+                UPDATE item_availability
+                SET available=?, limited_quantity=?, version=version+1
+                WHERE menu_item_id=? AND version=?
+                RETURNING available,limited_quantity,version
+                """,(rs,n)->new Availability(itemId,rs.getBoolean("available"),
+                    rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
+                    rs.getLong("version")),available,quantity,dbUuid(itemId),expectedVersion);
+            if(changed.isEmpty()) {
+                current(itemId);
+                throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",
+                    "Inventory has changed; fetch the latest version");
+            }
+            updated=changed.getFirst();
         }
         jdbc.update("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
                                    resource_id,reason,correlation_id)
             VALUES ('STAFF',?,'MENU_STOCK_UPDATED','MENU_ITEM',?,?,?)
-            """,staff.staffId(),itemId,reason,requestId);
-        return changed.getFirst();
+            """,dbUuid(staff.staffId()),dbUuid(itemId),reason,requestId);
+        return updated;
+    }
+
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private ApiFailureException notFound() {
