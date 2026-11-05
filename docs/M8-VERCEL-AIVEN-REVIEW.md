@@ -16,6 +16,23 @@ Both are on the user's own Vercel Hobby team. No credit card, Railway,
 Render or paid host was added. Vercel free quotas, possible idle cold
 starts and product policy changes are **not** lifetime uptime guarantees.
 
+## Critical hosted migration prerequisite (observed 2026-11-05)
+
+A clean Aiven review schema **cannot be migrated at cold startup on Vercel
+Hobby**. Vercel stops waiting for the container to bind its port after
+approximately 29 seconds, while Flyway requires substantially longer for
+V1-V31. The first real hosted run reached V2; the next run encountered
+partially applied V4 DDL (`receipts` already exists). Repeated deployment
+or health-check retries will not reliably fix this.
+
+**Do not invoke the review API again until the one-time isolated-schema
+recovery is complete.** Follow
+[empty-only Aiven review recovery](M8-AIVEN-REVIEW-SCHEMA-RECOVERY.md)
+using the reviewed Windows command. It refuses to delete any database
+containing staff, menu, customer or financial rows. After it confirms
+31 validated Flyway migrations, redeploy the same code using the Preview
+branch and only then test `/actuator/health`.
+
 ## Before attempting backend startup
 
 The current review gate (PR #104) is **opt-in and fail-closed** by default:
