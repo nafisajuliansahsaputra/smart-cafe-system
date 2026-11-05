@@ -1,4 +1,9 @@
 spring:
+  main:
+    # Vercel Hobby must bind its port rapidly. The review preflight verifies
+    # V31 and critical immutable triggers before Spring is launched.
+    # PostgreSQL and all non-review starts retain eager initialization.
+    lazy-initialization: ${SCS_MYSQL_REVIEW_ENABLED:false}
   application:
     name: smart-cafe-api
   datasource:
