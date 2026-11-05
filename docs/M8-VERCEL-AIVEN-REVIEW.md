@@ -85,6 +85,48 @@ When successful, configure the **frontend** server-only
 and guest session tokens HttpOnly and never expose DB credentials to
 the browser.
 
+## First administrator (one-time, isolated MySQL schema ONLY)
+
+A fresh Aiven review database contains staff roles after Flyway, but it
+contains no staff login. The hosted administrator bootstrap has now been
+extended to that **specific** synthetic MySQL database. The process is
+transactional and refuses an existing staff user. It locks the permanent
+\`ADMIN\` role row \`FOR UPDATE\` on MySQL rather than using unsafe
+connection-lifetime \`GET_LOCK\`; PostgreSQL retains its previous
+transaction-scoped advisory lock.
+
+**Preconditions:** The backend's real hosted MySQL health and full permission
+tests must pass on its isolated \`scs_review_*\` database before inviting
+any reviewer. Never use the project's existing \`defaultdb\` or a cafe
+production database. The caller must also have the exact four-value
+verified TLS truststore JDBC query from the earlier section.
+
+1. Ensure the empty \`scs_review_natsx\` has migrations V1–V31 applied
+   and zero rows in \`staff_users\`; take a snapshot first.
+2. In the **backend Vercel project**, add these **preview-only** environment
+   variables for exactly one bootstrap deployment, without sharing their
+   values in a chat, ticket, or GitHub:
+   - \`SPRING_PROFILES_ACTIVE=hosted-review-bootstrap\`
+   - \`SCS_REVIEW_BOOTSTRAP_ACK=I_ACCEPT_ONE_TIME_HOSTED_REVIEW_ADMIN\`
+   - \`SCS_REVIEW_BOOTSTRAP_USERNAME=[review-login, 3–40 safe characters]\`
+   - \`SCS_REVIEW_BOOTSTRAP_PASSWORD=[unique random secret, 24–128 characters]\`
+3. Keep all \`SCS_MYSQL_REVIEW_*\` and Aiven TLS/certificate settings from
+   the previous section. The bootstrap will refuse missing acknowledgements,
+   a wrong database/host, weak TLS, enabled payments or an existing staff user.
+4. Deploy the review backend once. Verify a **single** ADMIN role assignment
+   exists in \`staff_role_assignments\` and that no second bootstrap user
+   can be created. Never expose the password in logs or screenshots.
+5. **Immediately remove** the bootstrap profile, ACK, username and
+   password from Vercel. Trigger a clean normal deployment using only
+   \`SCS_MYSQL_REVIEW_ENABLED=true\` and the isolated database settings.
+   Never leave a one-time bootstrap profile enabled on a public project.
+6. Test staff login, access control, visit opening, checkout, KDS, waiter
+   assignment and immutable receipts using **synthetic-only** data.
+
+A Vercel deployment marked \`READY\` proves that the image was deployed,
+not that the one-time admin setup or live API operations succeeded.
+Do not expose the deployed API as a working POS until those checks pass.
+
 ## Deployment evidence
 
 - [PR #103 tests](https://github.com/nafisajuliansahsaputra/smart-cafe-system/actions/runs/41935747458):
