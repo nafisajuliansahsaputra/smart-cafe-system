@@ -43,7 +43,7 @@ public class TableAdminService {
             jdbc.update("""
                 INSERT INTO cafe_tables(id,table_code,public_alias,capacity,status)
                 VALUES (?,?,?,?,'AVAILABLE')
-                """, id, normalized, alias, capacity);
+                """, dbUuid(id), normalized, alias, capacity);
         } catch (DuplicateKeyException ex) {
             throw new ApiFailureException(HttpStatus.CONFLICT, "CONFLICT",
                 "Table code or public alias is already registered");
@@ -68,7 +68,7 @@ public class TableAdminService {
             """, rs -> rs.next() ? new TableInfo(
                 com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"), rs.getString("table_code"),
                 rs.getString("public_alias"), rs.getInt("capacity"),
-                rs.getString("status")) : null, id);
+                rs.getString("status")) : null, dbUuid(id));
         if (current == null) {
             throw new ApiFailureException(HttpStatus.NOT_FOUND, "NOT_FOUND",
                 "Cafe table not found");
@@ -82,7 +82,7 @@ public class TableAdminService {
             Boolean active = jdbc.queryForObject("""
                 SELECT EXISTS(SELECT 1 FROM table_visits
                     WHERE table_id=? AND status IN ('ACTIVE','CLOSING'))
-                """, Boolean.class, id);
+                """, Boolean.class, dbUuid(id));
             if (Boolean.TRUE.equals(active)) {
                 throw new ApiFailureException(HttpStatus.CONFLICT, "CONFLICT",
                     "Cannot take a table out of service during an active visit");
@@ -90,10 +90,16 @@ public class TableAdminService {
         }
         if (!current.status().equals(status) || current.capacity() != capacity) {
             jdbc.update("UPDATE cafe_tables SET status=?, capacity=? WHERE id=?",
-                status, capacity, id);
+                status, capacity, dbUuid(id));
             audit.staff(staff.staffId(), "CAFE_TABLE_UPDATED", "CAFE_TABLE", id, requestId);
         }
         return new TableInfo(id, current.tableCode(), current.publicAlias(), capacity, status);
+    }
+
+    /** Preserve native UUIDs on PostgreSQL and CHAR(36) on MySQL. */
+    private Object dbUuid(UUID id) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            id,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private boolean validStatus(String value) {

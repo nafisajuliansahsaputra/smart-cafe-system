@@ -100,6 +100,97 @@ class MySqlCoreParityIntegrationTest {
     }
 
     @Test
+    void mySqlPhysicalTableRegistrationJoinRotationAndVisitClosureAreConsistent() {
+        String waiter = newStaff();
+        jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,?)",
+            waiter,"WAITER");
+        var manager=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(waiter),"synthetic-manager","synthetic",java.util.Set.of("MANAGER"));
+        var audit=new com.natsx.smartcafe.audit.AuditTrail(jdbc);
+        var events=new com.natsx.smartcafe.common.events.OutboxEvents(jdbc);
+        var tables=new com.natsx.smartcafe.tables.TableAdminService(jdbc,audit);
+        var visits=new com.natsx.smartcafe.tables.TableVisitService(jdbc,audit,events);
+        var registry=new com.natsx.smartcafe.tables.TableRegistryQueryService(jdbc);
+        var staffTables=new com.natsx.smartcafe.tables.StaffTableQueryService(jdbc);
+        var guestSessions=new com.natsx.smartcafe.identity.GuestSessionService(jdbc);
+        var otherWaiter=new com.natsx.smartcafe.identity.StaffPrincipal(
+            UUID.fromString(newStaff()),"other-waiter","different",java.util.Set.of("WAITER"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource));
+        String code="R"+id().substring(0,8).toUpperCase(java.util.Locale.ROOT);
+        String alias="mysql-review-"+id();
+        var created=tx.execute(status->tables.create(
+            code,alias,4,manager,"table-created"));
+        assertEquals("AVAILABLE",created.status());
+        assertEquals(code,created.tableCode());
+        assertEquals(false,visits.entry(alias).activeVisit());
+        assertEquals(1,registry.list(0,code.toLowerCase(java.util.Locale.ROOT)).total());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->tables.create(
+                code,"collision-"+id(),4,manager,"duplicate-table")));
+
+        var opened=tx.execute(status->visits.open(
+            created.id(),UUID.fromString(waiter),"open-table-visit"));
+        assertEquals(true,visits.entry(alias).activeVisit());
+        assertEquals(true,opened.proofExpiresAt().isAfter(java.time.Instant.now()));
+        var ownerRow=staffTables.page(manager,0,alias).items().getFirst();
+        assertEquals(opened.id(),ownerRow.manageableVisitId());
+        assertEquals(true,ownerRow.proofExpiresAt().isAfter(java.time.Instant.now()));
+        var nonOwnerRow=staffTables.page(otherWaiter,0,alias).items().getFirst();
+        assertEquals(null,nonOwnerRow.manageableVisitId());
+        assertEquals(null,nonOwnerRow.proofExpiresAt());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->visits.open(
+                created.id(),UUID.fromString(waiter),"duplicate-active-visit")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->tables.update(
+                created.id(),"OUT_OF_SERVICE",4,"AVAILABLE",4,
+                manager,"cannot-disable-active-table")));
+
+        var rotated=tx.execute(status->visits.rotate(
+            opened.id(),UUID.fromString(waiter),"rotate-table-proof"));
+        assertEquals(opened.id(),rotated.id());
+        assertEquals(false,opened.joinProof().equals(rotated.joinProof()));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->visits.join(
+                alias,opened.joinProof(),"Stale session rejected")));
+
+        var entered=tx.execute(status->visits.join(
+            alias,rotated.joinProof(),"Synthetic Cafe Guest"));
+        assertEquals(opened.id(),entered.visitId());
+        assertEquals("Synthetic Cafe Guest",
+            visits.currentVisit(entered.guestId(),entered.visitId()).displayName());
+        assertEquals(entered.guestId(),guestSessions.authenticate(
+            entered.accessToken()).guestId());
+        assertEquals(1,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM guest_sessions WHERE visit_id=? AND revoked_at IS NULL
+            """,Integer.class,entered.visitId().toString()));
+
+        tx.executeWithoutResult(status->visits.close(
+            opened.id(),UUID.fromString(waiter),"close-table-visit"));
+        assertEquals(false,visits.entry(alias).activeVisit());
+        assertEquals(null,guestSessions.authenticate(entered.accessToken()));
+        assertEquals(0,jdbc.queryForObject("""
+            SELECT COUNT(*) FROM guest_sessions WHERE visit_id=? AND revoked_at IS NULL
+            """,Integer.class,entered.visitId().toString()));
+        assertEquals("CLOSED",jdbc.queryForObject(
+            "SELECT status FROM table_visits WHERE id=?",
+            String.class,opened.id().toString()));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->visits.join(
+                alias,rotated.joinProof(),"Closed visit rejected")));
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->visits.currentVisit(
+                entered.guestId(),entered.visitId())));
+        var disabled=tx.execute(status->tables.update(
+            created.id(),"OUT_OF_SERVICE",4,"AVAILABLE",4,manager,"disable-empty-table"));
+        assertEquals("OUT_OF_SERVICE",disabled.status());
+        assertThrows(com.natsx.smartcafe.common.api.ApiFailureException.class,
+            ()->tx.execute(status->visits.open(
+                created.id(),UUID.fromString(waiter),"deny-disabled-table")));
+    }
+
+    @Test
     void mySqlGameLossReportNeedsManagerDecisionAndDoesNotEraseEvidence() {
         String waiter = newStaff();
         String manager = newStaff();
