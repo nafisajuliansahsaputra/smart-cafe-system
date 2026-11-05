@@ -26,5 +26,9 @@ if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
     fi
     rm -f "$ca_file"
     trap - EXIT
+    # Inspect only immutable Flyway metadata and object presence before
+    # Spring starts. No SQL writes, Flyway repair, customer data or secrets.
+    java -cp '/app/scs-review-diagnostic:/app/scs-review-mysql-driver.jar' \
+      ReviewMySqlPreflight
 fi
 exec java -jar /app/app.jar
