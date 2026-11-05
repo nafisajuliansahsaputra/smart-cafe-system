@@ -41,6 +41,26 @@ public final class ReviewMySqlPreflight {
             long orderSnapshotTrigger=scalar(connection,
                 "SELECT COUNT(*) FROM information_schema.triggers "
                 +"WHERE trigger_schema=DATABASE() AND trigger_name='order_snapshot_no_update'");
+            long receiptsRows=receiptsTable==0?0:scalar(connection,
+                "SELECT COUNT(*) FROM receipts");
+            long countedBusinessTables=0;
+            long nonEmptyBusinessTables=0;
+            try (PreparedStatement names=connection.prepareStatement(
+                    "SELECT table_name FROM information_schema.tables "
+                    +"WHERE table_schema=DATABASE() AND table_type='BASE TABLE' "
+                    +"AND table_name NOT IN ('flyway_schema_history','staff_roles')");
+                 ResultSet tables=names.executeQuery()) {
+                while(tables.next()) {
+                    String table=tables.getString(1);
+                    if (!table.matches("[a-z][a-z0-9_]*")) {
+                        throw new IllegalStateException("Unexpected review SQL table identifier");
+                    }
+                    countedBusinessTables++;
+                    if (scalar(connection,"SELECT COUNT(*) FROM `"+table+"`")>0) {
+                        nonEmptyBusinessTables++;
+                    }
+                }
+            }
             long applied=historyTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1");
             long failed=historyTable==0?0:scalar(connection,
@@ -48,8 +68,9 @@ public final class ReviewMySqlPreflight {
             long failedV4=historyTable==0?0:scalar(connection,
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE version='4' AND success=0");
             System.out.printf(
-                "%s historyTable=%d applied=%d failed=%d failedV4=%d receipts=%d receiptUpdateTrigger=%d receiptDeleteTrigger=%d orderSnapshotTrigger=%d%n",
+                "%s historyTable=%d applied=%d failed=%d failedV4=%d receipts=%d receiptRows=%d businessTables=%d nonEmptyBusinessTables=%d receiptUpdateTrigger=%d receiptDeleteTrigger=%d orderSnapshotTrigger=%d%n",
                 PREFIX,historyTable,applied,failed,failedV4,receiptsTable,
+                receiptsRows,countedBusinessTables,nonEmptyBusinessTables,
                 receiptUpdateTrigger,receiptDeleteTrigger,orderSnapshotTrigger);
         } catch (SQLException ex) {
             // Never print a driver exception: it can contain the whole JDBC URL.
