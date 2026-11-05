@@ -2,8 +2,8 @@
 # Build an ephemeral JSSE truststore from the Aiven PUBLIC CA only for
 # the deliberately opt-in synthetic MySQL review. No secrets in image.
 set -eu
-if [ "\${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
-    if [ -z "\${SCS_AIVEN_CA_PEM_BASE64:-}" ]; then
+if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    if [ -z "${SCS_AIVEN_CA_PEM_BASE64:-}" ]; then
         echo 'MySQL review refused: Aiven public CA not configured.' >&2
         exit 1
     fi
