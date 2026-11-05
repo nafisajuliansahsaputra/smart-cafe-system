@@ -29,6 +29,24 @@ public class StaffPasswordService {
         this.passwords = passwords;
     }
 
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
+    private Object dbUtc(Instant instant) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? java.time.LocalDateTime.ofInstant(instant,java.time.ZoneOffset.UTC)
+            : Timestamp.from(instant);
+    }
+
+    private String dbNow() {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "UTC_TIMESTAMP(6)" : "now()";
+    }
+
     public enum Result { CHANGED, INVALID_CURRENT, RATE_LIMITED, REUSED, REVOKED }
     private record Credential(String hash, boolean enabled) {}
 
@@ -45,29 +63,32 @@ public class StaffPasswordService {
         List<Credential> users = jdbc.query("""
             SELECT password_hash, enabled FROM staff_users WHERE id=? FOR UPDATE
             """, (rs, n) -> new Credential(rs.getString("password_hash"),
-                rs.getBoolean("enabled")), actor.staffId());
+                rs.getBoolean("enabled")), dbUuid(actor.staffId()));
         if (users.isEmpty() || !users.getFirst().enabled()) return Result.REVOKED;
-        Integer sessions = jdbc.queryForObject("""
+        String sessionSql="""
             SELECT count(*) FROM staff_sessions
             WHERE staff_user_id=? AND token_hash=? AND revoked_at IS NULL
-              AND expires_at>now()
-            """, Integer.class, actor.staffId(), actor.tokenHash());
+              AND expires_at >
+            """+dbNow();
+        Integer sessions = jdbc.queryForObject(
+            sessionSql,Integer.class,dbUuid(actor.staffId()),actor.tokenHash());
         if (sessions == null || sessions != 1) return Result.REVOKED;
 
         UUID staffId = actor.staffId();
         Instant now = Instant.now();
-        jdbc.update("""
-            INSERT INTO staff_password_change_throttles(staff_user_id)
-            VALUES (?) ON CONFLICT DO NOTHING
-            """, staffId);
+        String ensure=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "INSERT INTO staff_password_change_throttles(staff_user_id) VALUES (?) ON DUPLICATE KEY UPDATE staff_user_id=staff_user_id"
+            : "INSERT INTO staff_password_change_throttles(staff_user_id) VALUES (?) ON CONFLICT DO NOTHING";
+        jdbc.update(ensure,dbUuid(staffId));
         var attempts = jdbc.queryForMap("""
             SELECT window_started_at, failed_attempts, locked_until
             FROM staff_password_change_throttles WHERE staff_user_id=? FOR UPDATE
-            """, staffId);
+            """, dbUuid(staffId));
         Instant locked = attempts.get("locked_until") == null ? null
-            : ((Timestamp) attempts.get("locked_until")).toInstant();
+            : com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(attempts.get("locked_until"));
         if (locked != null && locked.isAfter(now)) return Result.RATE_LIMITED;
-        Instant start = ((Timestamp) attempts.get("window_started_at")).toInstant();
+        Instant start = com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(attempts.get("window_started_at"));
         int failures = ((Number) attempts.get("failed_attempts")).intValue();
         if (start.plus(WINDOW).isBefore(now) || locked != null) {
             failures = 0;
@@ -75,7 +96,7 @@ public class StaffPasswordService {
                 UPDATE staff_password_change_throttles
                 SET window_started_at=?,failed_attempts=0,locked_until=NULL
                 WHERE staff_user_id=?
-                """, Timestamp.from(now), staffId);
+                """, dbUtc(now), dbUuid(staffId));
         }
 
         String oldHash = users.getFirst().hash();
@@ -85,25 +106,32 @@ public class StaffPasswordService {
             jdbc.update("""
                 UPDATE staff_password_change_throttles
                 SET failed_attempts=?,locked_until=? WHERE staff_user_id=?
-                """, next, until == null ? null : Timestamp.from(until), staffId);
+                """, next, until == null ? null : dbUtc(until), dbUuid(staffId));
             // Do not throw here: the throttle must commit with the failed check.
             return next >= MAX_FAILURES ? Result.RATE_LIMITED : Result.INVALID_CURRENT;
         }
         if (passwords.matches(newPassword, oldHash)) return Result.REUSED;
 
         jdbc.update("UPDATE staff_users SET password_hash=? WHERE id=?",
-            passwords.encode(newPassword), staffId);
-        jdbc.update("""
-            UPDATE staff_sessions SET revoked_at=now()
-            WHERE staff_user_id=? AND revoked_at IS NULL
-            """, staffId);
-        jdbc.update("DELETE FROM staff_password_change_throttles WHERE staff_user_id=?", staffId);
-        jdbc.update("""
-            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
-                                   resource_id,correlation_id,safe_before_after_diff)
-            VALUES ('STAFF',?,'STAFF_PASSWORD_CHANGED','STAFF_USER',?,?,
-                jsonb_build_object('allSessionsRevoked',true))
-            """, staffId, staffId, correlationId);
+            passwords.encode(newPassword), dbUuid(staffId));
+        jdbc.update("UPDATE staff_sessions SET revoked_at="+dbNow()
+            +" WHERE staff_user_id=? AND revoked_at IS NULL",dbUuid(staffId));
+        jdbc.update("DELETE FROM staff_password_change_throttles WHERE staff_user_id=?",dbUuid(staffId));
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String audit=vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                                       resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'STAFF_PASSWORD_CHANGED','STAFF_USER',?,?,
+                    JSON_OBJECT('allSessionsRevoked',true))
+                """
+            : """
+                INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                                       resource_id,correlation_id,safe_before_after_diff)
+                VALUES ('STAFF',?,'STAFF_PASSWORD_CHANGED','STAFF_USER',?,?,
+                    jsonb_build_object('allSessionsRevoked',true))
+                """;
+        jdbc.update(audit,dbUuid(staffId),dbUuid(staffId),correlationId);
         return Result.CHANGED;
     }
 }

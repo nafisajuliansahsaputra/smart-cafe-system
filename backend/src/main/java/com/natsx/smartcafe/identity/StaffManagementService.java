@@ -34,9 +34,14 @@ public class StaffManagementService {
     @Transactional(readOnly=true)
     public StaffPage list(int page) {
         if(page<0||page>2000)throw bad("Invalid staff page");
+        var vendor=com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc);
+        String aggregate=vendor==com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "COALESCE(GROUP_CONCAT(a.role_key ORDER BY a.role_key SEPARATOR ','),'')"
+            : "COALESCE(string_agg(a.role_key,',' ORDER BY a.role_key),'')";
         var rows=jdbc.query("""
             SELECT u.id,u.login,u.enabled,u.created_at,
-                   COALESCE(string_agg(a.role_key,',' ORDER BY a.role_key),'') AS role_keys
+            """ + aggregate + """
+                 AS role_keys
             FROM staff_users u
             LEFT JOIN staff_role_assignments a ON a.staff_user_id=u.id
             GROUP BY u.id
@@ -47,7 +52,8 @@ public class StaffManagementService {
                 rs.getBoolean("enabled"),
                 rs.getString("role_keys").isEmpty()?List.of():
                     Arrays.asList(rs.getString("role_keys").split(",")),
-                rs.getTimestamp("created_at").toInstant()),page*25);
+                com.natsx.smartcafe.common.db.JdbcUtcTime.toInstant(
+                    rs.getObject("created_at"))),page*25);
         return new StaffPage(page,rows.size()>25,rows.stream().limit(25).toList());
     }
 
@@ -63,12 +69,12 @@ public class StaffManagementService {
                 "Cannot change own account status");
         }
         var rows=jdbc.query("SELECT enabled,login FROM staff_users WHERE id=? FOR UPDATE",
-            (rs,n)->new Current(rs.getBoolean("enabled"),rs.getString("login")),targetId);
+            (rs,n)->new Current(rs.getBoolean("enabled"),rs.getString("login")),dbUuid(targetId));
         if(rows.isEmpty())throw new ApiFailureException(HttpStatus.NOT_FOUND,"NOT_FOUND","Staff not found");
         var current=rows.getFirst();
         var roles=Set.copyOf(jdbc.query(
             "SELECT role_key FROM staff_role_assignments WHERE staff_user_id=?",
-            (rs,n)->rs.getString("role_key"),targetId));
+            (rs,n)->rs.getString("role_key"),dbUuid(targetId)));
         if(roles.contains("ADMIN")||roles.contains("MANAGER")) {
             throw new ApiFailureException(HttpStatus.FORBIDDEN,"FORBIDDEN",
                 "Privileged staff status requires a separately approved recovery procedure");
@@ -77,20 +83,27 @@ public class StaffManagementService {
             throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT",
                 "Staff status changed; refresh the account before retrying");
         }
-        jdbc.update("UPDATE staff_users SET enabled=? WHERE id=?",enabled,targetId);
+        jdbc.update("UPDATE staff_users SET enabled=? WHERE id=?",enabled,dbUuid(targetId));
         if(!enabled) {
             jdbc.update("""
                 UPDATE staff_sessions SET revoked_at=now()
                 WHERE staff_user_id=? AND revoked_at IS NULL
-                """,targetId);
+                """,dbUuid(targetId));
         }
-        jdbc.update("""
+        String auditStatement=vendorJson("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
                                    resource_id,reason,correlation_id,safe_before_after_diff)
             VALUES ('STAFF',?,?,'STAFF_USER',?,?,?,
                 jsonb_build_object('enabledBefore',?,'enabledAfter',?))
-            """,actor.staffId(),enabled?"STAFF_ENABLED":"STAFF_DISABLED",
-                targetId,reason.strip(),correlationId,current.enabled(),enabled);
+            ""","""
+            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                                   resource_id,reason,correlation_id,safe_before_after_diff)
+            VALUES ('STAFF',?,?,'STAFF_USER',?,?,?,
+                JSON_OBJECT('enabledBefore',?,'enabledAfter',?))
+            """);
+        jdbc.update(auditStatement,dbUuid(actor.staffId()),
+            enabled?"STAFF_ENABLED":"STAFF_DISABLED",dbUuid(targetId),
+            reason.strip(),correlationId,current.enabled(),enabled);
     }
 
 
@@ -130,24 +143,46 @@ public class StaffManagementService {
             throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT","Login already exists");
         }
         UUID id=UUID.randomUUID();
-        int inserted=jdbc.update("""
-            INSERT INTO staff_users(id,login,password_hash,enabled)
-            VALUES (?,?,?,false) ON CONFLICT (login) DO NOTHING
-            """,id,login,passwords.encode(password));
+        String createSql = com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? "INSERT INTO staff_users(id,login,password_hash,enabled) VALUES (?,?,?,false)"
+            : "INSERT INTO staff_users(id,login,password_hash,enabled) VALUES (?,?,?,false) ON CONFLICT (login) DO NOTHING";
+        int inserted;
+        try {
+            inserted=jdbc.update(createSql,dbUuid(id),login,passwords.encode(password));
+        } catch(org.springframework.dao.DuplicateKeyException ex) {
+            throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT","Login already exists");
+        }
         if(inserted!=1) {
             throw new ApiFailureException(HttpStatus.CONFLICT,"CONFLICT","Login already exists");
         }
         jdbc.update("""
             INSERT INTO staff_role_assignments(staff_user_id,role_key)
             VALUES (?,?)
-            """,id,role);
-        jdbc.update("""
+            """,dbUuid(id),role);
+        jdbc.update(vendorJson("""
             INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
                                    resource_id,reason,correlation_id,safe_before_after_diff)
             VALUES ('STAFF',?,'STAFF_PROVISIONED','STAFF_USER',?,?,?,
                 jsonb_build_object('enabledAfter',false,'role',?))
-            """,actor.staffId(),id,reason.strip(),correlationId,role);
+            ""","""
+            INSERT INTO audit_logs(actor_type,actor_id,operation,resource_type,
+                                   resource_id,reason,correlation_id,safe_before_after_diff)
+            VALUES ('STAFF',?,'STAFF_PROVISIONED','STAFF_USER',?,?,?,
+                JSON_OBJECT('enabledAfter',false,'role',?))
+            """),dbUuid(actor.staffId()),dbUuid(id),reason.strip(),correlationId,role);
         return new CreatedStaff(id,login,role,false);
+    }
+
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
+    }
+
+    private String vendorJson(String postgresSql,String mysqlSql) {
+        return com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc)
+            == com.natsx.smartcafe.common.db.JdbcSqlDialect.Vendor.MYSQL
+            ? mysqlSql : postgresSql;
     }
 
     private ApiFailureException bad(String message) {
