@@ -41,7 +41,7 @@ public class VariantCatalogService {
             JOIN item_availability a ON a.menu_item_id=i.id
             WHERE i.id=? AND i.availability='AVAILABLE' AND c.active
               AND a.available AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
-            """,Integer.class,itemId);
+            """,Integer.class,dbUuid(itemId));
         if(live==null || live==0)throw missing();
         return lookupAll(itemId,true);
     }
@@ -55,7 +55,7 @@ public class VariantCatalogService {
     @Transactional(readOnly=true)
     public List<Group> adminGroups(UUID itemId) {
         Integer exists=jdbc.queryForObject("SELECT count(*) FROM menu_items WHERE id=?",
-            Integer.class,itemId);
+            Integer.class,dbUuid(itemId));
         if(exists==null || exists==0)throw missing();
         return lookupAll(itemId,false);
     }
@@ -67,7 +67,7 @@ public class VariantCatalogService {
             """+(publicOnly?" AND active=true":"")+" ORDER BY name,id",
             (rs,n)->new Group(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),itemId,
                 rs.getString("name"),rs.getBoolean("required"),
-                rs.getBoolean("active"),rs.getLong("revision"),List.of()),itemId);
+                rs.getBoolean("active"),rs.getLong("revision"),List.of()),dbUuid(itemId));
         var results=new java.util.ArrayList<Group>();
         for(var group:groups) {
             var options=jdbc.query("""
@@ -76,7 +76,7 @@ public class VariantCatalogService {
                 """+(publicOnly?" AND active=true":"")+" ORDER BY label,id",
                 (rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("option_key"),
                     rs.getString("label"),rs.getLong("price_delta_idr"),rs.getBoolean("active"),
-                    rs.getLong("revision")),group.id());
+                    rs.getLong("revision")),dbUuid(group.id()));
             results.add(new Group(group.id(),itemId,group.name(),group.required(),
                 group.active(),group.revision(),options));
         }
@@ -85,7 +85,7 @@ public class VariantCatalogService {
 
     private Group byId(UUID groupId) {
         UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
-            rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
+            rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"menu_item_id"):null,dbUuid(groupId));
         if(itemId==null)throw missing();
         return adminGroups(itemId).stream().filter(g->g.id().equals(groupId))
             .findFirst().orElseThrow(()->missing());
@@ -93,7 +93,7 @@ public class VariantCatalogService {
 
     private void lockItem(UUID itemId) {
         UUID id=jdbc.query("SELECT id FROM menu_items WHERE id=? FOR UPDATE",
-            rs->rs.next()?rs.getObject(1,UUID.class):null,itemId);
+            rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"id"):null,dbUuid(itemId));
         if(id==null)throw missing();
     }
 
@@ -103,14 +103,14 @@ public class VariantCatalogService {
         validateLabel(name);
         lockItem(itemId);
         Integer count=jdbc.queryForObject("SELECT count(*) FROM menu_variant_groups WHERE menu_item_id=?",
-            Integer.class,itemId);
+            Integer.class,dbUuid(itemId));
         if(count!=null && count>=8)throw invalid("Maximum eight modifier groups per menu item");
         UUID groupId=UUID.randomUUID();
         try {
             jdbc.update("""
                 INSERT INTO menu_variant_groups(id,menu_item_id,name,required)
                 VALUES (?,?,?,?)
-                """,groupId,itemId,name.strip(),required);
+                """,dbUuid(groupId),dbUuid(itemId),name.strip(),required);
         }catch(DuplicateKeyException ex){throw conflict("Item already has a variant group");}
         audit.staff(staff.staffId(),"VARIANT_GROUP_CREATED","MENU_ITEM",itemId,requestId);
         return byId(groupId);
@@ -121,7 +121,7 @@ public class VariantCatalogService {
                            StaffPrincipal staff,String requestId) {
         validateLabel(name);
         UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
-            rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
+            rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"menu_item_id"):null,dbUuid(groupId));
         if(itemId==null)throw missing();
         lockItem(itemId);
         int updated;
@@ -129,7 +129,7 @@ public class VariantCatalogService {
             updated=jdbc.update("""
             UPDATE menu_variant_groups SET name=?,required=?,active=?,revision=revision+1
             WHERE id=? AND revision=?
-            """,name.strip(),required,active,groupId,revision);
+            """,name.strip(),required,active,dbUuid(groupId),revision);
         } catch(DuplicateKeyException ex) {
             throw conflict("A modifier group with this name already exists");
         }
@@ -143,7 +143,7 @@ public class VariantCatalogService {
                                StaffPrincipal staff,String requestId) {
         validateOption(key,label,delta);
         UUID itemId=jdbc.query("SELECT menu_item_id FROM menu_variant_groups WHERE id=?",
-            rs->rs.next()?rs.getObject(1,UUID.class):null,groupId);
+            rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"menu_item_id"):null,dbUuid(groupId));
         if(itemId==null)throw missing();
         lockItem(itemId);
         UUID optionId=UUID.randomUUID();
@@ -151,7 +151,7 @@ public class VariantCatalogService {
             jdbc.update("""
                 INSERT INTO menu_variant_options(id,group_id,option_key,label,price_delta_idr)
                 VALUES (?,?,?,?,?)
-                """,optionId,groupId,key,label.strip(),delta);
+                """,dbUuid(optionId),dbUuid(groupId),key,label.strip(),delta);
         }catch(DuplicateKeyException ex){throw conflict("Variant key already exists");}
         audit.staff(staff.staffId(),"VARIANT_OPTION_CREATED","MENU_ITEM",itemId,requestId);
         return option(optionId);
@@ -165,14 +165,14 @@ public class VariantCatalogService {
         UUID itemId=jdbc.query("""
             SELECT g.menu_item_id FROM menu_variant_options o
             JOIN menu_variant_groups g ON g.id=o.group_id WHERE o.id=?
-            """,rs->rs.next()?rs.getObject(1,UUID.class):null,optionId);
+            """,rs->rs.next()?com.natsx.smartcafe.common.db.JdbcUuid.read(rs,"menu_item_id"):null,dbUuid(optionId));
         if(itemId==null)throw missing();
         lockItem(itemId);
         int updated=jdbc.update("""
             UPDATE menu_variant_options
             SET label=?,price_delta_idr=?,active=?,revision=revision+1
             WHERE id=? AND revision=?
-            """,label.strip(),delta,active,optionId,revision);
+            """,label.strip(),delta,active,dbUuid(optionId),revision);
         if(updated!=1)throw conflict("Variant option changed or does not exist");
         audit.staff(staff.staffId(),"VARIANT_OPTION_CHANGED","MENU_ITEM",itemId,requestId);
         return option(optionId);
@@ -184,7 +184,12 @@ public class VariantCatalogService {
             FROM menu_variant_options WHERE id=?
             """,(rs,n)->new Option(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("option_key"),
                 rs.getString("label"),rs.getLong("price_delta_idr"),
-                rs.getBoolean("active"),rs.getLong("revision")),id);
+                rs.getBoolean("active"),rs.getLong("revision")),dbUuid(id));
+    }
+
+    private Object dbUuid(UUID value) {
+        return com.natsx.smartcafe.common.db.JdbcUuid.parameter(
+            value,com.natsx.smartcafe.common.db.JdbcSqlDialect.detect(jdbc));
     }
 
     private void validateOption(String key,String label,long delta) {
