@@ -71,6 +71,20 @@ The Maven runner:
 **Success criterion:** the local console prints
 `PASS: isolated Aiven scs_review_natsx V1-V31 verified.`
 
+## Prevention: no destructive Flyway work during HTTP startup
+
+The synthetic MySQL preview now overrides Spring Boot's Flyway migration
+strategy with **validation only**. A preview container refuses to start
+unless **all 31** ordered MySQL migrations have already succeeded and
+there are no pending or failed versions. It does not run `migrate()`,
+`repair()`, `clean()` or any other schema-changing Flyway operation.
+This protects the currently interrupted V4 schema against retries caused
+by public health checks or Vercel cold starts.
+
+Normal PostgreSQL behavior is unchanged. The one-time, explicit Windows
+migration script is the only procedure allowed to recover the empty
+Aiven review database before the hosted app can start.
+
 ## After successful completion
 
 The owner can return here with only a success screenshot (hide usernames,
