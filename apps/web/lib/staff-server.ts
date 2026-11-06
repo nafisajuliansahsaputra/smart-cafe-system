@@ -61,7 +61,7 @@ export async function staffApi(
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(process.env.VERCEL_ENV === "preview" ? 45_000 : 6000),
     });
     let payload: unknown;
     try {
