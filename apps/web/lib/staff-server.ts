@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { trustedBackendHeaders } from "@/lib/vercel-trusted-backend";
 
 export const STAFF_COOKIE = "scs_staff_session";
 
@@ -53,6 +54,7 @@ export async function staffApi(
       method,
       headers: {
         Accept: "application/json",
+        ...(await trustedBackendHeaders(base)),
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),

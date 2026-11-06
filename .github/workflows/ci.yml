@@ -41,6 +41,17 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: Verify isolated Aiven CA startup and fail-closed Docker entrypoint
         run: bash scripts/test-mysql-review-entrypoint.sh
+      - name: Parse isolated Aiven one-time recovery PowerShell without executing it
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $parseErrors=$null
+          $path=(Resolve-Path 'scripts/migrate-aiven-review-windows.ps1').Path
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $path,[ref]$tokens,[ref]$parseErrors)
+          if($parseErrors.Count -gt 0) {
+            throw ($parseErrors | ForEach-Object { $_.Message }) -join '; '
+          }
       - name: Unit and Testcontainers integration
         working-directory: backend
         run: mvn -B -ntp verify

@@ -2,6 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { isMenuImageUrl } from "@/lib/menu-images";
+import { trustedBackendHeaders } from "@/lib/vercel-trusted-backend";
 
 export const GUEST_COOKIE = "scs_guest_session";
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -70,6 +71,7 @@ export async function guestApi(
       method,
       headers: {
         Accept: "application/json",
+        ...(await trustedBackendHeaders(baseUrl)),
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(key ? { "Idempotency-Key": key } : {}),

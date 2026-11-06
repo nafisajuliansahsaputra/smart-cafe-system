@@ -34,6 +34,12 @@ RUN set -eu; \
     javac -d /tmp/scs-review-diagnostic review-diagnostic/ReviewMySqlPreflight.java
 
 FROM eclipse-temurin:21-jre
+# The rolling Ubuntu 26.04 base contained a fixable HIGH apt/libapt-pkg
+# advisory (CVE-2026-109518). Upgrade those runtime packages rather than
+# suppressing the Trivy release gate. Do not retain the apt index layers.
+RUN apt-get update \
+    && apt-get install -y --only-upgrade --no-install-recommends apt libapt-pkg7.0 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN useradd --system --uid 10001 cafe
 COPY --from=build /source/target/smart-cafe-backend-0.1.0-SNAPSHOT.jar app.jar
