@@ -1,9 +1,67 @@
 # M8 Vercel container + Aiven isolated MySQL review deployment
 
-**Status 2026-11-05 WIB:** the Next.js presentation frontend is deployed
-and the Java 21 backend image builds on Vercel Container. **The backend
-has NOT been connected to Aiven**. The public site is not yet a working
-full-stack café. This plan never deploys real merchant payment credentials.
+**Status 2026-11-06 WIB:** the Next.js presentation frontend is deployed,
+and the Java 21 backend Preview now starts successfully with the isolated Aiven
+MySQL schema V1–V31. Both hosted read-only endpoints passed owner browser tests;
+**the public frontend is not connected to the protected API yet**, and this is
+not production merchant approval. This plan never deploys real merchant payment credentials.
+
+## Verified hosted recovery and safe frontend integration (6 Nov 2026)
+
+- Aiven `scs_review_natsx` migration runner returned `BUILD SUCCESS`, 31
+  validated migrations, zero failures, and **no reset**. MySQL TLS identity
+  was validated locally.
+- Backend protected Preview deployment `dpl_ARM94RbkW6AaYVFXZv8wwrytLouV`
+  (commit `bff4dfe`) is **READY** after a successful container registry push.
+- Owner browser `GET /actuator/health` returned `status: UP`.
+- Owner browser `GET /api/v1/system/status` returned
+  `database: connected`, `configuredTables: 0`. Despite the field name,
+  `configuredTables` is `SELECT COUNT(*) FROM cafe_tables`, so this
+  means **zero registered café tables**, not zero SQL schema tables.
+- Vercel runtime logs confirm a Spring Boot 4 / MySQL 8.4 Preview cold start
+  reaching `scs_review_natsx`, then a clean shutdown. A `READY` image alone
+  would not have proved this.
+- The `smart-cafe-review` frontend's previously configured
+  `API_INTERNAL_URL` remains scoped to the **older** branch
+  `fix/m8-vercel-aiven-truststore-startup`; the current
+  `fix/m8-hosted-review-one-time-migration` branch does **not** inherit it.
+
+### Cross-project connection (no static bypass secret)
+
+The backend Preview has Vercel Authentication enabled. Browsers already signed
+into Vercel can access its endpoints, but server-side Next.js calls from the
+frontend must separately authenticate. Do **not** disable backend Deployment
+Protection or put an automation-bypass key into a public environment variable.
+
+The frontend now has `apps/web/lib/vercel-trusted-backend.ts`; server-side
+`guestApi`, `staffApi`, and `fetchSystemStatus` forward the short-lived
+Vercel platform OIDC token as `x-vercel-trusted-oidc-idp-token` only when
+running in Vercel Preview and targeting the Smart Cafe backend
+`*.vercel.app` hostname. No bearer tokens or passwords are logged or exposed
+to client-side code. The backend must still validate every staff/guest bearer
+separately. This step is **code-prepared, not yet acceptance-tested**.
+
+Before enabling the integration, an authorized owner must configure the exact
+**Trusted Sources** rule under **smart-cafe-api-review → Settings → Deployment
+Protection → Trusted Sources**:
+
+- Calling project: `smart-cafe-review`.
+- From: `preview`.
+- To: `preview`.
+- No production/development mappings and no general exceptions.
+
+Then set the frontend server-side `API_INTERNAL_URL` in **Preview** scoped
+only to `fix/m8-hosted-review-one-time-migration`, with the exact HTTPS URL
+of the **already validated** backend Preview deployment; do not put it into
+`NEXT_PUBLIC_*`. Redeploy the frontend Preview. Confirm the frontend server
+status returns the expected database and table count without Vercel 401/403,
+then verify that unauthorized staff/ops endpoints still deny access before
+creating any synthetic staff, café table, order, or cash record.
+
+Previously exposed Aiven credentials must be rotated in the Aiven console and
+updated directly in the backend Preview `DB_PASSWORD` variable, without
+printing/pasting the new secret anywhere. Check fresh hosted health **after**
+the rotation and environment refresh.
 
 ## Already deployed (separate projects, not the NATSX portfolio)
 
