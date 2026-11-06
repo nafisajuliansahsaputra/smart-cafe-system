@@ -195,47 +195,79 @@ When successful, configure the **frontend** server-only
 and guest session tokens HttpOnly and never expose DB credentials to
 the browser.
 
-## First administrator (one-time, isolated MySQL schema ONLY)
+## First administrator: owner-local, one-time synthetic MySQL review
 
-A fresh Aiven review database contains staff roles after Flyway, but it
-contains no staff login. The hosted administrator bootstrap has now been
-extended to that **specific** synthetic MySQL database. The process is
-transactional and refuses an existing staff user. It locks the permanent
-\`ADMIN\` role row \`FOR UPDATE\` on MySQL rather than using unsafe
-connection-lifetime \`GET_LOCK\`; PostgreSQL retains its previous
-transaction-scoped advisory lock.
+**Status:** Prepared in PR #111; **not executed**, no administrator
+credentials have been created by this workflow.
 
-**Preconditions:** The backend's real hosted MySQL health and full permission
-tests must pass on its isolated \`scs_review_*\` database before inviting
-any reviewer. Never use the project's existing \`defaultdb\` or a cafe
-production database. The caller must also have the exact four-value
-verified TLS truststore JDBC query from the earlier section.
+After the owner validated 31 Aiven migrations and the Preview frontend
+successfully passed trusted OIDC transport, menu GET, nonexistent table
+lookup, and anonymous staff/OCC denial, the first remaining write gate
+is provisioning exactly one synthetic review ADMIN.
 
-1. Ensure the empty \`scs_review_natsx\` has migrations V1–V31 applied
-   and zero rows in \`staff_users\`; take a snapshot first.
-2. In the **backend Vercel project**, add these **preview-only** environment
-   variables for exactly one bootstrap deployment, without sharing their
-   values in a chat, ticket, or GitHub:
-   - \`SPRING_PROFILES_ACTIVE=hosted-review-bootstrap\`
-   - \`SCS_REVIEW_BOOTSTRAP_ACK=I_ACCEPT_ONE_TIME_HOSTED_REVIEW_ADMIN\`
-   - \`SCS_REVIEW_BOOTSTRAP_USERNAME=[review-login, 3–40 safe characters]\`
-   - \`SCS_REVIEW_BOOTSTRAP_PASSWORD=[unique random secret, 24–128 characters]\`
-3. Keep all \`SCS_MYSQL_REVIEW_*\` and Aiven TLS/certificate settings from
-   the previous section. The bootstrap will refuse missing acknowledgements,
-   a wrong database/host, weak TLS, enabled payments or an existing staff user.
-4. Deploy the review backend once. Verify a **single** ADMIN role assignment
-   exists in \`staff_role_assignments\` and that no second bootstrap user
-   can be created. Never expose the password in logs or screenshots.
-5. **Immediately remove** the bootstrap profile, ACK, username and
-   password from Vercel. Trigger a clean normal deployment using only
-   \`SCS_MYSQL_REVIEW_ENABLED=true\` and the isolated database settings.
-   Never leave a one-time bootstrap profile enabled on a public project.
-6. Test staff login, access control, visit opening, checkout, KDS, waiter
-   assignment and immutable receipts using **synthetic-only** data.
+Do **not** use a Vercel `hosted-review-bootstrap` profile for this step:
+the Hobby Java cold-start timeout previously interrupted database
+initialization. The hosted bootstrap remains disabled. Instead use
+`scripts/provision-aiven-review-admin-windows.ps1` from the owner's own
+Windows machine, which invokes the explicitly named Java runner
+`HostedAivenOwnerAdminProvision`. It is deliberately not discovered by
+default `mvn test`.
 
-A Vercel deployment marked \`READY\` proves that the image was deployed,
-not that the one-time admin setup or live API operations succeeded.
-Do not expose the deployed API as a working POS until those checks pass.
+Preconditions:
+
+1. Rotate any previously displayed Aiven database password and update
+   the backend Preview `DB_PASSWORD` privately, without pasting either
+   secret into screenshots, tickets, shell command history or GitHub.
+2. Ensure the isolated Aiven schema is `scs_review_natsx` and V1–V31
+   are checksum-validated. Make a backup or snapshot before first writes.
+3. Confirm there is **no existing staff user**. The Java runner refuses
+   any existing staff and a second invocation; it does not reset data.
+4. Verify Windows JDK 21, the Aiven public `ca.pem`, and the approved
+   `fix/m8-hosted-review-one-time-migration` Git branch.
+
+From the local checked-out repository:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\provision-aiven-review-admin-windows.ps1 `
+  -HostName "mysql-1e5b1eb2-nafisajuliansahsaputra-811e.b.aivencloud.com" `
+  -Port 12886 `
+  -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
+```
+
+The owner must type `CREATE-ONE-SYNTHETIC-REVIEW-ADMIN`,
+choose an ADMIN login and enter both the **Aiven password** and a
+different **new ADMIN password (24–128 characters)** using hidden prompts.
+No password or BCrypt hash is committed to the repository or printed.
+The script uses a locally verified Maven runtime and cleans up temporary
+credential environment variables even on failure.
+
+The Java runner restricts the MySQL host to Aiven, fixes the database
+catalog, enforces hostname-verified TLS using the supplied CA, confirms
+all 31 successful Flyway migrations and zero pending migrations,
+executes `flyway.validate()` (never `migrate()` or `clean()`),
+and ensures no staff exist. Inside **one InnoDB transaction** it locks
+the migrated `ADMIN` role row `FOR UPDATE`, inserts one BCrypt(12)
+staff password hash and assigns one ADMIN role. A failure rolls back
+both inserts, and concurrent provisioners cannot pass the empty-user
+gate simultaneously. No menu, guest, stock, cash or payment data is
+changed.
+
+Expected success:
+
+```text
+PASS: exactly one review ADMIN provisioned transactionally.
+```
+
+Afterwards, sign in **only** at the protected Preview frontend
+`/staff/login` using the owner's newly created credentials. Check
+session creation, logout, role denial and staff authorization before
+creating any synthetic tables, menu, order, kitchen or cash records.
+Do not post the credentials in chat. Do not re-run the bootstrap as
+a login test. Never set `SPRING_PROFILES_ACTIVE` or one-time bootstrap
+credentials in the hosted backend's Vercel Preview environment.
+
+This owner-local mechanism is strictly a **synthetic Preview** tool,
+not an approved merchant/admin recovery system or live POS cutover.
 
 ## Deployment evidence
 
