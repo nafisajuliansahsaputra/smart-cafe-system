@@ -63,6 +63,41 @@ updated directly in the backend Preview `DB_PASSWORD` variable, without
 printing/pasting the new secret anywhere. Check fresh hosted health **after**
 the rotation and environment refresh.
 
+## Preview integration evidence and remaining gates (6 Nov 2026)
+
+- `smart-cafe-review` is permitted to reach `smart-cafe-api-review`
+  only through Vercel Trusted Sources **Preview → Preview**.
+- The original read-only frontend smoke check returned
+  `result: passed`, `upstreamHttpStatus: 404` (intentionally nonexistent
+  test table), and `workloadIdentityPresent: true`.
+- Synthetic Aiven MySQL still validates Flyway V1–V31 without migrating at
+  container startup. Review backend `dpl_2TJ7CfYE9og7U13TwAwd9Ko4RtMC`
+  responded with HTTP 200 `database: connected`, `configuredTables: 0`;
+  anonymous `/api/v1/menu` returned HTTP 200 and an empty catalog.
+- The frontend server-side Preview-only `API_INTERNAL_URL` now targets
+  `https://smart-cafe-api-review-ngj8esauc.vercel.app`, with
+  `dpl_6eMa3ySkcPeJGKFSgx2i3nk9CXNo` as the first integration build.
+  It passed the original read-only frontend-to-backend check.
+- The backend previously had Vercel Hobby cold-start port timeouts.
+  Commit `8ba67f7` reuses a single Flyway history snapshot. Preview
+  `SPRING_AUTOCONFIGURE_EXCLUDE` now excludes **both** Hibernate JPA and
+  Spring Data JPA repository auto-configuration (neither is used by the
+  synthetic JDBC controllers); the first Hibernate-only attempt failed
+  because `entityManagerFactory` was still required, and was rolled back.
+  Both exclusions apply **only** to the exact synthetic Preview branch,
+  not normal PostgreSQL environments. Flyway validation, TLS and payment
+  guards remain active.
+- The preview-only `/api/review-connectivity` additionally checks that
+  menu GET is public, while staff identity and OCC GET return anonymous
+  HTTP 401. All tests are read-only; mutating API calls retain their
+  original 6-second timeout. No bearer credentials or OIDC tokens appear
+  in this endpoint's response.
+
+This does **not** certify always-on reliability, full staff bootstrap,
+multi-role operations, digital payment integrations, or merchant production.
+Those remain gated on separate live end-to-end tests. Never expose the
+review API by disabling Deployment Protection or use live funds.
+
 ## Already deployed (separate projects, not the NATSX portfolio)
 
 | Component | Vercel project | URL | Capability |

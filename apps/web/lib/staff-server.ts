@@ -61,7 +61,9 @@ export async function staffApi(
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(process.env.VERCEL_ENV === "preview" ? 45_000 : 6000),
+      // Only read-only Preview requests wait through a possible backend cold start.
+      // Mutations keep their short deadline and idempotency protection.
+      signal: AbortSignal.timeout(process.env.VERCEL_ENV === "preview" && method === "GET" ? 45_000 : 6000),
     });
     let payload: unknown;
     try {
