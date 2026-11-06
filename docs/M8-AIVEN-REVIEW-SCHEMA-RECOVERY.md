@@ -1,6 +1,6 @@
 # Recover the isolated Aiven review schema after Vercel cold-start timeout
 
-**Status:** 2026-11-05 WIB. This does NOT touch `defaultdb`, production MySQL,
+**Status:** 2026-11-06 WIB. This does NOT touch `defaultdb`, production MySQL,
 Neon/PostgreSQL or live merchant payments. The target is fixed to **`scs_review_natsx`**.
 
 ## Why the API is not ready yet
@@ -84,6 +84,44 @@ by public health checks or Vercel cold starts.
 Normal PostgreSQL behavior is unchanged. The one-time, explicit Windows
 migration script is the only procedure allowed to recover the empty
 Aiven review database before the hosted app can start.
+
+## Separate Vercel Container Registry quota blocker (verified 6 Nov 2026)
+
+This is **not** a Maven compilation failure and **not** an Aiven password error.
+The exact-head `bff4dfe` Java image built successfully on Vercel, but the
+`smart-cafe-api-review` deployments
+`dpl_65ygKPDPgxSPVYeMBfLsGEX2uiYv` and
+`dpl_9m5dG2xgHSAh5xuHZ7UQsy3qDDZn` failed on registry push with:
+
+```text
+denied: repository has reached the maximum allowed number of images
+```
+
+The project is on the Hobby plan. Vercel documents a finite image quota.
+Repeated **force redeploys do not resolve a full registry** and needlessly
+consume build minutes. This is a separate blocker from the incomplete MySQL
+V4 migration.
+
+Safe manual Vercel step:
+
+1. Open the `smart-cafe-api-review` project in the Vercel dashboard, then
+   inspect **Sandboxes → Container Registry / Images** (menu naming may vary).
+2. Review the `dockerfile` repository's stored tags and digests. Identify
+   only obsolete builds that are **not referenced by any active/rollback
+   deployment**. Remove eligible old images using the dashboard's supported
+   management controls. Never delete images still required by a running
+   deployment. Do not delete the project or its environment variables.
+3. If image deletion is unavailable, use Vercel support or the documented
+   registry management UI; **do not create disposable extra projects** to
+   evade the quota. Do not retry a push until capacity is available.
+4. Separately, complete the one-time local Aiven V1–V31 recovery described
+   above. Both the registry capacity and the persistent schema must be
+   ready before a new backend Preview deployment can succeed and be tested.
+
+The frontend project `smart-cafe-review` is already **READY** at
+commit `bff4dfe`. PR #111's six exact-head GitHub Actions workflows all
+passed. **Neither fact proves the hosted Java API is healthy.** The API
+remains blocked until the two independent steps above are completed.
 
 ## After successful completion
 
