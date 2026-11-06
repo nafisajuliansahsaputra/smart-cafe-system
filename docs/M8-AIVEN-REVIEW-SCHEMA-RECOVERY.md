@@ -123,6 +123,40 @@ commit `bff4dfe`. PR #111's six exact-head GitHub Actions workflows all
 passed. **Neither fact proves the hosted Java API is healthy.** The API
 remains blocked until the two independent steps above are completed.
 
+## Owner-local Aiven recovery result (verified 6 Nov 2026, 20:10 WIB)
+
+The owner executed `scripts/migrate-aiven-review-windows.ps1` from Windows
+against the **existing** isolated Aiven MySQL `scs_review_natsx` schema.
+The local Maven/JUnit console reports:
+
+```text
+Successfully validated 31 migrations
+Schema 'scs_review_natsx' is up to date. No migration necessary.
+PASS: persistent review already has all 31 valid migrations; no reset performed.
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+PASS: isolated scs_review_natsx migrations are validated and persistent.
+```
+
+**Result:** MySQL V1–V31 are present, checksum-validated, and persistent.
+The recovery runner took the **already-complete** path and did **not**
+clean the schema. This is evidence of successful database validation,
+**not** a hosted HTTP health result.
+
+**Next gate:** Backend Preview deployment
+`dpl_ARM94RbkW6AaYVFXZv8wwrytLouV` on commit `bff4dfe` is
+`READY` with registry push completed. Its protected Vercel preview
+must still be exercised by a Vercel-authorized reviewer on
+`/actuator/health` and `/api/v1/system/status` and checked for runtime
+errors. Keep preview Deployment Protection enabled. If the earlier Aiven
+password was rotated, update the backend Preview `DB_PASSWORD` securely
+and redeploy with the current environment before health verification.
+Do not place credentials in docs, tickets, screenshots or repository.
+
+Do not connect the public frontend or initialize an ADMIN until live
+health, authentication, role-denial and financial safety checks pass.
+Do not repeat `clean()` or re-run migration as a way of testing health.
+
 ## After successful completion
 
 The owner can return here with only a success screenshot (hide usernames,
