@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^[A-Za-z0-9.-]+\\.aivencloud\\.com$')]
+    [ValidatePattern('^[A-Za-z0-9.-]+\.aivencloud\.com$')]
     [string]$HostName,
 
     [Parameter(Mandatory = $true)]
