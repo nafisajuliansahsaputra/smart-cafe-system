@@ -26,9 +26,22 @@ Run from `C:\Users\nafis\smart-cafe-aiven`:
 
 ```powershell
 git fetch origin
-git switch -C fix/m8-hosted-review-one-time-migration origin/fix/m8-hosted-review-one-time-migration
+git switch --detach origin/fix/m8-hosted-review-one-time-migration
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\migrate-aiven-review-windows.ps1 -HostName "mysql-1e5b1eb2-nafisajuliansahsaputra-811e.b.aivencloud.com" -Port 12886 -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
 ```
+
+The `git switch --detach` above does not reset or overwrite your local
+branch. If Git detects local uncommitted changes, it refuses switching;
+review and save those changes rather than running a forced checkout.
+
+**Maven is no longer a manual prerequisite:** when `mvn` is absent, the
+script downloads fixed Apache Maven **3.9.16** from the official HTTPS
+Apache distribution, verifies its SHA-512 checksum against the official
+checksum file, and extracts it under
+`%LOCALAPPDATA%\\SmartCafe\\tools`. It does not edit system PATH or
+require administrator privileges. **JDK 21 and the local Aiven CA file
+are still required.** Do not run the script if the checksum verification
+fails.
 
 The script will check Aiven TLS and MySQL, then ask for the exact local
 confirmation `RESET-EMPTY-SYNTHETIC-REVIEW` before any potential schema
