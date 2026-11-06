@@ -27,4 +27,11 @@ if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
     rm -f "$ca_file"
     trap - EXIT
 fi
+# Short-lived Hobby container cold starts have a strict ~29-second port-bind
+# deadline. C1-only JIT compilation brings the synthetic MySQL Preview API
+# to readiness sooner without changing schemas, TLS, or payment safeguards.
+# Leave the regular PostgreSQL/merchant runtime unchanged.
+if [ "${SCS_MYSQL_REVIEW_ENABLED:-false}" = "true" ]; then
+    exec java -XX:TieredStopAtLevel=1 -jar /app/app.jar
+fi
 exec java -jar /app/app.jar
