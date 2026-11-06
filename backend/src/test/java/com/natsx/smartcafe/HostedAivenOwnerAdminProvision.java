@@ -1,7 +1,5 @@
 package com.natsx.smartcafe;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -144,13 +142,17 @@ final class HostedAivenOwnerAdminProvision {
                         insert.setString(1, staffId);
                         insert.setString(2, adminUsername);
                         insert.setString(3, passwordHash);
-                        assertEquals(1, insert.executeUpdate());
+                        if (insert.executeUpdate() != 1) {
+                            throw new IllegalStateException("Exactly one staff row must be inserted");
+                        }
                     }
                     try (PreparedStatement assign = connection.prepareStatement(
                             "INSERT INTO staff_role_assignments(staff_user_id,role_key) "
                             + "VALUES (?,'ADMIN')")) {
                         assign.setString(1, staffId);
-                        assertEquals(1, assign.executeUpdate());
+                        if (assign.executeUpdate() != 1) {
+                            throw new IllegalStateException("Exactly one ADMIN assignment must be inserted");
+                        }
                     }
                     connection.commit();
                 } catch (Exception failure) {
