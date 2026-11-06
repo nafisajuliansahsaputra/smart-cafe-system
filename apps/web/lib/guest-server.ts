@@ -78,7 +78,7 @@ export async function guestApi(
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(process.env.VERCEL_ENV === "preview" ? 45_000 : 6000),
     });
     let payload: unknown = null;
     try { payload = await response.json(); } catch { /* invalid upstream response */ }
