@@ -1,3 +1,5 @@
+import { trustedBackendHeaders } from "@/lib/vercel-trusted-backend";
+
 export type ApiStatus = {
   service: string;
   database: string;
@@ -8,6 +10,7 @@ export async function fetchSystemStatus(): Promise<ApiStatus | null> {
   const baseUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8080";
   try {
     const response = await fetch(new URL("/api/v1/system/status", baseUrl), {
+      headers: await trustedBackendHeaders(baseUrl),
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
