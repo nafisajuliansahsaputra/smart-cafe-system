@@ -46,6 +46,8 @@ class HostedMySqlReviewFlywaySafetyTest {
         assertDoesNotThrow(() ->
             HostedMySqlReviewFlywaySafety.validatePriorMigration(fixture.flyway()));
         verify(fixture.flyway()).validate();
+        // A single history snapshot avoids repeated Aiven metadata reads.
+        verify(fixture.flyway()).info();
         verify(fixture.flyway(), never()).migrate();
     }
 

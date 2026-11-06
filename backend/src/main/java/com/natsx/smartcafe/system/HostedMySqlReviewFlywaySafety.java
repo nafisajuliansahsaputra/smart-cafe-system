@@ -2,6 +2,7 @@ package com.natsx.smartcafe.system;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationInfoService;
 import org.flywaydb.core.api.MigrationState;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
@@ -32,14 +33,17 @@ class HostedMySqlReviewFlywaySafety {
             + "Flyway migrations. Run the explicit owner-local empty-only "
             + "Aiven recovery first; HTTP startup never mutates the schema.";
         try {
-            MigrationInfo[] applied = flyway.info().applied();
+            // Reuse a single Flyway history snapshot: Aiven network round trips are
+            // costly on Hobby cold starts. No SQL DDL is executed.
+            MigrationInfoService snapshot = flyway.info();
+            MigrationInfo[] applied = snapshot.applied();
             if (applied.length != 31) throw new IllegalStateException(error);
             for (MigrationInfo migration : applied) {
                 if (migration.getState() != MigrationState.SUCCESS) {
                     throw new IllegalStateException(error);
                 }
             }
-            if (flyway.info().pending().length != 0) {
+            if (snapshot.pending().length != 0) {
                 throw new IllegalStateException(error);
             }
             // This checks checksums, file identity and failed migrations
