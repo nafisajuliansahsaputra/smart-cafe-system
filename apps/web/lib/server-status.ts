@@ -12,7 +12,7 @@ export async function fetchSystemStatus(): Promise<ApiStatus | null> {
     const response = await fetch(new URL("/api/v1/system/status", baseUrl), {
       headers: await trustedBackendHeaders(baseUrl),
       cache: "no-store",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(process.env.VERCEL_ENV === "preview" ? 45_000 : 5000),
     });
     if (!response.ok) return null;
     const envelope: unknown = await response.json();
