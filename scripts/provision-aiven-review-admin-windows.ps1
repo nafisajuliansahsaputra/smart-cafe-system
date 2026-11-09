@@ -91,8 +91,8 @@ if ($username -cnotmatch '^[A-Za-z][A-Za-z0-9._-]{2,39}$') {
     throw 'ADMIN login is invalid; no database changes were made.'
 }
 $secureDb = Read-Host 'Aiven DB password (hidden)' -AsSecureString
-$secureAdmin = Read-Host 'NEW review ADMIN password, 24-128 chars (hidden)' -AsSecureString
-$secureConfirm = Read-Host 'Confirm NEW review ADMIN password (hidden)' -AsSecureString
+$secureAdmin = $null
+$secureConfirm = $null
 
 function Read-ReviewSecureString([Security.SecureString]$secret) {
     $ptr = [IntPtr]::Zero
@@ -112,14 +112,33 @@ $rawAdmin = $null
 $rawConfirm = $null
 try {
     $rawDb = Read-ReviewSecureString $secureDb
-    $rawAdmin = Read-ReviewSecureString $secureAdmin
-    $rawConfirm = Read-ReviewSecureString $secureConfirm
     if ([string]::IsNullOrWhiteSpace($rawDb)) {
         throw 'Database password must not be blank.'
     }
-    if ($rawAdmin.Length -lt 24 -or $rawAdmin.Length -gt 128 -or
-        $rawAdmin -cne $rawConfirm) {
-        throw 'ADMIN password does not meet policy or confirmation differs.'
+    # A typo at confirmation must not force the owner to fetch the branch,
+    # authorize the action, or retype the Aiven DB password all over again.
+    # No database connection or write happens before these checks pass.
+    $acceptedAdminPassword = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $secureAdmin = Read-Host 'NEW review ADMIN password, 24-128 chars (hidden)' -AsSecureString
+        $secureConfirm = Read-Host 'Confirm NEW review ADMIN password (hidden)' -AsSecureString
+        $rawAdmin = Read-ReviewSecureString $secureAdmin
+        $rawConfirm = Read-ReviewSecureString $secureConfirm
+        if ($rawAdmin.Length -ge 24 -and $rawAdmin.Length -le 128 -and
+            $rawAdmin -cne '' -and $rawAdmin -ceq $rawConfirm) {
+            $acceptedAdminPassword = $true
+            break
+        }
+        Write-Warning "Password too short, too long or confirmation differs. Attempt $attempt of 3."
+        $rawAdmin = $null
+        $rawConfirm = $null
+        $secureAdmin.Dispose()
+        $secureConfirm.Dispose()
+        $secureAdmin = $null
+        $secureConfirm = $null
+    }
+    if (-not $acceptedAdminPassword) {
+        throw 'Three invalid ADMIN password confirmations; no database changes were made.'
     }
     # Temporary inherited variables are limited to this owner-local Maven
     # process, then deleted even when compilation, TLS or SQL checks fail.
@@ -155,7 +174,7 @@ finally {
     $rawAdmin = $null
     $rawConfirm = $null
     $secureDb.Dispose()
-    $secureAdmin.Dispose()
-    $secureConfirm.Dispose()
+    if ($null -ne $secureAdmin) { $secureAdmin.Dispose() }
+    if ($null -ne $secureConfirm) { $secureConfirm.Dispose() }
 }
 Write-Host 'PASS: first synthetic Aiven review ADMIN is provisioned. Do not run again.'
