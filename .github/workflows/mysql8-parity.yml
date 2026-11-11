@@ -1,6 +1,13 @@
 name: MySQL 8 Port Parity (isolated, no merchant or external DB)
 
 on:
+  push:
+    branches: [fix/m8-hosted-review-one-time-migration]
+    paths:
+      - "backend/src/main/java/com/natsx/smartcafe/catalog/MenuController.java"
+      - "backend/src/test/java/com/natsx/smartcafe/MySqlCoreParityIntegrationTest.java"
+      - "backend/src/main/resources/db/mysql/**"
+      - ".github/workflows/mysql8-parity.yml"
   pull_request:
     paths:
       - "backend/pom.xml"
