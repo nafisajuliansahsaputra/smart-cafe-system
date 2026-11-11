@@ -980,3 +980,35 @@ candidate, not a production financial service or a Vercel portfolio release.
   approves, consider publishing the project as a portfolio case study.
 See `docs/M8-MYSQL-MIGRATION.md`. PostgreSQL remains stable; MySQL is NOT
 live or yet operational.
+
+### M8 hosted review verified update (11 Nov 2026)
+
+- [x] Aiven MySQL `scs_review_natsx` Flyway V1–V31 checksum validated by the
+  owner-local runner (no cleanup). Preview Spring Boot health and
+  `/api/v1/system/status` returned `UP` / `database: connected`.
+- [x] Vercel Trusted Sources Preview → Preview and short-lived OIDC confirmed
+  on live frontend `/api/review-connectivity`; read-only public menu 200,
+  nonexistent test table 404, unauthenticated staff/OCC 401.
+- [x] Fix the MySQL CHAR(36) menu UUID decoder before seeding nonempty data.
+  Validate via real disposable MySQL 8.4 integration test.
+- [x] Add explicit owner-local ADMIN provisioner and optional **transactional**
+  synthetic seed: 6 tables, 4 categories, 12 menu items/stock, 2 games and
+  3 serialized game copies. Verify transaction rollback and menu read on
+  disposable MySQL 8.4; no Aiven write performed by CI.
+- [x] Full original PostgreSQL isolated CI 11/11 groups passed on
+  `96958b8` (GitHub Actions run `42248387291`).
+- [ ] Owner rotates the previously exposed Aiven password and updates only
+  the backend Preview secret. Owner runs the explicit one-time local ADMIN
+  + synthetic seed command after verifying zero business data.
+- [ ] Verify the hosted ADMIN login/logout and live role-backed table/catalog,
+  QR guest, cash order, OCC, KDS, waiter, receipt and audit sequence on
+  **fictional** data. Protected Preview web/API are not yet full-flow approved.
+- [ ] Exercise cold-start regression and full hosted MySQL business flows
+  repeatedly; PostgreSQL E2E passing is not equivalent to MySQL E2E.
+- [ ] Merchant QRIS/VA onboarding, receipt messaging provider authorization,
+  physical QR/NFC devices, backup/restore and production release require
+  explicit owner/provider approvals. Never send live funds in Preview.
+
+Scope: All code and evidence above are on **draft PR #111**, not main.
+Do not equate `/showcase` with backend settlement and do not add the
+site to the NATSX portfolio until owner-facing acceptance.
