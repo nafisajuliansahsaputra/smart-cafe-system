@@ -17,6 +17,9 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import com.natsx.smartcafe.identity.StaffAuthService;
+import com.natsx.smartcafe.identity.StaffPrincipal;
+import com.natsx.smartcafe.fulfillment.WaiterTaskQueryService;
+import java.util.Set;
 import java.util.UUID;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -123,6 +126,72 @@ class MySqlSyntheticCatalogSeedTest {
         try (Connection connection = dataSource.getConnection()) {
             assertEquals(0L, count(connection, "staff_users"));
             assertEquals(0L, count(connection, "staff_sessions"));
+        }
+    }
+
+
+    @Test
+    void waiterTaskProjectionAndRoleScopedUuidBindingsWorkOnMySql() throws Exception {
+        // Exercise the real MySQL query (window function, date interval, JSON
+        // extraction and ASCII UUID parameters), never a mocked row mapper.
+        var waiterId = UUID.randomUUID();
+        var tableId = UUID.randomUUID();
+        var visitId = UUID.randomUUID();
+        var guestId = UUID.randomUUID();
+        var orderId = UUID.randomUUID();
+        var intentId = UUID.randomUUID();
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
+            jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+                waiterId.toString(), "waiter-port-review", "synthetic-unused-hash");
+            jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
+                tableId.toString(), "WREV01", "waiter-review-only", 4);
+            jdbc.update("INSERT INTO table_visits(id,table_id,opened_by,join_secret_hash) VALUES (?,?,?,?)",
+                visitId.toString(), tableId.toString(), waiterId.toString(), "a".repeat(64));
+            jdbc.update("INSERT INTO visit_guests(id,visit_id,display_name) VALUES (?,?,?)",
+                guestId.toString(), visitId.toString(), "Fictional Reviewer");
+            jdbc.update("""
+                INSERT INTO orders(id,visit_id,guest_id,status,subtotal_idr,total_idr,pricing_policy_version)
+                VALUES (?,?,?,?,?,?,?)
+                """, orderId.toString(),visitId.toString(),guestId.toString(),
+                "SERVED",26000L,26000L,"synthetic-review");
+            jdbc.update("""
+                INSERT INTO payment_intents(id,order_id,method_selected,amount_due_idr,aggregate_status)
+                VALUES (?,?,?,?,?)
+                """, intentId.toString(),orderId.toString(),"CASH",26000L,"AWAITING_CASH");
+            jdbc.update("""
+                INSERT INTO order_lines(order_id,name_snapshot,variant_snapshot,unit_price_idr,
+                                        quantity,line_total_idr,notes)
+                VALUES (?,?,?,?,?,?,?)
+                """,orderId.toString(),"Iced Americano","{\"label\":\"Regular\"}",
+                26000L,1,26000L,"Synthetic only");
+
+            var service = new WaiterTaskQueryService(jdbc);
+            var waiter = new StaffPrincipal(waiterId, "waiter-port-review", "synthetic",
+                Set.of("WAITER"));
+            var page = service.page(waiter, 0);
+            assertEquals(1L, page.total());
+            assertEquals(1, page.items().size());
+            var task = page.items().getFirst();
+            assertEquals(orderId, task.orderId());
+            assertEquals(intentId, task.paymentIntentId());
+            assertEquals("AWAITING_CASH", task.paymentStatus());
+            assertEquals("Regular", task.lines().getFirst().variantLabel());
+            assertEquals("Iced Americano", task.lines().getFirst().name());
+            assertEquals(1, service.tasks(waiter).size());
+
+            var stranger = new StaffPrincipal(UUID.randomUUID(), "other-waiter",
+                "synthetic",Set.of("WAITER"));
+            assertEquals(0L, service.page(stranger, 0).total());
+            var admin = new StaffPrincipal(UUID.randomUUID(),"fake-supervisor","synthetic",
+                Set.of("ADMIN"));
+            assertEquals(1L, service.page(admin, 0).total());
+            connection.rollback();
+        }
+        try (Connection connection = dataSource.getConnection()) {
+            assertEquals(0L,count(connection,"orders"));
+            assertEquals(0L,count(connection,"payment_intents"));
         }
     }
 
