@@ -19,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import com.natsx.smartcafe.identity.StaffAuthService;
 import com.natsx.smartcafe.identity.StaffPrincipal;
 import com.natsx.smartcafe.fulfillment.WaiterTaskQueryService;
+import com.natsx.smartcafe.ops.OrderControlQueryService;
 import java.util.Set;
 import java.util.UUID;
 import org.testcontainers.junit.jupiter.Container;
@@ -187,6 +188,18 @@ class MySqlSyntheticCatalogSeedTest {
             var admin = new StaffPrincipal(UUID.randomUUID(),"fake-supervisor","synthetic",
                 Set.of("ADMIN"));
             assertEquals(1L, service.page(admin, 0).total());
+
+            // Verify OCC performs parameterized CHAR(36) UUID filters and
+            // reads JSON variant labels through MySQL's JSON_EXTRACT.
+            var occ = new OrderControlQueryService(jdbc);
+            var filtered = occ.page(0, "SERVED", "AWAITING_CASH", null, orderId);
+            assertEquals(1L, filtered.total());
+            assertEquals(orderId, filtered.items().getFirst().id());
+            assertEquals(1, occ.search(null, null, null, orderId).size());
+            var detail = occ.detail(orderId);
+            assertEquals("AWAITING_CASH", detail.paymentStatus());
+            assertEquals("Regular", detail.lines().getFirst().variantLabel());
+            assertEquals("Iced Americano", detail.lines().getFirst().name());
             connection.rollback();
         }
         try (Connection connection = dataSource.getConnection()) {
