@@ -195,79 +195,75 @@ When successful, configure the **frontend** server-only
 and guest session tokens HttpOnly and never expose DB credentials to
 the browser.
 
-## First administrator: owner-local, one-time synthetic MySQL review
+## First ADMIN and fictional catalog: one owner-local operation
 
-**Status:** Prepared in PR #111; **not executed**, no administrator
-credentials have been created by this workflow.
+**Status as of 11 Nov 2026 WIB:** Mechanism prepared and tested in PR #111,
+but **not yet executed against Aiven**. The real Aiven schema has valid
+Flyway V1–V31, and the protected Preview frontend/backend connection passed
+its read-only test.
 
-After the owner validated 31 Aiven migrations and the Preview frontend
-successfully passed trusted OIDC transport, menu GET, nonexistent table
-lookup, and anonymous staff/OCC denial, the first remaining write gate
-is provisioning exactly one synthetic review ADMIN.
+The owner does **not** need to create tables, products, stock or game
+copies manually. The Windows bootstrap can atomically create:
 
-Do **not** use a Vercel `hosted-review-bootstrap` profile for this step:
-the Hobby Java cold-start timeout previously interrupted database
-initialization. The hosted bootstrap remains disabled. Instead use
-`scripts/provision-aiven-review-admin-windows.ps1` from the owner's own
-Windows machine, which invokes the explicitly named Java runner
-`HostedAivenOwnerAdminProvision`. It is deliberately not discovered by
-default `mvn test`.
+- One ADMIN, chosen privately by the owner (BCrypt/12, no default login).
+- Six fictional café tables, four menu categories and twelve products.
+- 200 synthetic stock units per item, Size and Milk modifiers on Spanish Latte.
+- Two physical game types and three serialized game copies.
+- No guest identities, orders, money, payment attempts or receipts.
 
-Preconditions:
+Only run this once in the isolated Aiven `scs_review_natsx` schema.
+The required conditions are: (1) rotate any previously disclosed Aiven
+database password and update the backend Preview `DB_PASSWORD`; (2) make a
+backup/snapshot; (3) confirm the service is reachable, the CA file exists and
+the current review branch is checked out; (4) enter the secrets in hidden
+PowerShell prompts, **never into GitHub, screenshots, URLs or chat**.
 
-1. Rotate any previously displayed Aiven database password and update
-   the backend Preview `DB_PASSWORD` privately, without pasting either
-   secret into screenshots, tickets, shell command history or GitHub.
-2. Ensure the isolated Aiven schema is `scs_review_natsx` and V1–V31
-   are checksum-validated. Make a backup or snapshot before first writes.
-3. Confirm there is **no existing staff user**. The Java runner refuses
-   any existing staff and a second invocation; it does not reset data.
-4. Verify Windows JDK 21, the Aiven public `ca.pem`, and the approved
-   `fix/m8-hosted-review-one-time-migration` Git branch.
-
-From the local checked-out repository:
+From the checked-out `smart-cafe-system` review branch:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\provision-aiven-review-admin-windows.ps1 `
-  -HostName "mysql-1e5b1eb2-nafisajuliansahsaputra-811e.b.aivencloud.com" `
-  -Port 12886 `
-  -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\provision-aiven-review-admin-windows.ps1 -HostName "mysql-1e5b1eb2-nafisajuliansahsaputra-811e.b.aivencloud.com" -Port 12886 -CaFile "$env:LOCALAPPDATA\SmartCafe\ca.pem" -SeedSyntheticCatalog
 ```
 
-The owner must type `CREATE-ONE-SYNTHETIC-REVIEW-ADMIN`,
-choose an ADMIN login and enter both the **Aiven password** and a
-different **new ADMIN password (24–128 characters)** using hidden prompts.
-No password or BCrypt hash is committed to the repository or printed.
-The script uses a locally verified Maven runtime and cleans up temporary
-credential environment variables even on failure.
+The single approval phrase for this option is
+`CREATE-ONE-SYNTHETIC-REVIEW-ADMIN-AND-CATALOG`. Choose a 3–40
+character ADMIN username, enter the current Aiven password, then enter
+a different 24–128 character ADMIN password. Confirmation can be retried
+three times **before any database connection or write**, without retyping
+the Aiven password. Passwords are never stored in the repository.
 
-The Java runner restricts the MySQL host to Aiven, fixes the database
-catalog, enforces hostname-verified TLS using the supplied CA, confirms
-all 31 successful Flyway migrations and zero pending migrations,
-executes `flyway.validate()` (never `migrate()` or `clean()`),
-and ensures no staff exist. Inside **one InnoDB transaction** it locks
-the migrated `ADMIN` role row `FOR UPDATE`, inserts one BCrypt(12)
-staff password hash and assigns one ADMIN role. A failure rolls back
-both inserts, and concurrent provisioners cannot pass the empty-user
-gate simultaneously. No menu, guest, stock, cash or payment data is
-changed.
+The Java runner checks the exact database catalog, verified CA/TLS
+hostname, **all 31 successful and checksum-validated Flyway migrations**,
+the presence of the `ADMIN` role, zero existing staff, and (when the
+seed option is enabled) zero existing business records. It then locks
+the ADMIN role, creates the account, and inserts all fictional inventory
+in **one InnoDB transaction**. Any partial failure rolls back both the
+account and catalog. Flyway `clean()`/`migrate()` are never invoked.
 
-Expected success:
+Expected final messages:
 
 ```text
 PASS: exactly one review ADMIN provisioned transactionally.
+PASS: six tables, 12 menu items, 4 categories, 2 games, 3 copies seeded atomically.
 ```
 
-Afterwards, sign in **only** at the protected Preview frontend
-`/staff/login` using the owner's newly created credentials. Check
-session creation, logout, role denial and staff authorization before
-creating any synthetic tables, menu, order, kitchen or cash records.
-Do not post the credentials in chat. Do not re-run the bootstrap as
-a login test. Never set `SPRING_PROFILES_ACTIVE` or one-time bootstrap
-credentials in the hosted backend's Vercel Preview environment.
+The seeding SQL and rollback were verified in disposable MySQL 8.4 with
+`MySqlSyntheticCatalogSeedTest`, alongside the public menu endpoint with
+real MySQL UUID mappings. This proof does **not** mean an ADMIN has been
+created on Aiven or that hosted staff-to-receipt operations are accepted.
 
-This owner-local mechanism is strictly a **synthetic Preview** tool,
-not an approved merchant/admin recovery system or live POS cutover.
+For an empty review where **only** the ADMIN is required, omit
+`-SeedSyntheticCatalog` and use the original authorization phrase
+`CREATE-ONE-SYNTHETIC-REVIEW-ADMIN`. Do not run either form a second
+time after success.
+
+After the one-time setup, use protected Preview `/staff/login` to
+verify account login, role access, logout and audit, then run a
+dummy-money full operations cycle (table → QR guest → menu/cart → cash
+order → OCC approval → KDS → waiter → paid-only receipt). Use **no real
+merchant funds or personally identifying guest data**. Production QRIS/VA
+provider onboarding, external receipt sender, real-device/tablet UX,
+backup recovery, and owner release acceptance remain separate gates.
+The educational `/showcase` is not proof of real operations.
 
 ## Deployment evidence
 
