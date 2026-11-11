@@ -225,7 +225,12 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
+          # Ubuntu GitHub runner already provides Chromium shared libraries.
+          # Avoid Playwright's apt-get font install: GitHub mirror DNS outages
+          # caused three otherwise passing browser jobs to fail on 11 Nov.
+          # Browser version still matches the pinned @playwright/test release.
+          npx playwright install chromium
+          npx playwright --version
       - name: Run authenticated full browser acceptance
         working-directory: apps/web
         env:
@@ -307,7 +312,12 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
+          # Ubuntu GitHub runner already provides Chromium shared libraries.
+          # Avoid Playwright's apt-get font install: GitHub mirror DNS outages
+          # caused three otherwise passing browser jobs to fail on 11 Nov.
+          # Browser version still matches the pinned @playwright/test release.
+          npx playwright install chromium
+          npx playwright --version
       - name: Exercise guest QRIS and VA fake creation through browser and API
         working-directory: apps/web
         env:
@@ -417,7 +427,12 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
+          # Ubuntu GitHub runner already provides Chromium shared libraries.
+          # Avoid Playwright's apt-get font install: GitHub mirror DNS outages
+          # caused three otherwise passing browser jobs to fail on 11 Nov.
+          # Browser version still matches the pinned @playwright/test release.
+          npx playwright install chromium
+          npx playwright --version
       - name: Exercise full cash workflow and negative CSRF via HTTPS edge
         working-directory: apps/web
         env:
