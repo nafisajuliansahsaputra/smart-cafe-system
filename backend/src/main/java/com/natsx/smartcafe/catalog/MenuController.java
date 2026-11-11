@@ -28,7 +28,7 @@ public class MenuController {
             WHERE i.availability='AVAILABLE' AND c.active=true AND a.available=true
               AND (a.limited_quantity IS NULL OR a.limited_quantity>0)
             ORDER BY c.sort_order,i.name
-            """, (rs,n)->new MenuItem(rs.getObject("id",UUID.class),rs.getString("name"),
+            """, (rs,n)->new MenuItem(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("name"),
                 rs.getString("category"),rs.getLong("base_price_idr"),
                 rs.getObject("limited_quantity")==null?null:rs.getLong("limited_quantity"),
                 rs.getString("description"),rs.getString("image_url")));
