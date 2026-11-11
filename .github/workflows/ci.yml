@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Avoid running eleven expensive integration jobs repeatedly for stale
+# review commits. The newest pushed SHA remains the only acceptance target.
+concurrency:
+  group: scs-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security-baseline:
     name: Security baseline / tracked secrets / production npm advisories
