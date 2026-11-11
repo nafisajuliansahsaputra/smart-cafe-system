@@ -6,6 +6,8 @@ on:
     paths:
       - "backend/src/main/java/com/natsx/smartcafe/catalog/MenuController.java"
       - "backend/src/test/java/com/natsx/smartcafe/MySqlCoreParityIntegrationTest.java"
+      - "backend/src/test/java/com/natsx/smartcafe/MySqlSyntheticCatalogSeedTest.java"
+      - "backend/src/test/java/com/natsx/smartcafe/SyntheticReviewCatalogSeed.java"
       - "backend/src/main/resources/db/mysql/**"
       - ".github/workflows/mysql8-parity.yml"
   pull_request:
@@ -44,7 +46,7 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: Run MySQL-specific real database negative tests
         working-directory: backend
-        run: mvn -B -ntp -Dtest=MySqlCoreParityIntegrationTest test
+        run: mvn -B -ntp -Dtest=MySqlCoreParityIntegrationTest,MySqlSyntheticCatalogSeedTest test
       - name: Guard against touching production databases
         run: |
           test ! -f .env
