@@ -1,6 +1,8 @@
 package com.natsx.smartcafe.ops;
 
 import com.natsx.smartcafe.common.api.ApiFailureException;
+import com.natsx.smartcafe.common.db.JdbcSqlDialect;
+import com.natsx.smartcafe.common.db.JdbcUuid;
 import com.natsx.smartcafe.orders.OrderStatus;
 import com.natsx.smartcafe.payments.PaymentStatus;
 import java.time.Instant;
@@ -62,7 +64,7 @@ public class OrderControlQueryService {
         }
         if (orderId != null) {
             fromWhere.append(" AND o.id=?");
-            arguments.add(orderId);
+            arguments.add(JdbcUuid.parameter(orderId, JdbcSqlDialect.detect(jdbc)));
         }
         return new Filters(fromWhere.toString(), arguments);
     }
@@ -103,6 +105,7 @@ public class OrderControlQueryService {
 
     @Transactional(readOnly = true)
     public OrderDetail detail(UUID id) {
+        var vendor = JdbcSqlDialect.detect(jdbc);
         var details=jdbc.query("""
             SELECT o.id,t.table_code,o.status,p.aggregate_status,o.subtotal_idr,o.tax_idr,
                    o.service_fee_idr,o.total_idr,p.method_selected,o.created_at
@@ -112,17 +115,22 @@ public class OrderControlQueryService {
             """,(rs,n)->new Base(com.natsx.smartcafe.common.db.JdbcUuid.read(rs, "id"),rs.getString("table_code"),
                 rs.getString("status"),rs.getString("aggregate_status"),rs.getLong("subtotal_idr"),
                 rs.getLong("tax_idr"),rs.getLong("service_fee_idr"),rs.getLong("total_idr"),
-                rs.getString("method_selected"),rs.getTimestamp("created_at").toInstant()),id);
+                rs.getString("method_selected"),rs.getTimestamp("created_at").toInstant()),
+            JdbcUuid.parameter(id,vendor));
         if(details.isEmpty())throw new ApiFailureException(HttpStatus.NOT_FOUND,"NOT_FOUND",
             "Order not found");
         var order=details.getFirst();
-        var lines=jdbc.query("""
-            SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes,
-                   variant_snapshot->>'label' AS variant_label
-            FROM order_lines WHERE order_id=? ORDER BY name_snapshot
-            """,(rs,n)->new OrderLine(rs.getString("name_snapshot"),rs.getInt("quantity"),
+        String variantLabel = vendor == JdbcSqlDialect.Vendor.MYSQL
+            ? "JSON_UNQUOTE(JSON_EXTRACT(variant_snapshot,'$.label'))"
+            : "variant_snapshot->>'label'";
+        String linesSql = "SELECT name_snapshot,quantity,unit_price_idr,line_total_idr,notes,"
+            + variantLabel + " AS variant_label FROM order_lines WHERE order_id=? "
+            + "ORDER BY name_snapshot";
+        var lines=jdbc.query(linesSql,(rs,n)->new OrderLine(
+                rs.getString("name_snapshot"),rs.getInt("quantity"),
                 rs.getLong("unit_price_idr"),rs.getLong("line_total_idr"),
-                rs.getString("notes"),rs.getString("variant_label")),id);
+                rs.getString("notes"),rs.getString("variant_label")),
+            JdbcUuid.parameter(id,vendor));
         return new OrderDetail(order.id(),order.tableCode(),order.orderStatus(),order.paymentStatus(),
             order.subtotal(),order.tax(),order.fee(),order.total(),order.method(),
             order.createdAt(),lines);
