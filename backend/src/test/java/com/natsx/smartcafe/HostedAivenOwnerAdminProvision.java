@@ -55,6 +55,7 @@ final class HostedAivenOwnerAdminProvision {
             throw new IllegalStateException("Review ADMIN credentials failed the safety policy");
         }
         adminUsername = adminUsername.toLowerCase(Locale.ROOT);
+        final boolean seedCatalog = "true".equals(System.getenv("SCS_OWNER_SEED_CATALOG"));
 
         Path caPath = Path.of(required("SCS_OWNER_AIVEN_CA")).toRealPath();
         Path truststore = Files.createTempFile("scs-owner-review-", ".p12");
@@ -135,6 +136,9 @@ final class HostedAivenOwnerAdminProvision {
                         }
                     }
 
+                    if (seedCatalog) {
+                        SyntheticReviewCatalogSeed.verifyTargetsEmpty(connection);
+                    }
                     String staffId = UUID.randomUUID().toString();
                     String passwordHash = new BCryptPasswordEncoder(12).encode(adminPassword);
                     try (PreparedStatement insert = connection.prepareStatement(
@@ -154,6 +158,9 @@ final class HostedAivenOwnerAdminProvision {
                             throw new IllegalStateException("Exactly one ADMIN assignment must be inserted");
                         }
                     }
+                    if (seedCatalog) {
+                        SyntheticReviewCatalogSeed.seed(connection);
+                    }
                     connection.commit();
                 } catch (Exception failure) {
                     try {
@@ -165,6 +172,9 @@ final class HostedAivenOwnerAdminProvision {
                 }
             }
             System.out.println("PASS: exactly one review ADMIN provisioned transactionally.");
+            if (seedCatalog) {
+                System.out.println("PASS: six tables, 12 menu items, 4 categories, 2 games, 3 copies seeded atomically.");
+            }
             System.out.println("No migrations, schema resets, checkout or real payments were performed.");
         } finally {
             Files.deleteIfExists(truststore);
