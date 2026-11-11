@@ -10,7 +10,9 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
-    [string]$CaFile
+    [string]$CaFile,
+
+    [switch]$SeedSyntheticCatalog
 )
 
 # Explicit, one-time OWNER-LOCAL initialization of an EMPTY synthetic MySQL
@@ -77,13 +79,22 @@ if (-not (Test-Path -LiteralPath (Join-Path $backend 'pom.xml') -PathType Leaf) 
 Write-Host ''
 Write-Host 'TARGET: ONLY the existing scs_review_natsx Aiven MySQL schema.'
 Write-Host 'Review ADMIN creation requires V1-V31 validation and zero existing staff users.'
+if ($SeedSyntheticCatalog) {
+    Write-Host 'SYNTHETIC SEED: additionally create six review tables, 12 menu items and three game copies.'
+    Write-Host 'The seed requires ALL business data tables to be empty and shares the ADMIN transaction.'
+}
 Write-Host 'The script FAILS CLOSED on any other database, username, migration mismatch, or existing staff.'
 Write-Host 'No real payments, production database, Flyway clean or schema migration.'
 Write-Host 'Rotate the previously exposed Aiven DB password before running this script.'
 Write-Host 'The ADMIN login/password you choose must be retained privately for first sign-in.'
 Write-Host ''
-$approval = Read-Host 'Type CREATE-ONE-SYNTHETIC-REVIEW-ADMIN to approve exactly one ADMIN insert'
-if ($approval -cne 'CREATE-ONE-SYNTHETIC-REVIEW-ADMIN') {
+$approvalPhrase = if ($SeedSyntheticCatalog) {
+    'CREATE-ONE-SYNTHETIC-REVIEW-ADMIN-AND-CATALOG'
+} else {
+    'CREATE-ONE-SYNTHETIC-REVIEW-ADMIN'
+}
+$approval = Read-Host "Type $approvalPhrase to approve this one-time review setup"
+if ($approval -cne $approvalPhrase) {
     throw 'Cancelled. No database changes were made.'
 }
 $username = Read-Host 'Choose review ADMIN login (letters/numbers/._-, 3 to 40 characters)'
@@ -143,6 +154,7 @@ try {
     # Temporary inherited variables are limited to this owner-local Maven
     # process, then deleted even when compilation, TLS or SQL checks fail.
     $env:SCS_OWNER_PROVISION_AUTHORIZATION = 'CREATE_ONE_SYNTHETIC_AIVEN_ADMIN'
+    $env:SCS_OWNER_SEED_CATALOG = if ($SeedSyntheticCatalog) { 'true' } else { 'false' }
     $env:SCS_OWNER_AIVEN_HOST = $HostName
     $env:SCS_OWNER_AIVEN_PORT = $Port.ToString()
     $env:SCS_OWNER_AIVEN_USERNAME = 'avnadmin'
@@ -166,7 +178,8 @@ finally {
         'SCS_OWNER_PROVISION_AUTHORIZATION','SCS_OWNER_AIVEN_HOST',
         'SCS_OWNER_AIVEN_PORT','SCS_OWNER_AIVEN_USERNAME',
         'SCS_OWNER_AIVEN_PASSWORD','SCS_OWNER_AIVEN_CA',
-        'SCS_OWNER_ADMIN_USERNAME','SCS_OWNER_ADMIN_PASSWORD'
+        'SCS_OWNER_ADMIN_USERNAME','SCS_OWNER_ADMIN_PASSWORD',
+        'SCS_OWNER_SEED_CATALOG'
     )) {
         Remove-Item "Env:$key" -ErrorAction SilentlyContinue
     }
@@ -178,3 +191,6 @@ finally {
     if ($null -ne $secureConfirm) { $secureConfirm.Dispose() }
 }
 Write-Host 'PASS: first synthetic Aiven review ADMIN is provisioned. Do not run again.'
+if ($SeedSyntheticCatalog) {
+    Write-Host 'PASS: synthetic catalog, tables and physical games provisioned in same transaction.'
+}
