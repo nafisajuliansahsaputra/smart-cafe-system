@@ -15,6 +15,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import com.natsx.smartcafe.identity.StaffAuthService;
+import java.util.UUID;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -80,6 +83,46 @@ class MySqlSyntheticCatalogSeedTest {
             assertThrows(IllegalStateException.class,
                 () -> SyntheticReviewCatalogSeed.seed(connection));
             assertEquals(0L, count(connection, "menu_items"));
+        }
+    }
+
+
+    @Test
+    void firstSyntheticAdminCanLogInGetAdminRoleAndRevokeSessionOnMySql() throws Exception {
+        // Test the real JDBC auth service on MySQL CHAR(36), not mocked
+        // PostgreSQL-specific UUID behavior. All writes are rolled back.
+        final String username = "reviewadmin-smoke";
+        final String password = "Only-For-Disposable-MySQL-Test-9187";
+        final String userId = UUID.randomUUID().toString();
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
+            var encoder = new BCryptPasswordEncoder(12);
+            jdbc.update("INSERT INTO staff_users(id,login,password_hash) VALUES (?,?,?)",
+                userId, username, encoder.encode(password));
+            jdbc.update("INSERT INTO staff_role_assignments(staff_user_id,role_key) VALUES (?,'ADMIN')",
+                userId);
+            var auth = new StaffAuthService(jdbc, encoder);
+
+            var bad = auth.login(username, "not-the-correct-password");
+            assertEquals("UNAUTHENTICATED", bad.failure());
+            var good = auth.login(username.toUpperCase(java.util.Locale.ROOT), password);
+            assertEquals(null, good.failure());
+            assertTrue(good.token() != null && good.token().length() == 43);
+
+            var principal = auth.authenticate(good.token());
+            assertTrue(principal != null);
+            assertEquals(UUID.fromString(userId), principal.staffId());
+            assertTrue(principal.roles().contains("ADMIN"));
+            assertEquals(1, principal.roles().size());
+
+            auth.logout(principal);
+            assertEquals(null, auth.authenticate(good.token()));
+            connection.rollback();
+        }
+        try (Connection connection = dataSource.getConnection()) {
+            assertEquals(0L, count(connection, "staff_users"));
+            assertEquals(0L, count(connection, "staff_sessions"));
         }
     }
 
