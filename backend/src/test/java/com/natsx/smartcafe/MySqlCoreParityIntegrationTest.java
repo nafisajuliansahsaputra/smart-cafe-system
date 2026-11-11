@@ -2,6 +2,7 @@ package com.natsx.smartcafe;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -1651,4 +1652,27 @@ class MySqlCoreParityIntegrationTest {
             jdbc.update("INSERT INTO cafe_tables(id,table_code,public_alias,capacity) VALUES (?,?,?,?)",
                 id(), "bad-" + id(), "bad-" + id(), -1));
     }
+    @Test
+    void publicMenuMapsMySqlChar36IdsAfterSyntheticCatalogSeed() {
+        // Unlike PostgreSQL's native UUID, Connector/J reads CHAR(36) as text.
+        // This exercises the actual public controller against MySQL 8.4,
+        // so a nonempty catalog cannot silently break hosted review.
+        String category = id();
+        String menuItem = id();
+        jdbc.update("INSERT INTO menu_categories(id,name,slug,sort_order) VALUES (?,?,?,?)",
+            category, "Synthetic Coffee " + category.substring(0, 8),
+            "mysql-" + category, 999);
+        jdbc.update("""
+            INSERT INTO menu_items(id,category_id,name,base_price_idr)
+            VALUES (?,?,?,?)
+            """, menuItem, category, "Synthetic Menu " + menuItem, 22000L);
+
+        var controller = new com.natsx.smartcafe.catalog.MenuController(jdbc);
+        var payload = controller.menu(new org.springframework.mock.web.MockHttpServletRequest());
+        assertTrue(payload.data().stream().anyMatch(item ->
+            item.id().equals(UUID.fromString(menuItem))
+                && item.priceIdr() == 22000L
+                && item.name().equals("Synthetic Menu " + menuItem)));
+    }
+
 }
